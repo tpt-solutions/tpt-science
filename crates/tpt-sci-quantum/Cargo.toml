@@ -1,0 +1,27 @@
+[package]
+name = "tpt-sci-quantum"
+description = "Qubit state-vector and tensor-product (Kronecker) circuit simulation for the tpt-science pillar (built from scratch)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/tpt-sci-quantum"
+keywords = ["quantum", "qubit", "simulation", "science"]
+categories = ["science", "simulation", "physics"]
+publish = false
+
+[dependencies]
+tpt-math-linalg = { workspace = true }
+tpt-math-prob-core = { workspace = true }
+num-complex = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }
+
+[lints]
+workspace = true

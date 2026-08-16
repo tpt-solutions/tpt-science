@@ -1,0 +1,25 @@
+[package]
+name = "tpt-sci-astro"
+description = "Orbital mechanics and coordinate-frame primitives for the tpt-science pillar (built from scratch)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/tpt-sci-astro"
+keywords = ["orbital-mechanics", "astrodynamics", "science", "simulation"]
+categories = ["science", "simulation"]
+publish = false
+
+[dependencies]
+tpt-math-linalg = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }
+
+[lints]
+workspace = true

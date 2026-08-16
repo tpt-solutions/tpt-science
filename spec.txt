@@ -1,0 +1,136 @@
+DESIGN DOCUMENT: tpt-science (SCIENCE FOUNDATION)
+
+BEFORE YOU WRITE ANYTHING BELOW: check tpt-rust-map/registry.toml (in the
+sibling tpt-rust-map repo) for an existing foundation or external crate
+before adding a new one here. Every crate name in this repo carries the
+tpt-sci- prefix. A crate is only a valid wrap target if its CURRENT
+license is MIT OR Apache-2.0 (or more permissive) — Apache-2.0-ONLY is
+always disqualifying, no exceptions (see tpt-rust-map/docs/adr/0007). If
+it passes that check, default to wrapping; reimplementation still needs
+one written reason. Prefer many small crates + a thin umbrella crate over
+one broad crate. Every crate: license = "MIT OR Apache-2.0".
+
+PROJECT OVERVIEW
+tpt-science provides simulation and modeling substrate for tpt-solutions'
+science verticals: differential equations, structured-grid PDE, multi-
+scale simulation orchestration, probabilistic programming, rigid-body
+physics, quantum simulation, tomographic imaging, and astrodynamics. Unlike
+tpt-math (universal numeric primitives), every crate here is motivated by a
+specific existing tpt-solutions repo's unmet need — tpt-soma, tpt-cerebrum,
+tpt-augur, tpt-physics-engine, tpt-selenograph, tpt-q-phase, tpt-spectra,
+and tpt-system-zero each need a different piece of this substrate, and none
+of them currently depend on a shared foundation for it.
+
+ECOSYSTEM GAP JUSTIFICATION
+- ODE/DAE solving is well-covered by diffsol (JOSS 2026, actively
+  maintained, Enzyme-based autodiff, LLVM/Cranelift JIT) — wrap it, don't
+  reimplement.
+- Unstructured FEM/mesh generation is a genuine, unfilled Rust gap (the one
+  existing crate, finite_element_method, is explicitly educational; the
+  only serious 2026 effort, FrankenSim, is 100+ crates/160k LOC) but is
+  explicitly OUT OF SCOPE here — multi-year-scale problem, not attempted
+  alongside three other pillars. tpt-soma/tpt-cerebrum's actual needs look
+  like compartmental-ODE + structured-grid problems, not full unstructured
+  3D FEM, so a structured finite-difference crate covers them without this.
+- Probabilistic programming has several small, competing Rust efforts
+  (bayes-rs, Ferric, rv) but nuts-rs is a solid, actively-maintained (Jun
+  2026) NUTS sampler worth wrapping rather than reimplementing HMC/NUTS.
+- Rigid-body physics: rapier is mature and dominant but Apache-2.0-ONLY,
+  not dual-licensed — DISQUALIFIED (see tpt-rust-map/docs/adr/0007). No
+  dual-licensed alternative was found. tpt-sci-physics-rigid is build-from-
+  scratch. Audit tpt-physics-engine and tpt-selenograph first regardless —
+  they may already have this, and a from-scratch build makes duplicating
+  their work an even bigger waste than it would have been for a wrap.
+- Quantum simulation: QuantRS2 (cool-japan/quantrs) is a comprehensive,
+  recent (v0.2.0, Jun 2026), pure-Rust state-vector/tensor-network
+  simulator, but Apache-2.0-ONLY (same org as the Apache-only SciRS2) —
+  DISQUALIFIED (see tpt-rust-map/docs/adr/0007). tpt-sci-quantum is
+  build-from-scratch. Audit tpt-q-phase first regardless.
+- Orbital mechanics/coordinate frames: tpt-system-zero's own description
+  ("orbital mechanics, J2...") suggests this may already exist there.
+  Audit before building — don't duplicate for tpt-astrobus/tpt-zenith/
+  tpt-selenograph.
+
+CORE PRINCIPLES
+Every crate here is motivated by a named existing repo's need — no crate
+is added speculatively. Wrap an external crate whenever one exists and
+fits; where the flag below says "needs-audit-first," resolve that audit
+before writing any code, not just before merging it. Many small crates,
+dual-licensed MIT OR Apache-2.0, no_std where the motivating use case
+plausibly needs it (most of this pillar is std-only — simulation, physics,
+and quantum workloads don't typically run on bare-metal targets — but
+check per crate rather than assuming).
+
+CRATE INVENTORY
+
+  tpt-sci-ode
+    Wrap diffsol. ODE/DAE solving. Depends on: tpt-math-numeric (from the
+    tpt-math repo).
+
+  tpt-sci-grid
+    Build: structured finite-difference grids/stencils. Covers reaction-
+    diffusion, cable-equation/cortical-sheet style spatial models.
+    Motivated by: tpt-soma, tpt-cerebrum. Depends on: tpt-math-linalg.
+
+  tpt-sci-sim-core
+    Build: multi-scale simulation orchestration — time-stepping, coupling
+    between sub-models running at different time/space scales,
+    checkpointing. This is the layer above tpt-sci-ode/tpt-sci-grid that a
+    "multi-scale computational platform" actually needs and neither solver
+    crate provides alone. Motivated by: tpt-soma, tpt-cerebrum (both
+    explicitly describe themselves as multi-scale platforms). Depends on:
+    tpt-sci-ode, tpt-sci-grid.
+
+  tpt-sci-reaction-network
+    FLAGGED, not committed for v1. Species/rate/stoichiometry DSL for
+    compartmental models (the Rust equivalent of Julia's Catalyst.jl).
+    Needs a dedicated ecosystem research pass before design — not found
+    during the research done so far, but that was a byproduct of other
+    searches, not a targeted survey. Motivated by: tpt-soma, tpt-cerebrum.
+    Would depend on: tpt-sci-ode.
+
+  tpt-sci-ppl
+    Build the model/DSL layer; wrap nuts-rs for the NUTS sampler backend.
+    Probabilistic programming. Consolidates tpt-augur. Depends on:
+    tpt-math-prob-bayes, tpt-math-autodiff-rev.
+
+  tpt-sci-physics-rigid
+    FLAGGED, needs-audit-first. BUILD from scratch — rapier was the
+    obvious wrap candidate but is Apache-2.0-only, disqualified under the
+    dual-license policy (ADR 0007). Rigid-body/collision physics. Audit
+    tpt-physics-engine and tpt-selenograph before writing anything — they
+    may already have this, and building a second from-scratch
+    implementation would repeat the exact duplication problem
+    tpt-rust-map exists to prevent, now at higher cost since there's no
+    wrap fallback. Depends on: tpt-math-linalg.
+
+  tpt-sci-quantum
+    FLAGGED, needs-audit-first. BUILD from scratch — QuantRS2 was the
+    obvious wrap candidate but is Apache-2.0-only, disqualified under the
+    dual-license policy (ADR 0007). Qubit state-vector/tensor-network
+    simulation. Audit tpt-q-phase before writing anything. Depends on:
+    tpt-math-linalg.
+
+  tpt-sci-image
+    Build: n-dimensional image processing / tomographic reconstruction
+    (Radon transform, filtered back-projection). Motivated by: tpt-spectra.
+    Depends on: tpt-math-signal-fft, tpt-math-linalg.
+
+  tpt-sci-astro
+    FLAGGED, needs-audit-first. Orbital mechanics / coordinate-frame
+    primitives. Audit tpt-system-zero before writing anything — its own
+    description suggests this may already exist there. Depends on:
+    tpt-math-linalg.
+
+OUT OF SCOPE
+Unstructured FEM/mesh generation — see ECOSYSTEM GAP JUSTIFICATION above.
+Revisit only if tpt-sci-grid proves insufficient for a specific vertical,
+and if so, treat it as its own repo, not a tpt-science addition, given the
+scale FrankenSim demonstrates this problem actually requires.
+
+REPO CONVENTIONS
+Cargo workspace under crates/, one crate per directory, seeded from
+tpt-rust-map/template/. Every crate registered in tpt-rust-map/registry.toml
+before implementation starts — flagged crates get status =
+"flagged-needs-audit" or "flagged-deferred" until their audit/research
+resolves, not "planned".

@@ -1,0 +1,46 @@
+# cargo-deny configuration — license/security/dependency hygiene.
+# See https://embarkstudios.github.io/cargo-deny/
+
+[advisories]
+version = 2
+yanked = "warn"
+# NOTE: the only advisory currently tripped is `RUSTSEC-2024-0436` — `paste`
+# is unmaintained. `paste` is pulled in *transitively* (and only as a build-time
+# proc-macro) via our `diffsol` wrap target (diffsol -> faer/gemm -> paste). It
+# is stable, extremely widely used, and has no known vulnerability, so we accept
+# it rather than forking the linear-algebra stack. Revisit if `diffsol` drops or
+# replaces it.
+ignore = [
+    "RUSTSEC-2024-0436",
+]
+
+[licenses]
+# All workspace crates are MIT OR Apache-2.0. The allow-list also permits the
+# permissive licenses of transitive dependencies pulled in by dev/build tooling.
+# NOTE: the wrap targets in this pillar (diffsol) are dual-licensed
+# MIT OR Apache-2.0, satisfying the dual-license policy (ADR 0007). Re-check
+# this list against tpt-rust-map/registry.toml's [[external]] entries whenever
+# a new wrap target is added — Apache-2.0-ONLY crates (rapier, QuantRS2,
+# SciRS2) are explicitly disqualified and must never be added as dependencies.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+    "Zlib",
+    "CC0-1.0",
+    "MPL-2.0",
+    "Unicode-3.0",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"

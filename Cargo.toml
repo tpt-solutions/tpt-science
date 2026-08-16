@@ -1,0 +1,67 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/tpt-sci-ode",
+    "crates/tpt-sci-grid",
+    "crates/tpt-sci-sim-core",
+    "crates/tpt-sci-astro",
+    "crates/tpt-sci-quantum",
+    "crates/tpt-sci-image",
+    "crates/tpt-sci-physics-rigid",
+    "crates/tpt-sci-ppl",
+    "crates/tpt-sci-reaction-network",
+]
+exclude = []
+
+[workspace.package]
+version = "0.1.0"
+description = "tpt-science — simulation and modeling substrate for the TPT Solutions science verticals (ODE/DAE, structured-grid PDE, multi-scale orchestration, probabilistic programming, physics, quantum, imaging, astrodynamics)"
+authors = ["TPT Solutions"]
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+homepage = "https://github.com/tpt-solutions/tpt-science"
+repository = "https://github.com/tpt-solutions/tpt-science"
+
+[workspace.dependencies]
+# Cross-repo dependencies (tpt-math substrate), published on crates.io.
+tpt-math-numeric = "0.1.0"
+tpt-math-linalg = "0.1.0"
+tpt-math-signal-fft = "0.1.0"
+tpt-math-autodiff-rev = "0.1.0"
+tpt-math-prob-bayes = "0.1.0"
+tpt-math-prob-core = "0.1.0"
+num-complex = "0.4"
+
+# In-repo crate dependencies (referenced by `workspace = true`).
+tpt-sci-ode = { version = "0.1.0", path = "crates/tpt-sci-ode" }
+tpt-sci-grid = { version = "0.1.0", path = "crates/tpt-sci-grid" }
+tpt-sci-sim-core = { version = "0.1.0", path = "crates/tpt-sci-sim-core" }
+tpt-sci-reaction-network = { version = "0.1.0", path = "crates/tpt-sci-reaction-network" }
+
+# Wrap targets (dual-licensed MIT OR Apache-2.0 — see tpt-rust-map/registry.toml
+# and the ECOSYSTEM GAP JUSTIFICATION / ADR 0007 in spec.txt).
+diffsol = "0.16.1"
+
+# Shared external dev/build dependencies.
+thiserror = "2"
+anyhow = "1.0"
+approx = "0.5"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+# No crate here is allowed to introduce `unsafe`; the math substrate we wrap is
+# already audited, and these primitives need no unsafe escape hatch.
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+missing_errors_doc = "warn"
+missing_panics_doc = "warn"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+overflow-checks = true

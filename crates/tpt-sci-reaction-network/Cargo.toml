@@ -1,0 +1,25 @@
+[package]
+name = "tpt-sci-reaction-network"
+description = "Species/rate/stoichiometry DSL for compartmental models (Catalyst.jl-style), built from scratch, for the tpt-science pillar"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/tpt-sci-reaction-network"
+keywords = ["reaction-network", "systems-biology", "ode", "catalyst", "science"]
+categories = ["science", "simulation"]
+publish = false
+
+[dependencies]
+tpt-sci-ode = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }
+
+[lints]
+workspace = true
