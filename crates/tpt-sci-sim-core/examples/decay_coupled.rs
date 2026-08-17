@@ -4,12 +4,7 @@ use tpt_sci_sim_core::{OdeSubModel, Simulation};
 
 fn main() {
     // Fast: dx/dt = -x  (a quickly-decaying reagent).
-    let fast = OdeSubModel::new(
-        "fast",
-        |_t, y, dydt| dydt[0] = -y[0],
-        vec![1.0],
-        0.0,
-    );
+    let fast = OdeSubModel::new("fast", |_t, y, dydt| dydt[0] = -y[0], vec![1.0], 0.0);
     // Slow: dy/dt = 0.1 * (1 - y)  (a slowly saturating quantity).
     let slow = OdeSubModel::new(
         "slow",

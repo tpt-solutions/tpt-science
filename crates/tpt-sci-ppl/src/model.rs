@@ -270,10 +270,7 @@ impl Model {
         for _ in 0..n_chains {
             // Disperse the start so the chains explore from different regions;
             // a single shared start would make R-hat trivially ~1.
-            let start: Vec<f64> = base
-                .iter()
-                .map(|&v| v + 0.1 * randn(rng))
-                .collect();
+            let start: Vec<f64> = base.iter().map(|&v| v + 0.1 * randn(rng)).collect();
             let (samples, d) = nuts_with_divergences(&target, &start, rng, n_samples)?;
             n_div += d;
             chains.push(samples);
@@ -418,7 +415,10 @@ mod tests {
         assert!(rhat.is_finite() && rhat < 1.1, "rhat = {rhat}");
         // ESS should be a positive fraction of the raw draw count.
         let ess = trace.ess(0);
-        assert!(ess > 0.0 && ess < trace.n_draws() as f64 + 1.0, "ess = {ess}");
+        assert!(
+            ess > 0.0 && ess < trace.n_draws() as f64 + 1.0,
+            "ess = {ess}"
+        );
         // Divergence rate is well defined (0.0 for this well-behaved target).
         assert!((0.0..=1.0).contains(&trace.divergence_rate()));
         // The posterior mean is recovered.

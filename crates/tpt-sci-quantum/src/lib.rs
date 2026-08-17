@@ -560,7 +560,8 @@ mod tests {
     }
 
     #[test]
-    fn probabilities_sum_to_one() {        let mut s = State::new(3).unwrap();
+    fn probabilities_sum_to_one() {
+        let mut s = State::new(3).unwrap();
         s.h(0).unwrap();
         s.h(1).unwrap();
         s.h(2).unwrap();

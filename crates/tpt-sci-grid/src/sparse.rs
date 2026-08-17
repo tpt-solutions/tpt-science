@@ -238,7 +238,11 @@ mod tests {
             let start = sparse.row_ptr[i];
             let end = sparse.row_ptr[i + 1];
             for k in start..end {
-                assert_abs_diff_eq!(sparse.values[k], dense[(i, sparse.col_ind[k])], epsilon = 1e-12);
+                assert_abs_diff_eq!(
+                    sparse.values[k],
+                    dense[(i, sparse.col_ind[k])],
+                    epsilon = 1e-12
+                );
             }
         }
     }

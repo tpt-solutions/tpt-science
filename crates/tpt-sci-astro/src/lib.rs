@@ -513,39 +513,27 @@ mod tests {
     #[test]
     fn j2_rates_match_formula() {
         // LEO orbit: a = 7000 km, e = 0.01, i = 50 deg.
-        let el = OrbitalElements::new(
-            7000.0,
-            0.01,
-            50.0_f64.to_radians(),
-            0.0,
-            0.0,
-            0.0,
-            EARTH_MU,
-        )
-        .unwrap();
+        let el = OrbitalElements::new(7000.0, 0.01, 50.0_f64.to_radians(), 0.0, 0.0, 0.0, EARTH_MU)
+            .unwrap();
         let (raan_dot, argp_dot) = el.j2_secular_rates(EARTH_J2, EARTH_RADIUS_EQ);
         let n = (EARTH_MU / el.a.powi(3)).sqrt();
         let p = el.a * (1.0 - el.e.powi(2));
         let factor = 1.5 * n * EARTH_J2 * (EARTH_RADIUS_EQ / p).powi(2);
         let ci = el.i.cos();
         assert_abs_diff_eq!(raan_dot, -factor * ci, epsilon = 1e-12);
-        assert_abs_diff_eq!(argp_dot, 0.5 * factor * (5.0 * ci * ci - 1.0), epsilon = 1e-12);
+        assert_abs_diff_eq!(
+            argp_dot,
+            0.5 * factor * (5.0 * ci * ci - 1.0),
+            epsilon = 1e-12
+        );
     }
 
     #[test]
     fn j2_regresses_raan_for_prograde() {
         // A 50° inclined LEO orbit should see its RAAN regress (decrease) over
         // a day, by roughly the analytic secular rate.
-        let el = OrbitalElements::new(
-            7000.0,
-            0.01,
-            50.0_f64.to_radians(),
-            1.0,
-            0.0,
-            0.0,
-            EARTH_MU,
-        )
-        .unwrap();
+        let el = OrbitalElements::new(7000.0, 0.01, 50.0_f64.to_radians(), 1.0, 0.0, 0.0, EARTH_MU)
+            .unwrap();
         let dt = 86_400.0; // one day, seconds
         let advanced = el.propagate_j2(dt, EARTH_J2, EARTH_RADIUS_EQ);
         let (raan_dot, _) = el.j2_secular_rates(EARTH_J2, EARTH_RADIUS_EQ);

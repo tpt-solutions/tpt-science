@@ -24,9 +24,7 @@ pub enum ImageError {
     EmptyAngles,
 
     /// The sinogram row count did not match the number of projection angles.
-    #[error(
-        "sinogram has {sino_rows} rows but {n_angles} angles were supplied"
-    )]
+    #[error("sinogram has {sino_rows} rows but {n_angles} angles were supplied")]
     AngleCountMismatch {
         /// Number of rows in the supplied sinogram.
         sino_rows: usize,

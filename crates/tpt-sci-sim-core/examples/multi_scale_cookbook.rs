@@ -22,27 +22,20 @@ fn main() {
     .unwrap();
     sir.set_parameter("beta", 0.002).unwrap();
     sir.set_parameter("gamma", 0.4).unwrap();
-    let y0 = sir.initial_state(&[("S", 990.0), ("I", 10.0), ("R", 0.0)]).unwrap();
+    let y0 = sir
+        .initial_state(&[("S", 990.0), ("I", 10.0), ("R", 0.0)])
+        .unwrap();
     let i_idx = sir.species_index("I").unwrap();
 
     // --- Multi-scale side: the SIR system drives a diffusion field. ---
     let grid = UniformGrid1D::new(41, 0.0, 1.0).unwrap();
-    let diffusion = DiffusionSubModel::new(
-        "field",
-        grid,
-        0.02,
-        Boundary::Dirichlet,
-        vec![0.0; 41],
-    )
-    .unwrap();
+    let diffusion =
+        DiffusionSubModel::new("field", grid, 0.02, Boundary::Dirichlet, vec![0.0; 41]).unwrap();
 
     // Wrap the reaction network's mass-action RHS as an ODE sub-model. tpt-sci-sim-core
     // integrates it on the SIR's own time scale and exposes its state to couplings.
-    let sir_model = OdeSubModel::with_builder(
-        "sir",
-        sir.ode_builder(&y0, 0.0).unwrap(),
-        Method::Bdf,
-    );
+    let sir_model =
+        OdeSubModel::with_builder("sir", sir.ode_builder(&y0, 0.0).unwrap(), Method::Bdf);
 
     let coupling_strength = 0.01;
     let mut sim = Simulation::new();

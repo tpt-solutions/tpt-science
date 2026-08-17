@@ -16,14 +16,15 @@ fn main() {
     let dt = 0.0005;
     let mut u = u0.clone();
     for _ in 0..2000 {
-        let lu: Vec<f64> = (l.clone() * DVector::from_vec(u.clone())).iter().cloned().collect();
+        let lu: Vec<f64> = (l.clone() * DVector::from_vec(u.clone()))
+            .iter()
+            .cloned()
+            .collect();
         for k in 0..u.len() {
             u[k] += dt * coeff * lu[k];
         }
     }
     let peak0 = u0.iter().cloned().fold(0.0_f64, f64::max);
     let peak1 = u.iter().cloned().fold(0.0_f64, f64::max);
-    println!(
-        "Diffusion: bump peak {peak0:.4} -> {peak1:.4} over 2000 steps (should decrease)"
-    );
+    println!("Diffusion: bump peak {peak0:.4} -> {peak1:.4} over 2000 steps (should decrease)");
 }

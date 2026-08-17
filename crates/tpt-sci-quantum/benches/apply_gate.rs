@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use tpt_sci_quantum::State;
 
 fn bench_hadamard_chain(c: &mut Criterion) {

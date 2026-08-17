@@ -76,7 +76,7 @@ pub mod trace;
 pub use error::PplError;
 pub use model::{Model, ModelBuilder};
 pub use nuts::{NutsOptions, Target, nuts, nuts_with_options};
-pub use trace::Trace;
 pub use tpt_math_autodiff_rev::{GradientTape, Variable};
 pub use tpt_math_prob_bayes::{Beta, Gamma, Gaussian};
 pub use tpt_math_prob_core::Rng;
+pub use trace::Trace;

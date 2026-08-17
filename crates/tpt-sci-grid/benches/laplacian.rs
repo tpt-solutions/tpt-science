@@ -1,5 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use tpt_sci_grid::{laplacian_1d, Boundary, UniformGrid1D};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use tpt_sci_grid::{Boundary, UniformGrid1D, laplacian_1d};
 
 fn bench_laplacian_assembly(c: &mut Criterion) {
     c.bench_function("laplacian_1d_201", |b| {

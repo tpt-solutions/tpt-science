@@ -2,16 +2,8 @@
 use tpt_sci_astro::{EARTH_J2, EARTH_MU, EARTH_RADIUS_EQ, OrbitalElements};
 
 fn main() {
-    let el = OrbitalElements::new(
-        7000.0,
-        0.01,
-        50.0_f64.to_radians(),
-        0.0,
-        0.0,
-        0.0,
-        EARTH_MU,
-    )
-    .unwrap();
+    let el =
+        OrbitalElements::new(7000.0, 0.01, 50.0_f64.to_radians(), 0.0, 0.0, 0.0, EARTH_MU).unwrap();
     let period = el.period();
     println!("Orbital period: {period:.1} s");
 

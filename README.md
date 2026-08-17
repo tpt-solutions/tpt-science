@@ -91,20 +91,21 @@ README snippet — a good first place to see the API in action:
 
 | Crate | Example | Demonstrates |
 |-------|---------|--------------|
-| `tpt-sci-ode` | `vander_pol` | Van der Pol limit-cycle integration |
+| `tpt-sci-ode` | `van_der_pol` | Van der Pol limit cycle + dense trajectory (`solve_dense`) |
 | `tpt-sci-quantum` | `bell_ghz` | Bell/GHZ states + measurement statistics |
-| `tpt-sci-reaction-network` | `sir_epidemic` | Full SIR run from the Catalyst.jl-style DSL |
-| `tpt-sci-grid` | `diffusion_operator` | 1-D Laplacian vs. analytic 2nd derivative |
-| `tpt-sci-sim-core` | `coupled_field` | ODE→diffusion cross-scale coupling + checkpoint |
-| `tpt-sci-ppl` | `bayesian_linear` | Bayesian linear regression via from-scratch NUTS |
-| `tpt-sci-image` | `ct_reconstruction` | Parallel-beam CT of a phantom (FBP) |
-| `tpt-sci-physics-rigid` | `bouncing_balls` | Gravity + walls in a rigid-body world |
-| `tpt-sci-astro` | `leo_orbit` | LEO propagation + J2 RAAN regression |
+| `tpt-sci-reaction-network` | `sir` | Full SIR run, peak-infected tracking |
+| `tpt-sci-grid` | `diffusion` | 1-D diffusion of a Gaussian bump on a uniform grid |
+| `tpt-sci-sim-core` | `multi_scale_cookbook` | SIR → diffusion cross-scale coupling (composes reaction-network + grid) |
+| `tpt-sci-ppl` | `posterior` | NUTS posterior + R-hat / ESS / divergence diagnostics |
+| `tpt-sci-image` | `reconstruction` | Parallel-beam CT of a phantom (FBP) |
+| `tpt-sci-physics-rigid` | `collision` | Spheres under gravity + walls, elastic collisions |
+| `tpt-sci-astro` | `propagation` | LEO propagation + J2 RAAN regression |
 
+`sim-core` also ships `decay_coupled` (ODE↔diffusion coupling + checkpoint).
 Run any of them with, e.g.:
 
 ```sh
-cargo run --example vander_pol -p tpt-sci-ode
+cargo run --example van_der_pol -p tpt-sci-ode
 ```
 
 ## Benchmarking & coverage

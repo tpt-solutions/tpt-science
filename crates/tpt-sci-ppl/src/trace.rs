@@ -85,14 +85,8 @@ impl Trace {
             .chains
             .iter()
             .flatten()
-            .fold((0.0_f64, 0usize), |(s, n), draw| {
-                (s + draw[param], n + 1)
-            });
-        if n == 0 {
-            0.0
-        } else {
-            s / n as f64
-        }
+            .fold((0.0_f64, 0usize), |(s, n), draw| (s + draw[param], n + 1));
+        if n == 0 { 0.0 } else { s / n as f64 }
     }
 
     /// Posterior standard deviation of `param` over all draws.
@@ -210,7 +204,11 @@ fn split_rhat(chains: &[Vec<Vec<f64>>], param: usize) -> f64 {
     let n = split[0].len() as f64;
     let chain_means: Vec<f64> = split.iter().map(|s| s.iter().sum::<f64>() / n).collect();
     let grand = chain_means.iter().sum::<f64>() / m;
-    let b = n / (m - 1.0) * chain_means.iter().map(|cm| (cm - grand).powi(2)).sum::<f64>();
+    let b = n / (m - 1.0)
+        * chain_means
+            .iter()
+            .map(|cm| (cm - grand).powi(2))
+            .sum::<f64>();
     let mut w = 0.0;
     for (s, cm) in split.iter().zip(&chain_means) {
         let v = s.iter().map(|v| (v - cm).powi(2)).sum::<f64>() / (n - 1.0);

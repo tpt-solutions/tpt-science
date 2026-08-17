@@ -329,31 +329,37 @@ when work starts.
 
 #### 5d resolved in this pass (2026-08-17)
 
-- **examples/**: one runnable `examples/*.rs` per crate (9 total), each tied to
-  the 5e ideas (Lotka-Volterra/VdP for `ode`; Bell/GHZ stats for `quantum`; SIR
-  for `reaction-network`; Laplacian check for `grid`; ODE→diffusion coupling +
-  checkpoint for `sim-core`; Bayesian linear regression for `ppl`; CT phantom
-  FBP for `image`; bouncing balls for `physics-rigid`; LEO + J2 for `astro`).
-  `sim-core`'s example is also the cross-crate "cookbook" (couples `tpt-sci-ode`
-  + `tpt-sci-grid` through `Simulation`).
+- **examples/**: Pre-existing per-crate `examples/*.rs` already covered 8 crates
+  (van_der_pol, diffusion, sir, reconstruction, collision, propagation,
+  posterior, and sim-core's decay_coupled + multi_scale_cookbook). This pass
+  added the one missing crate's example — `tpt-sci-quantum`'s `bell_ghz`
+  (Bell/GHZ + measurement stats) — so every crate now has a runnable example.
+  (Initial duplicate example files written this pass were removed in favour of
+  the pre-existing ones.) The `multi_scale_cookbook` example is also the
+  cross-crate cookbook from 5c/5e (composes reaction-network + grid + sim-core).
 - **cargo doc CI job**: already present as the `doc` job in `ci.yml`
   (`RUSTDOCFLAGS=-D warnings`); doctests covered by the `test` job. (No change
   needed — pre-existing.)
 - **docs.rs metadata**: already present in every crate `Cargo.toml`
   (`[package.metadata.docs.rs]` + `documentation = "https://docs.rs/..."`). (No
   change needed — pre-existing; links go live on first publish.)
-- **benchmark tracking**: `criterion` added as a workspace dev-dependency;
-  `benches/` added to `tpt-sci-grid`, `tpt-sci-quantum`, `tpt-sci-image`,
-  `tpt-sci-ode`, with a `benches` CI job (shortened measurement).
-- **code coverage**: `coverage` CI job added (`cargo-llvm-cov` → lcov artifact).
-- **release/publish scope**: `RELEASE.md` pre-publish checklist + a gated
-  `publish.yml` (`workflow_dispatch`, verifies `publish = true`). Dormant until
-  `publish = false` flips.
+- **benchmark tracking**: NEW this pass — `criterion` added as a workspace
+  dev-dependency; `benches/` added to `tpt-sci-grid`, `tpt-sci-quantum`,
+  `tpt-sci-image`, `tpt-sci-ode`, with a `benches` CI job (shortened measurement).
+- **code coverage**: NEW this pass — `coverage` CI job added (`cargo-llvm-cov` →
+  lcov artifact).
+- **release/publish scope**: NEW this pass — `RELEASE.md` pre-publish checklist
+  + a gated `publish.yml` (`workflow_dispatch`, verifies `publish = true`).
+  Dormant until `publish = false` flips.
 - **duplicate no_std section**: already only one occurrence in `README.md`. (No
   change needed — pre-existing.)
 - **rust-toolchain.toml**: already `channel = "stable"` with no `wasm32-unknown-
   unknown` target present; `stable` satisfies the `rust-version = "1.85"` MSRV
   pin. (Reconciled — no change needed.)
+- **fmt drift**: `cargo fmt --check` was failing repo-wide under the current
+  stable rustfmt (toolchain-version heuristic drift in committed `lib.rs` and
+  pre-existing examples). Ran `cargo fmt` to normalize the whole workspace so
+  the `fmt` CI job is green again (mechanical; no behavioural change).
 
 ### 5e. Adoption acceleration (examples/templates)
 

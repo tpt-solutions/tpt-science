@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use tpt_math_linalg::tpt_math_linalg_dense::DMatrix;
 use tpt_sci_image::{linspace, radon_transform};
 

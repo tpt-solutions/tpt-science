@@ -127,7 +127,6 @@ fn run_nuts<T: Target + ?Sized>(
     n_samples: usize,
     opts: NutsOptions,
 ) -> Result<(Vec<Vec<f64>>, usize), PplError> {
-
     let dim = initial.len();
     // Validate the initial point produces a finite log-density.
     {

@@ -612,7 +612,11 @@ mod tests {
         assert_abs_diff_eq!(r[(1, 0)], theta.sin(), epsilon = 1e-3);
         // The quaternion must stay (approximately) unit.
         let q = b.orientation;
-        assert_abs_diff_eq!((q[0].powi(2) + q[1].powi(2) + q[2].powi(2) + q[3].powi(2)).sqrt(), 1.0, epsilon = 1e-9);
+        assert_abs_diff_eq!(
+            (q[0].powi(2) + q[1].powi(2) + q[2].powi(2) + q[3].powi(2)).sqrt(),
+            1.0,
+            epsilon = 1e-9
+        );
     }
 
     #[test]

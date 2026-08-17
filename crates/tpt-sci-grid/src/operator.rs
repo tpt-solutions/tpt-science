@@ -82,7 +82,7 @@ pub fn laplacian_2d(grid: &UniformGrid2D, bc: Boundary) -> DMatrix {
     let dy = laplacian_1d(&gy, bc);
     let ix = DMatrix::from_fn(grid.nx(), grid.nx(), |a, b| if a == b { 1.0 } else { 0.0 });
     let iy = DMatrix::from_fn(grid.ny(), grid.ny(), |a, b| if a == b { 1.0 } else { 0.0 });
-    kron(&iy, &dx) +     kron(&dy, &ix)
+    kron(&iy, &dx) + kron(&dy, &ix)
 }
 
 /// Assemble a 1-D finite-difference operator from a [`Stencil`].
