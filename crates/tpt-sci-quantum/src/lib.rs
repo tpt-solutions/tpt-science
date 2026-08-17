@@ -38,37 +38,8 @@ pub mod tensor;
 pub use tensor::{Circuit, embed_gate_2x2, kron};
 
 /// Errors produced by state construction and gate application.
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
-pub enum StateError {
-    /// The requested number of qubits exceeds the supported limit.
-    #[error("cannot simulate {0} qubits: state vector would be too large (max 20)")]
-    TooManyQubits(usize),
-
-    /// A gate referenced a qubit index that does not exist.
-    #[error("qubit index {qubit} is invalid for a {n}-qubit state")]
-    InvalidQubit {
-        /// The offending qubit index.
-        qubit: usize,
-        /// The number of qubits in the state.
-        n: usize,
-    },
-
-    /// A two-qubit gate was given the same qubit for control and target.
-    #[error("control and target must differ, but both were {0}")]
-    SameQubits(usize),
-
-    /// A unitary matrix supplied to [`State::apply_unitary`] had the wrong
-    /// dimension for this state's qubit count.
-    #[error(
-        "unitary must be {expected}x{expected} (2^(n+1) for an n-qubit state), but got {got}x{got}"
-    )]
-    UnitarySizeMismatch {
-        /// The required row/column count.
-        expected: usize,
-        /// The row count that was actually supplied.
-        got: usize,
-    },
-}
+pub mod error;
+pub use error::StateError;
 
 /// A pure `n`-qubit state stored as a length-`2^n` amplitude vector.
 ///
@@ -170,6 +141,13 @@ impl State {
     /// Uses `rng` to draw a uniform value in `[0, 1)` and returns the first
     /// index whose cumulative probability exceeds it.
     ///
+    /// This method is **non-destructive**: it only reads the state and reports
+    /// a sampled outcome. Repeated calls therefore keep returning outcomes from
+    /// the same (uncollapsed) distribution. Use [`State::measure_collapsing`]
+    /// when you need the standard post-measurement collapse semantics (as in
+    /// Qiskit/Cirq), where the state is projected onto the measured basis
+    /// state.
+    ///
     /// # Examples
     ///
     /// ```
@@ -193,6 +171,42 @@ impl State {
             }
         }
         self.amps.len() - 1
+    }
+
+    /// Sample a basis index and collapse the state onto that outcome.
+    ///
+    /// Unlike [`State::measure`], which only samples without disturbing the
+    /// state, this consumes the measurement: the state is projected onto the
+    /// measured computational-basis state (all other amplitudes zeroed) and the
+    /// surviving amplitude is renormalised. This matches the standard simulator
+    /// semantics (Qiskit/Cirq), where a subsequent measurement of the same
+    /// register is deterministic.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tpt_sci_quantum::State;
+    /// use tpt_math_prob_core::SplitMix64;
+    ///
+    /// let mut state = State::new(1).unwrap();
+    /// state.x(0).unwrap(); // |1⟩
+    /// let mut rng = SplitMix64::seed_from_u64(7);
+    /// let idx = state.measure_collapsing(&mut rng);
+    /// assert_eq!(idx, 1);
+    /// assert!((state.amplitude(1).norm() - 1.0).abs() < 1e-9);
+    /// ```
+    pub fn measure_collapsing(&mut self, rng: &mut impl Rng) -> usize {
+        let idx = self.measure(rng);
+        let amp = self.amps[idx];
+        let norm = amp.norm();
+        for a in &mut self.amps {
+            *a = Complex::new(0.0, 0.0);
+        }
+        if norm > 0.0 {
+            // Preserve the (now unit-magnitude) phase of the surviving amplitude.
+            self.amps[idx] = amp.scale(1.0 / norm);
+        }
+        idx
     }
 
     /// Expectation value `⟨Z^{⊗n}⟩` of the all-qubit parity operator.
@@ -521,8 +535,32 @@ mod tests {
     }
 
     #[test]
-    fn probabilities_sum_to_one() {
-        let mut s = State::new(3).unwrap();
+    fn measure_collapsing_projects_state() {
+        // |1> collapses deterministically to |1>.
+        let mut s = State::new(1).unwrap();
+        s.x(0).unwrap();
+        let mut rng = SplitMix64::seed_from_u64(7);
+        let idx = s.measure_collapsing(&mut rng);
+        assert_eq!(idx, 1);
+        assert!((s.amplitude(1).norm() - 1.0).abs() < TOL);
+        assert!((s.amplitude(0).norm()).abs() < TOL);
+
+        // A superposition collapses to one of its basis states and stays there.
+        let mut s2 = State::new(2).unwrap();
+        s2.h(0).unwrap();
+        s2.cnot(0, 1).unwrap();
+        let mut rng2 = SplitMix64::seed_from_u64(99);
+        let idx2 = s2.measure_collapsing(&mut rng2);
+        assert!(idx2 == 0 || idx2 == 3);
+        // After collapse, exactly one basis state carries unit probability.
+        let p = s2.probabilities();
+        let max_p: f64 = p.iter().cloned().fold(0.0, f64::max);
+        assert!((max_p - 1.0).abs() < TOL);
+        assert!((s2.norm() - 1.0).abs() < TOL);
+    }
+
+    #[test]
+    fn probabilities_sum_to_one() {        let mut s = State::new(3).unwrap();
         s.h(0).unwrap();
         s.h(1).unwrap();
         s.h(2).unwrap();

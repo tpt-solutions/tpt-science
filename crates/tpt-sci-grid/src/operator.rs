@@ -1,6 +1,7 @@
 use tpt_math_linalg::tpt_math_linalg_dense::DMatrix;
 
 use crate::grid::{Boundary, UniformGrid1D, UniformGrid2D};
+use crate::stencil::Stencil;
 
 /// Kronecker product `A ⊗ B`.
 pub fn kron(a: &DMatrix, b: &DMatrix) -> DMatrix {
@@ -81,7 +82,40 @@ pub fn laplacian_2d(grid: &UniformGrid2D, bc: Boundary) -> DMatrix {
     let dy = laplacian_1d(&gy, bc);
     let ix = DMatrix::from_fn(grid.nx(), grid.nx(), |a, b| if a == b { 1.0 } else { 0.0 });
     let iy = DMatrix::from_fn(grid.ny(), grid.ny(), |a, b| if a == b { 1.0 } else { 0.0 });
-    kron(&iy, &dx) + kron(&dy, &ix)
+    kron(&iy, &dx) +     kron(&dy, &ix)
+}
+
+/// Assemble a 1-D finite-difference operator from a [`Stencil`].
+///
+/// Each stencil entry `(offset, coeff)` contributes `coeff / h^order` to the
+/// row `i`, column `i + offset`, where `order` is `1` for the first-derivative
+/// stencil and `2` for the second-derivative stencil (the `1/h^order` factor
+/// follows the standard finite-difference scaling for unit-spaced
+/// coefficients).
+///
+/// Near the boundary, offsets that fall outside `[0, n)` are simply dropped, so
+/// the returned operator is exact in the interior and zero-padded at the edges.
+/// For interior-only derivative operators on a fixed grid this matches the
+/// behaviour of [`laplacian_1d`] away from the boundary.
+pub fn derivative_1d(grid: &UniformGrid1D, stencil: Stencil) -> DMatrix {
+    let n = grid.n();
+    let h = grid.dx();
+    let (offsets, coeffs) = stencil.coefficients();
+    let order = if stencil == Stencil::CentralFirstDerivative {
+        1
+    } else {
+        2
+    };
+    let h_pow = h.powi(order);
+    DMatrix::from_fn(n, n, |i, j| {
+        let needed_off = j as isize - i as isize;
+        for (off, c) in offsets.iter().zip(&coeffs) {
+            if *off == needed_off {
+                return c / h_pow;
+            }
+        }
+        0.0
+    })
 }
 
 #[cfg(test)]
@@ -153,5 +187,27 @@ mod tests {
         assert_eq!(k.ncols(), 4);
         assert_abs_diff_eq!(k[(0, 0)], 1.0, epsilon = 1e-12);
         assert_abs_diff_eq!(k[(2, 3)], 2.0, epsilon = 1e-12);
+    }
+
+    #[test]
+    fn derivative_first_of_linear_is_constant() {
+        // u(x) = x  ->  u' = 1 everywhere.
+        let g = UniformGrid1D::new(21, 0.0, 1.0).unwrap();
+        let d = derivative_1d(&g, Stencil::CentralFirstDerivative);
+        let u = g.coordinates();
+        let du = d * DVector::from_vec(u);
+        let mid = g.n() / 2;
+        assert_abs_diff_eq!(du[mid], 1.0, epsilon = 1e-3);
+    }
+
+    #[test]
+    fn derivative_second_of_quadratic_is_constant() {
+        // u(x) = x^2  ->  u'' = 2 everywhere.
+        let g = UniformGrid1D::new(21, 0.0, 1.0).unwrap();
+        let d2 = derivative_1d(&g, Stencil::CentralSecondDerivative);
+        let u: Vec<f64> = g.coordinates().iter().map(|x| x * x).collect();
+        let d2u = d2 * DVector::from_vec(u);
+        let mid = g.n() / 2;
+        assert_abs_diff_eq!(d2u[mid], 2.0, epsilon = 1e-3);
     }
 }

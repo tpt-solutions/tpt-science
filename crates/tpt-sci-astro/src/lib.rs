@@ -12,6 +12,10 @@
 //!   ([`OrbitalElements::state_vector`] and [`OrbitalElements::from_state`]).
 //! * Time propagation via Kepler's equation (`state -> mean anomaly -> advance
 //!   -> solve -> true anomaly`) in [`OrbitalElements::propagate`].
+//! * First-order secular `J₂` perturbation: [`OrbitalElements::propagate_j2`]
+//!   and [`OrbitalElements::j2_secular_rates`] give the dominant long-term
+//!   nodal regression and apsidal precession for oblate-body missions (e.g.
+//!   sun-synchronous orbit design).
 //!
 //! All angles are in **radians**. The model assumes an ideal point-mass central
 //! body and neglects perturbations (J2, drag, third bodies, SRP, ...), so it is
@@ -42,6 +46,14 @@ mod error;
 /// Useful as a default when working in Earth-Centered Inertial (ECI) frames
 /// with kilometre and second units.
 pub const EARTH_MU: f64 = 398_600.441_8;
+
+/// Earth's second zonal harmonic `J₂` (dimensionless), the leading oblateness
+/// term that drives nodal regression and apsidal precession.
+pub const EARTH_J2: f64 = 1.082_626_68e-3;
+
+/// Earth's equatorial radius `Rₑ` in km, the reference length for the `J₂`
+/// perturbation (the perturbation scales as `(Rₑ/p)²`).
+pub const EARTH_RADIUS_EQ: f64 = 6378.137;
 
 /// A classical (Keplerian) set of orbital elements describing an elliptical
 /// orbit in an Earth-Centered Inertial (ECI) frame.
@@ -287,6 +299,57 @@ impl OrbitalElements {
             mu: self.mu,
         }
     }
+
+    /// First-order secular J2 perturbation rates (Brouwer/Lyddane secular
+    /// terms) for this orbit: the time derivatives of the right ascension of
+    /// the ascending node (`Ω̇`) and the argument of periapsis (`ω̇`).
+    ///
+    /// These are the dominant long-term perturbations from Earth's oblateness:
+    /// `Ω̇` (nodal regression) and `ω̇` (apsidal precession). They depend on the
+    /// `J₂` coefficient and the reference equatorial radius `r_eq` (both
+    /// supplied so the same routine works for any oblate body). The semi-major
+    /// axis, eccentricity, and inclination are constant to first order in `J₂`.
+    ///
+    /// Returns `(raan_dot, argp_dot)` in radians per unit time.
+    #[must_use]
+    pub fn j2_secular_rates(&self, j2: f64, r_eq: f64) -> (f64, f64) {
+        let n = (self.mu / self.a.powi(3)).sqrt();
+        let p = self.a * (1.0 - self.e.powi(2));
+        let factor = 1.5 * n * j2 * (r_eq / p).powi(2);
+        let ci = self.i.cos();
+        let raan_dot = -factor * ci;
+        let argp_dot = 0.5 * factor * (5.0 * ci * ci - 1.0);
+        (raan_dot, argp_dot)
+    }
+
+    /// Propagate the orbit under the first-order secular `J₂` perturbation for
+    /// `dt` units of time.
+    ///
+    /// The in-plane motion (mean anomaly / true anomaly) is advanced with the
+    /// two-body mean motion, while the secular `J₂` drifts are added to the
+    /// right ascension of the ascending node and the argument of periapsis. The
+    /// semi-major axis, eccentricity, and inclination are held fixed (they are
+    /// constant to first order in `J₂`). This is the standard model used for
+    /// long-term RAAN drift and sun-synchronous orbit design; it does not
+    /// include short-periodic `J₂` oscillations.
+    ///
+    /// `j2` is the body's zonal harmonic (e.g. [`EARTH_J2`]) and `r_eq` its
+    /// equatorial radius (e.g. [`EARTH_RADIUS_EQ`]).
+    #[must_use]
+    pub fn propagate_j2(&self, dt: f64, j2: f64, r_eq: f64) -> OrbitalElements {
+        let in_plane = self.propagate(dt);
+        let (raan_dot, argp_dot) = self.j2_secular_rates(j2, r_eq);
+        let two_pi = 2.0 * std::f64::consts::PI;
+        OrbitalElements {
+            a: in_plane.a,
+            e: in_plane.e,
+            i: in_plane.i,
+            raan: (in_plane.raan + raan_dot * dt).rem_euclid(two_pi),
+            argp: (in_plane.argp + argp_dot * dt).rem_euclid(two_pi),
+            nu: in_plane.nu,
+            mu: in_plane.mu,
+        }
+    }
 }
 
 /// The 3×3 rotation matrix `Q` that maps perifocal-frame coordinates to ECI.
@@ -445,5 +508,54 @@ mod tests {
         assert_abs_diff_eq!(c[0], 0.0, epsilon = 1e-12);
         assert_abs_diff_eq!(c[1], 0.0, epsilon = 1e-12);
         assert_abs_diff_eq!(c[2], 1.0, epsilon = 1e-12);
+    }
+
+    #[test]
+    fn j2_rates_match_formula() {
+        // LEO orbit: a = 7000 km, e = 0.01, i = 50 deg.
+        let el = OrbitalElements::new(
+            7000.0,
+            0.01,
+            50.0_f64.to_radians(),
+            0.0,
+            0.0,
+            0.0,
+            EARTH_MU,
+        )
+        .unwrap();
+        let (raan_dot, argp_dot) = el.j2_secular_rates(EARTH_J2, EARTH_RADIUS_EQ);
+        let n = (EARTH_MU / el.a.powi(3)).sqrt();
+        let p = el.a * (1.0 - el.e.powi(2));
+        let factor = 1.5 * n * EARTH_J2 * (EARTH_RADIUS_EQ / p).powi(2);
+        let ci = el.i.cos();
+        assert_abs_diff_eq!(raan_dot, -factor * ci, epsilon = 1e-12);
+        assert_abs_diff_eq!(argp_dot, 0.5 * factor * (5.0 * ci * ci - 1.0), epsilon = 1e-12);
+    }
+
+    #[test]
+    fn j2_regresses_raan_for_prograde() {
+        // A 50° inclined LEO orbit should see its RAAN regress (decrease) over
+        // a day, by roughly the analytic secular rate.
+        let el = OrbitalElements::new(
+            7000.0,
+            0.01,
+            50.0_f64.to_radians(),
+            1.0,
+            0.0,
+            0.0,
+            EARTH_MU,
+        )
+        .unwrap();
+        let dt = 86_400.0; // one day, seconds
+        let advanced = el.propagate_j2(dt, EARTH_J2, EARTH_RADIUS_EQ);
+        let (raan_dot, _) = el.j2_secular_rates(EARTH_J2, EARTH_RADIUS_EQ);
+        let expected = (el.raan + raan_dot * dt).rem_euclid(2.0 * std::f64::consts::PI);
+        assert_abs_diff_eq!(advanced.raan, expected, epsilon = 1e-9);
+        // a, e, i are preserved by the secular model.
+        assert_abs_diff_eq!(advanced.a, el.a, epsilon = 1e-9);
+        assert_abs_diff_eq!(advanced.e, el.e, epsilon = 1e-12);
+        assert_abs_diff_eq!(advanced.i, el.i, epsilon = 1e-12);
+        // Prograde (i < 90°): RAAN regresses.
+        assert!(raan_dot < 0.0);
     }
 }

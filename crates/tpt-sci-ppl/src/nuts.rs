@@ -78,7 +78,8 @@ pub fn nuts<T: Target + ?Sized>(
     rng: &mut impl Rng,
     n_samples: usize,
 ) -> Result<Vec<Vec<f64>>, PplError> {
-    nuts_with_options(target, initial, rng, n_samples, NutsOptions::default())
+    let (samples, _) = run_nuts(target, initial, rng, n_samples, NutsOptions::default())?;
+    Ok(samples)
 }
 
 /// Run NUTS with explicit [`NutsOptions`].
@@ -93,15 +94,39 @@ pub fn nuts_with_options<T: Target + ?Sized>(
     n_samples: usize,
     opts: NutsOptions,
 ) -> Result<Vec<Vec<f64>>, PplError> {
-    if n_samples == 0 {
-        return Err(PplError::InvalidOption("n_samples must be > 0".into()));
-    }
-    if opts.step_size <= 0.0 {
-        return Err(PplError::InvalidOption("step_size must be > 0".into()));
-    }
-    if opts.max_depth == 0 {
-        return Err(PplError::InvalidOption("max_depth must be > 0".into()));
-    }
+    let (samples, _) = run_nuts(target, initial, rng, n_samples, opts)?;
+    Ok(samples)
+}
+
+/// Run NUTS and also report the number of divergent transitions observed
+/// during the sampling phase.
+///
+/// A high divergence count signals a pathological posterior (steep curvature,
+/// poor identifiability) where the step size had to be shrunk hard; the
+/// resulting samples may be biased. The count feeds [`crate::Trace`].
+///
+/// # Errors
+///
+/// See [`nuts`] for the error conditions.
+pub fn nuts_with_divergences<T: Target + ?Sized>(
+    target: &T,
+    initial: &[f64],
+    rng: &mut impl Rng,
+    n_samples: usize,
+) -> Result<(Vec<Vec<f64>>, usize), PplError> {
+    run_nuts(target, initial, rng, n_samples, NutsOptions::default())
+}
+
+/// Core NUTS driver shared by the public entry points. Returns the post
+/// warm-up samples plus the number of divergent transitions seen while
+/// sampling.
+fn run_nuts<T: Target + ?Sized>(
+    target: &T,
+    initial: &[f64],
+    rng: &mut impl Rng,
+    n_samples: usize,
+    opts: NutsOptions,
+) -> Result<(Vec<Vec<f64>>, usize), PplError> {
 
     let dim = initial.len();
     // Validate the initial point produces a finite log-density.
@@ -129,6 +154,7 @@ pub fn nuts_with_options<T: Target + ?Sized>(
 
     let total = opts.warmup + n_samples;
     let mut samples = Vec::with_capacity(n_samples);
+    let mut n_divergences = 0usize;
 
     for m in 1..=total {
         let r0: Vec<f64> = (0..dim).map(|_| randn(rng)).collect();
@@ -146,6 +172,7 @@ pub fn nuts_with_options<T: Target + ?Sized>(
         let mut x_sample = x.clone();
         let mut n = 1usize;
         let mut sum_accept = 0.0_f64;
+        let mut iter_divergent = false;
 
         for j in 0..opts.max_depth {
             let v = if rng.next_f64() < 0.5 { -1.0 } else { 1.0 };
@@ -156,6 +183,7 @@ pub fn nuts_with_options<T: Target + ?Sized>(
             };
             let tree = build_tree(target, endpoint_x, endpoint_r, log_u, v, j, eps, rng);
             if tree.divergent {
+                iter_divergent = true;
                 break;
             }
             if v < 0.0 {
@@ -207,11 +235,14 @@ pub fn nuts_with_options<T: Target + ?Sized>(
         if m > opts.warmup {
             // Hold the dual-averaged step size fixed for the sampling phase.
             eps = log_eps_bar.exp().clamp(1e-3, 10.0);
+            if iter_divergent {
+                n_divergences += 1;
+            }
             samples.push(x.clone());
         }
     }
 
-    Ok(samples)
+    Ok((samples, n_divergences))
 }
 
 /// One recursive NUTS tree expansion.
@@ -351,7 +382,7 @@ fn log_post_grad<T: Target + ?Sized>(target: &T, x: &[f64]) -> (f64, Vec<f64>) {
 }
 
 /// Standard-normal draw via Box–Muller.
-fn randn<R: Rng + ?Sized>(rng: &mut R) -> f64 {
+pub(crate) fn randn<R: Rng + ?Sized>(rng: &mut R) -> f64 {
     let u1 = rng.next_f64().max(1e-300);
     let u2 = rng.next_f64();
     (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos()

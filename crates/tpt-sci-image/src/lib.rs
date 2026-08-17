@@ -21,7 +21,7 @@
 //! // A 4x4 image with a single bright pixel at the centre.
 //! let image = DMatrix::from_fn(4, 4, |i, j| if i == 1 && j == 1 { 1.0 } else { 0.0 });
 //! let angles = linspace(0.0, std::f64::consts::PI, 8);
-//! let sinogram = radon_transform(&image, &angles);
+//! let sinogram = radon_transform(&image, &angles).unwrap();
 //!
 //! // The sinogram has one row per angle and one column per detector bin.
 //! assert_eq!(sinogram.nrows(), 8);
@@ -30,6 +30,10 @@
 
 use tpt_math_linalg::tpt_math_linalg_dense::DMatrix;
 use tpt_math_signal_fft::{Complex, fft, ifft_normalized};
+
+/// Errors returned by the image reconstruction API.
+pub mod error;
+pub use error::ImageError;
 
 /// Build an inclusive linearly-spaced vector of `n` points from `start` to
 /// `end`.
@@ -115,7 +119,21 @@ fn sample_1d(v: &[f64], x: f64) -> f64 {
 /// pixel) and bilinear interpolation; the same centre convention and rotation
 /// sense are used by [`filtered_back_projection`] so forward and inverse are
 /// consistent.
-pub fn radon_transform(image: &DMatrix<f64>, angles: &[f64]) -> DMatrix<f64> {
+///
+/// # Errors
+///
+/// Returns [`ImageError::EmptyImage`] if `image` has zero rows or columns, or
+/// [`ImageError::EmptyAngles`] if `angles` is empty.
+pub fn radon_transform(image: &DMatrix<f64>, angles: &[f64]) -> Result<DMatrix<f64>, ImageError> {
+    if image.nrows() == 0 || image.ncols() == 0 {
+        return Err(ImageError::EmptyImage {
+            nrows: image.nrows(),
+            ncols: image.ncols(),
+        });
+    }
+    if angles.is_empty() {
+        return Err(ImageError::EmptyAngles);
+    }
     let nb = detector_count(image);
     let c = (nb - 1) as f64 / 2.0;
     let cx_img = (image.ncols() - 1) as f64 / 2.0;
@@ -142,7 +160,7 @@ pub fn radon_transform(image: &DMatrix<f64>, angles: &[f64]) -> DMatrix<f64> {
             }
         }
     }
-    DMatrix::from_fn(angles.len(), nb, |a, i| sino[a * nb + i])
+    Ok(DMatrix::from_fn(angles.len(), nb, |a, i| sino[a * nb + i]))
 }
 
 /// Apply the ram-lak ramp filter to a single projection in the Fourier domain.
@@ -211,7 +229,24 @@ fn back_project(projections: &[Vec<f64>], angles: &[f64], nb: usize) -> DMatrix<
 ///
 /// The returned reconstruction is always `n_bins x n_bins` with
 /// `n_bins = sinogram.ncols()`.
-pub fn filtered_back_projection(sinogram: &DMatrix<f64>, angles: &[f64]) -> DMatrix<f64> {
+///
+/// # Errors
+///
+/// Returns [`ImageError::EmptyAngles`] if `angles` is empty or
+/// [`ImageError::AngleCountMismatch`] if `sinogram.nrows() != angles.len()`.
+pub fn filtered_back_projection(
+    sinogram: &DMatrix<f64>,
+    angles: &[f64],
+) -> Result<DMatrix<f64>, ImageError> {
+    if angles.is_empty() {
+        return Err(ImageError::EmptyAngles);
+    }
+    if sinogram.nrows() != angles.len() {
+        return Err(ImageError::AngleCountMismatch {
+            sino_rows: sinogram.nrows(),
+            n_angles: angles.len(),
+        });
+    }
     let nb = sinogram.ncols();
     let mut qs: Vec<Vec<f64>> = Vec::with_capacity(angles.len());
     for a in 0..angles.len() {
@@ -220,7 +255,7 @@ pub fn filtered_back_projection(sinogram: &DMatrix<f64>, angles: &[f64]) -> DMat
     }
     let rec = back_project(&qs, angles, nb);
     let scale = 4.0 / nb as f64 / angles.len() as f64;
-    rec * scale
+    Ok(rec * scale)
 }
 
 /// Unfiltered (naive) back-projection of a sinogram.
@@ -228,14 +263,31 @@ pub fn filtered_back_projection(sinogram: &DMatrix<f64>, angles: &[f64]) -> DMat
 /// Like [`filtered_back_projection`] but without the ramp filter, used to show
 /// that filtering improves the reconstruction (it removes the characteristic
 /// blur/halo of the naive adjoint).
-pub fn naive_back_projection(sinogram: &DMatrix<f64>, angles: &[f64]) -> DMatrix<f64> {
+///
+/// # Errors
+///
+/// Returns [`ImageError::EmptyAngles`] if `angles` is empty or
+/// [`ImageError::AngleCountMismatch`] if `sinogram.nrows() != angles.len()`.
+pub fn naive_back_projection(
+    sinogram: &DMatrix<f64>,
+    angles: &[f64],
+) -> Result<DMatrix<f64>, ImageError> {
+    if angles.is_empty() {
+        return Err(ImageError::EmptyAngles);
+    }
+    if sinogram.nrows() != angles.len() {
+        return Err(ImageError::AngleCountMismatch {
+            sino_rows: sinogram.nrows(),
+            n_angles: angles.len(),
+        });
+    }
     let nb = sinogram.ncols();
     let projections: Vec<Vec<f64>> = (0..angles.len())
         .map(|a| (0..nb).map(|j| sinogram[(a, j)]).collect())
         .collect();
     let rec = back_project(&projections, angles, nb);
     let scale = 4.0 / nb as f64 / angles.len() as f64;
-    rec * scale
+    Ok(rec * scale)
 }
 
 #[cfg(test)]
@@ -279,7 +331,7 @@ mod tests {
             |i, j| if i == n / 2 && j == n / 2 { 1.0 } else { 0.0 },
         );
         let angles = linspace(0.0, std::f64::consts::PI, 32);
-        let sino = radon_transform(&image, &angles);
+        let sino = radon_transform(&image, &angles).unwrap();
         assert_eq!(sino.nrows(), 32);
         assert_eq!(sino.ncols(), n);
     }
@@ -293,7 +345,7 @@ mod tests {
             |i, j| if i == n / 2 && j == n / 2 { 1.0 } else { 0.0 },
         );
         let angles = linspace(0.0, std::f64::consts::PI, 32);
-        let sino = radon_transform(&image, &angles);
+        let sino = radon_transform(&image, &angles).unwrap();
 
         // Find the column (detector bin) holding the maximum value of the whole
         // sinogram: for a centred point source it must be the centre bin.
@@ -315,7 +367,7 @@ mod tests {
         let n = 16usize;
         let image = DMatrix::from_fn(n, n, |_, _| 1.0);
         let angles = linspace(0.0, std::f64::consts::PI, 24);
-        let sino = radon_transform(&image, &angles);
+        let sino = radon_transform(&image, &angles).unwrap();
         // A constant unit image integrates to at most N samples per detector
         // bin (a full line through the square). Because the discrete sinogram
         // samples a rotated `N x N` frame and no bin sits exactly on the
@@ -356,8 +408,8 @@ mod tests {
             |i, j| if i == n / 2 && j == n / 2 { 1.0 } else { 0.0 },
         );
         let angles = linspace(0.0, std::f64::consts::PI, 32);
-        let sino = radon_transform(&image, &angles);
-        let rec = filtered_back_projection(&sino, &angles);
+        let sino = radon_transform(&image, &angles).unwrap();
+        let rec = filtered_back_projection(&sino, &angles).unwrap();
 
         let c = center(n);
         assert!(rec[(c.0, c.1)] > 0.0, "centre should be positive");
@@ -382,9 +434,9 @@ mod tests {
         });
 
         let angles = linspace(0.0, std::f64::consts::PI, 48);
-        let sino = radon_transform(&original, &angles);
-        let rec = filtered_back_projection(&sino, &angles);
-        let naive = naive_back_projection(&sino, &angles);
+        let sino = radon_transform(&original, &angles).unwrap();
+        let rec = filtered_back_projection(&sino, &angles).unwrap();
+        let naive = naive_back_projection(&sino, &angles).unwrap();
 
         // The centre reconstruction should be positive and reasonably close to
         // the original centre value (filtered back-projection is not exact, so
@@ -419,5 +471,38 @@ mod tests {
             fbp_err < naive_err,
             "FBP error {fbp_err} should be below naive error {naive_err}"
         );
+    }
+
+    #[test]
+    fn radon_rejects_empty_image_and_angles() {
+        let empty = DMatrix::<f64>::zeros(0, 4);
+        let angles = linspace(0.0, std::f64::consts::PI, 8);
+        assert!(matches!(
+            radon_transform(&empty, &angles),
+            Err(ImageError::EmptyImage { .. })
+        ));
+        let image = DMatrix::from_fn(4, 4, |_, _| 1.0);
+        assert!(matches!(
+            radon_transform(&image, &[]),
+            Err(ImageError::EmptyAngles)
+        ));
+    }
+
+    #[test]
+    fn fbp_rejects_angle_count_mismatch() {
+        let n = 8usize;
+        let image = DMatrix::from_fn(n, n, |_, _| 1.0);
+        let angles = linspace(0.0, std::f64::consts::PI, 8);
+        let sino = radon_transform(&image, &angles).unwrap();
+        // A sinogram built from 8 angles cannot be reconstructed with 4 angles.
+        let few = linspace(0.0, std::f64::consts::PI, 4);
+        assert!(matches!(
+            filtered_back_projection(&sino, &few),
+            Err(ImageError::AngleCountMismatch { .. })
+        ));
+        assert!(matches!(
+            naive_back_projection(&sino, &few),
+            Err(ImageError::AngleCountMismatch { .. })
+        ));
     }
 }

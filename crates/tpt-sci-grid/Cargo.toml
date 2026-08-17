@@ -19,8 +19,17 @@ tpt-math-numeric = { workspace = true }
 tpt-math-linalg = { workspace = true }
 thiserror = { workspace = true }
 
+[features]
+# Opt-in sparse-matrix backend (`CsrMatrix`, `laplacian_*_sparse`). additive:
+# the dense API is always available; enabling this unlocks memory-efficient
+# operators for realistically-sized (N-D) PDE grids.
+sparse = []
+
 [dev-dependencies]
 approx = { workspace = true }
 
 [lints]
 workspace = true
+
+[package.metadata.docs.rs]
+all-features = true

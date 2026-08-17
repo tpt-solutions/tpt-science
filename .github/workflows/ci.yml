@@ -36,6 +36,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --workspace
 
+  # Build the documentation and fail on any rustdoc warning (including broken
+  # intra-doc links). This catches doc rot that `cargo test` only surfaces
+  # indirectly via doctests.
+  doc:
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo doc --workspace --no-deps --all-features
+
   # NOTE: intentionally NOT `cargo build --workspace --target thumbv6m-none-eabi`.
   # Per ADR 0001 (tpt-rust-map/docs/adr/0001-no-std-via-features-not-forks.md), a
   # blind --workspace no_std build breaks the moment any std-only crate joins

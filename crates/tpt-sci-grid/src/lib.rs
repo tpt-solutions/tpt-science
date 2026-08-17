@@ -29,12 +29,17 @@
 pub mod error;
 pub mod grid;
 pub mod operator;
+#[cfg(feature = "sparse")]
+pub mod sparse;
 pub mod stencil;
 
 pub use error::GridError;
 pub use grid::{Boundary, UniformGrid1D, UniformGrid2D, linspace};
-pub use operator::{kron, laplacian_1d, laplacian_2d};
+pub use operator::{derivative_1d, kron, laplacian_1d, laplacian_2d};
 pub use stencil::Stencil;
+
+#[cfg(feature = "sparse")]
+pub use sparse::{CsrMatrix, diffuse_step, laplacian_1d_sparse, laplacian_2d_sparse};
 
 /// The `tpt-math` linear-algebra substrate this crate builds on.
 pub use tpt_math_linalg as linalg;

@@ -1548,6 +1548,7 @@ dependencies = [
  "tpt-math-linalg",
  "tpt-sci-grid",
  "tpt-sci-ode",
+ "tpt-sci-reaction-network",
 ]
 
 [[package]]

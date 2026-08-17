@@ -12,6 +12,12 @@
 //! (Baumgarte-style) correction to keep overlapping bodies from sinking into
 //! one another.
 //!
+//! Each [`Body`] is a genuine rigid body, not just a point mass: it carries an
+//! orientation quaternion and an angular velocity, so torques change its spin
+//! and its orientation integrates forward under [`Body::spin`]. For a sphere the
+//! moment of inertia is isotropic (default `(2/5)·m·r²`), captured by a single
+//! scalar [`Body::inertia`].
+//!
 //! # Examples
 //!
 //! ```
@@ -44,7 +50,7 @@
 //! ```
 #![forbid(unsafe_code)]
 
-use tpt_math_linalg::tpt_math_linalg_dense::DVector;
+use tpt_math_linalg::tpt_math_linalg_dense::{DMatrix, DVector};
 
 mod error;
 
@@ -52,6 +58,12 @@ pub use error::PhysicsError;
 
 /// A spherical rigid body living in an `n`-dimensional space (the dimension is
 /// implied by the length of its [`Body::position`]/`[Body::velocity]` vectors).
+///
+/// Beyond the point-mass kinematics, a body also carries an orientation
+/// (unit quaternion `[w, x, y, z]`) and an angular velocity, so it behaves as
+/// a true rigid body: torques change its spin and its orientation integrates
+/// forward in time. For a sphere the moment of inertia is isotropic, so a
+/// single scalar `inertia` (defaulting to `(2/5)·m·r²`) is sufficient.
 #[derive(Debug, Clone)]
 pub struct Body {
     /// Center of mass position.
@@ -64,6 +76,12 @@ pub struct Body {
     pub radius: f64,
     /// Unique identifier within a [`World`].
     pub id: usize,
+    /// Orientation as a unit quaternion `[w, x, y, z]`.
+    pub orientation: [f64; 4],
+    /// Angular velocity (rad/s) as a 3-vector.
+    pub angular_velocity: [f64; 3],
+    /// Scalar moment of inertia about any principal axis (sphere: isotropic).
+    pub inertia: f64,
 }
 
 impl Body {
@@ -113,8 +131,114 @@ impl Body {
             mass,
             radius,
             id,
+            orientation: [1.0, 0.0, 0.0, 0.0],
+            angular_velocity: [0.0; 3],
+            inertia: 0.4 * mass * radius * radius,
         })
     }
+}
+
+impl Body {
+    /// Set the 3×3 rotation matrix `R` corresponding to this body's
+    /// orientation quaternion. Useful for orienting contact normals or
+    /// rendering.
+    #[must_use]
+    pub fn orientation_matrix(&self) -> DMatrix<f64> {
+        quat_to_matrix(&self.orientation)
+    }
+
+    /// Overwrite the orientation quaternion (must be a unit quaternion).
+    pub fn set_orientation(&mut self, q: [f64; 4]) {
+        self.orientation = q;
+    }
+
+    /// Overwrite the angular velocity (rad/s).
+    pub fn set_angular_velocity(&mut self, omega: [f64; 3]) {
+        self.angular_velocity = omega;
+    }
+
+    /// Set the scalar moment of inertia (overrides the default `(2/5)·m·r²`).
+    pub fn set_inertia(&mut self, inertia: f64) {
+        self.inertia = inertia;
+    }
+
+    /// Apply a torque vector `tau` (N·m) for `dt` seconds, changing the angular
+    /// velocity via `ω += τ·dt / I`. For an isotropic (spherical) body this
+    /// fully captures the rigid-body rotational dynamics.
+    pub fn apply_torque(&mut self, tau: [f64; 3], dt: f64) {
+        if self.inertia == 0.0 {
+            return;
+        }
+        for k in 0..3 {
+            self.angular_velocity[k] += tau[k] * dt / self.inertia;
+        }
+    }
+
+    /// Integrate the orientation forward by `dt` seconds under the current
+    /// angular velocity (quaternion kinematics `q̇ = ½·(0, ω)⊗q`), then
+    /// renormalise so the quaternion stays unit.
+    pub fn spin(&mut self, dt: f64) {
+        let [w, x, y, z] = self.orientation;
+        let [ox, oy, oz] = self.angular_velocity;
+        // (0, ω) ⊗ q  (Hamilton product).
+        let dq = [
+            -0.5 * (ox * x + oy * y + oz * z),
+            0.5 * (ox * w + oy * z - oz * y),
+            0.5 * (-ox * z + oy * w + oz * x),
+            0.5 * (ox * y - oy * x + oz * w),
+        ];
+        let nx = w + dq[0] * dt;
+        let ny = x + dq[1] * dt;
+        let nz = y + dq[2] * dt;
+        let nw = z + dq[3] * dt;
+        self.orientation = quat_normalize(nx, ny, nz, nw);
+    }
+}
+
+/// Multiply two quaternions `a ⊗ b` (Hamilton product), both `[w, x, y, z]`.
+#[must_use]
+pub fn quat_mul(a: [f64; 4], b: [f64; 4]) -> [f64; 4] {
+    let [aw, ax, ay, az] = a;
+    let [bw, bx, by, bz] = b;
+    [
+        aw * bw - ax * bx - ay * by - az * bz,
+        aw * bx + ax * bw + ay * bz - az * by,
+        aw * by - ax * bz + ay * bw + az * bx,
+        aw * bz + ax * by - ay * bx + az * bw,
+    ]
+}
+
+/// Normalise a quaternion to unit length, returning `[w, x, y, z]`.
+#[must_use]
+pub fn quat_normalize(w: f64, x: f64, y: f64, z: f64) -> [f64; 4] {
+    let n = (w * w + x * x + y * y + z * z).sqrt();
+    if n == 0.0 {
+        [1.0, 0.0, 0.0, 0.0]
+    } else {
+        [w / n, x / n, y / n, z / n]
+    }
+}
+
+/// Convert a unit quaternion `[w, x, y, z]` to a 3×3 rotation matrix.
+#[must_use]
+pub fn quat_to_matrix(q: &[f64; 4]) -> DMatrix<f64> {
+    let [w, x, y, z] = *q;
+    let (x2, y2, z2) = (x + x, y + y, z + z);
+    let (wx, wy, wz) = (w * x2, w * y2, w * z2);
+    let (xx, xy, xz) = (x * x2, x * y2, x * z2);
+    let (yy, yz, zz) = (y * y2, y * z2, z * z2);
+    DMatrix::from_fn(3, 3, |r, c| match (r, c) {
+        (0, 0) => 1.0 - (yy + zz),
+        (0, 1) => xy - wz,
+        (0, 2) => xz + wy,
+        (1, 0) => xy + wz,
+        (1, 1) => 1.0 - (xx + zz),
+        (1, 2) => yz - wx,
+        (2, 0) => xz - wy,
+        (2, 1) => yz + wx,
+        (2, 2) => 1.0 - (xx + yy),
+        _ => 0.0,
+    })
 }
 
 /// A small rigid-body (sphere) simulation world.
@@ -346,7 +470,6 @@ fn resolve_pair(a: &mut Body, b: &mut Body, restitution: f64) {
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use tpt_math_linalg::tpt_math_linalg_dense::DVector;
 
     fn v(x: &[f64]) -> DVector<f64> {
         DVector::from_row_slice(x)
@@ -463,5 +586,42 @@ mod tests {
 
         assert_abs_diff_eq!(after[0], before[0], epsilon = 1e-6);
         assert_abs_diff_eq!(after[1], before[1], epsilon = 1e-6);
+    }
+
+    #[test]
+    fn apply_torque_changes_spin() {
+        let mut b = Body::new(0, v(&[0.0, 0.0]), v(&[0.0, 0.0]), 2.0, 0.5).unwrap();
+        // Default inertia for a sphere = 0.4·m·r² = 0.4·2·0.25 = 0.2.
+        assert_abs_diff_eq!(b.inertia, 0.2, epsilon = 1e-12);
+        // τ = (0,0,1) for dt = 0.1  =>  ω_z = τ·dt / I = 0.1/0.2 = 0.5.
+        b.apply_torque([0.0, 0.0, 1.0], 0.1);
+        assert_abs_diff_eq!(b.angular_velocity[2], 0.5, epsilon = 1e-12);
+        assert_abs_diff_eq!(b.angular_velocity[0], 0.0, epsilon = 1e-12);
+    }
+
+    #[test]
+    fn spin_integrates_orientation() {
+        let mut b = Body::new(0, v(&[0.0, 0.0]), v(&[0.0, 0.0]), 1.0, 0.5).unwrap();
+        b.set_angular_velocity([0.0, 0.0, 1.0]); // spin about z
+        let dt = 0.01_f64;
+        let theta = 1.0 * dt; // small angle
+        b.spin(dt);
+        let r = b.orientation_matrix();
+        // Rotating the x-axis by `theta` about z should give (cosθ, sinθ, 0).
+        assert_abs_diff_eq!(r[(0, 0)], theta.cos(), epsilon = 1e-3);
+        assert_abs_diff_eq!(r[(1, 0)], theta.sin(), epsilon = 1e-3);
+        // The quaternion must stay (approximately) unit.
+        let q = b.orientation;
+        assert_abs_diff_eq!((q[0].powi(2) + q[1].powi(2) + q[2].powi(2) + q[3].powi(2)).sqrt(), 1.0, epsilon = 1e-9);
+    }
+
+    #[test]
+    fn quat_helpers_roundtrip() {
+        let q = [0.0, 0.0, 0.0, 1.0]; // 180° about z
+        let r = quat_to_matrix(&q);
+        // Maps (1,0,0) -> (-1,0,0) and (0,1,0) -> (0,-1,0).
+        assert_abs_diff_eq!(r[(0, 0)], -1.0, epsilon = 1e-9);
+        assert_abs_diff_eq!(r[(1, 1)], -1.0, epsilon = 1e-9);
+        assert_abs_diff_eq!(r[(2, 2)], 1.0, epsilon = 1e-9);
     }
 }

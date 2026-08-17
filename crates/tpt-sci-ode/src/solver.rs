@@ -1,4 +1,7 @@
-use diffsol::{NalgebraLU, NalgebraMat, NalgebraVec, OdeBuilder, OdeSolverMethod};
+use diffsol::{
+    DenseMatrix, MatrixCommon, NalgebraLU, NalgebraMat, NalgebraVec, OdeBuilder, OdeSolverMethod,
+    VectorView,
+};
 
 use crate::error::OdeError;
 use crate::problem::{OdeProblem, nalgebra_vec_to_vec};
@@ -106,12 +109,71 @@ impl OdeProblem {
     /// Integrate at each time in `t_eval` (each must be greater than `t0`) and
     /// return one state vector per evaluation time.
     ///
+    /// Unlike a naive loop over [`OdeProblem::solve`], this builds the solver
+    /// once and walks a *single* trajectory, interpolating the requested times
+    /// off that one integration. This turns the O(n) redundant re-integration
+    /// from `t0` (one full solve per evaluation point) into a single solve plus
+    /// cheap interpolations, which matters for trajectory plotting with many
+    /// `t_eval` points.
+    ///
+    /// The entries of `t_eval` must be strictly increasing and greater than or
+    /// equal to `t0` (this mirrors the underlying diffsol requirement); a
+    /// violating `t_eval` is rejected rather than silently mis-integrated.
+    ///
     /// # Errors
     ///
-    /// Returns [`OdeError`] if any single integration step fails (see
+    /// Returns [`OdeError`] if the integration fails or `t_eval` is not a valid
+    /// strictly-increasing sequence starting at/after `t0` (see
     /// [`OdeProblem::solve`]).
     pub fn solve_dense(&self, method: Method, t_eval: &[f64]) -> Result<Vec<Vec<f64>>, OdeError> {
-        t_eval.iter().map(|&t| self.solve(method, t)).collect()
+        if t_eval.is_empty() {
+            return Ok(Vec::new());
+        }
+        let n = self.nstates;
+        let mut out = Vec::with_capacity(t_eval.len());
+        match method {
+            Method::Bdf => {
+                let problem = build_problem!(self)?;
+                let mut solver = problem.bdf::<NalgebraLU<f64>>().map_err(OdeError::from)?;
+                let (matrix, _stop) = solver.solve_dense(t_eval).map_err(OdeError::from)?;
+                for j in 0..matrix.ncols() {
+                    let col = matrix.column(j).into_owned();
+                    out.push(nalgebra_vec_to_vec(&col, n));
+                }
+            }
+            Method::Tsit45 => {
+                let problem = build_problem!(self)?;
+                let mut solver = problem.tsit45().map_err(OdeError::from)?;
+                let (matrix, _stop) = solver.solve_dense(t_eval).map_err(OdeError::from)?;
+                for j in 0..matrix.ncols() {
+                    let col = matrix.column(j).into_owned();
+                    out.push(nalgebra_vec_to_vec(&col, n));
+                }
+            }
+            Method::TrBdf2 => {
+                let problem = build_problem!(self)?;
+                let mut solver = problem
+                    .tr_bdf2::<NalgebraLU<f64>>()
+                    .map_err(OdeError::from)?;
+                let (matrix, _stop) = solver.solve_dense(t_eval).map_err(OdeError::from)?;
+                for j in 0..matrix.ncols() {
+                    let col = matrix.column(j).into_owned();
+                    out.push(nalgebra_vec_to_vec(&col, n));
+                }
+            }
+            Method::Esdirk34 => {
+                let problem = build_problem!(self)?;
+                let mut solver = problem
+                    .esdirk34::<NalgebraLU<f64>>()
+                    .map_err(OdeError::from)?;
+                let (matrix, _stop) = solver.solve_dense(t_eval).map_err(OdeError::from)?;
+                for j in 0..matrix.ncols() {
+                    let col = matrix.column(j).into_owned();
+                    out.push(nalgebra_vec_to_vec(&col, n));
+                }
+            }
+        }
+        Ok(out)
     }
 
     /// BDF solve to a single final time. See [`Method::Bdf`].

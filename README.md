@@ -84,16 +84,6 @@ See the crate READMEs for the full API:
 [`tpt-sci-astro`](crates/tpt-sci-astro),
 [`tpt-sci-reaction-network`](crates/tpt-sci-reaction-network).
 
-## `no_std` posture
-
-This pillar is **predominantly `std`-only** and is not built as `no_std`. The
-science workloads (simulation, physics, quantum, imaging, astrodynamics) do not
-target bare-metal, and every crate pulls in `std` transitively via
-`tpt-math-linalg`/`tpt-math-prob` (and `diffsol` for `tpt-sci-ode`). The CI
-`no_std` job is therefore a no-op placeholder; per ADR 0001 a crate is only
-built with `-p` against `thumbv6m-none-eabi` once it is explicitly confirmed
-`no_std`. No crate in this repo currently qualifies.
-
 ## License
 
 Licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE)

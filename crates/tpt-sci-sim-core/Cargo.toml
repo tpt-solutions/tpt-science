@@ -21,7 +21,12 @@ tpt-math-linalg = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+# For the multi-scale cookbook example (reaction network -> sim-core coupling).
+tpt-sci-reaction-network = { version = "0.1.0", path = "../tpt-sci-reaction-network" }
 approx = { workspace = true }
 
 [lints]
 workspace = true
+
+[package.metadata.docs.rs]
+all-features = true

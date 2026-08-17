@@ -25,7 +25,8 @@
 //! });
 //! let model = m.build().unwrap();
 //! let mut rng = SplitMix64::seed_from_u64(1);
-//! let samples = model.fit(&mut rng, 500).unwrap();
+//! let trace = model.fit(&mut rng, 500).unwrap();
+//! let samples = trace.combined_samples();
 //! let mean: f64 = samples.iter().map(|s| s[0]).sum::<f64>() / samples.len() as f64;
 //! assert!((mean - 2.8).abs() < 0.6);
 //! ```
@@ -34,7 +35,8 @@ use tpt_math_autodiff_rev::{GradientTape, Variable};
 use tpt_math_prob_core::Rng;
 
 use crate::error::PplError;
-use crate::nuts::nuts;
+use crate::nuts::{nuts_with_divergences, randn};
+use crate::trace::Trace;
 use crate::{Beta, Gamma, Gaussian};
 
 /// A prior over one scalar parameter, written in terms of its `autodiff`
@@ -193,13 +195,18 @@ impl Model {
     }
 
     /// Build the differentiable target and draw `n_samples` posterior samples
-    /// with NUTS, starting each chain from `0.5` in every coordinate (a safe
-    /// interior point for both bounded and unbounded priors).
+    /// with NUTS, starting from `0.5` in every coordinate (a safe interior
+    /// point for both bounded and unbounded priors).
+    ///
+    /// Returns a [`Trace`] carrying the draws plus convergence diagnostics
+    /// (effective sample size, split-R-hat, divergence rate). Use
+    /// [`Model::fit_chains`] when you need R-hat (it is undefined for a single
+    /// chain).
     ///
     /// # Errors
     ///
     /// Propagates any error from [`Model::fit_from`].
-    pub fn fit(&self, rng: &mut impl Rng, n_samples: usize) -> Result<Vec<Vec<f64>>, PplError> {
+    pub fn fit(&self, rng: &mut impl Rng, n_samples: usize) -> Result<Trace, PplError> {
         let initial = vec![0.5; self.dim];
         self.fit_from(&initial, rng, n_samples)
     }
@@ -215,7 +222,7 @@ impl Model {
         initial: &[f64],
         rng: &mut impl Rng,
         n_samples: usize,
-    ) -> Result<Vec<Vec<f64>>, PplError> {
+    ) -> Result<Trace, PplError> {
         if initial.len() != self.dim {
             return Err(PplError::DimensionMismatch {
                 expected: self.dim,
@@ -230,7 +237,48 @@ impl Model {
             likelihood: &self.likelihood,
             data: &self.data,
         };
-        nuts(&target, initial, rng, n_samples)
+        let (samples, n_div) = nuts_with_divergences(&target, initial, rng, n_samples)?;
+        Ok(Trace::new(vec![samples], n_div))
+    }
+
+    /// Draw `n_samples` posterior samples from `n_chains` independently
+    /// initialised NUTS chains. The chains start from dispersed points around
+    /// `0.5` so that [`Trace::rhat`] (split-R-hat across chains) is a meaningful
+    /// convergence diagnostic.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PplError::InvalidOption`] if `n_chains == 0`, or any error from
+    /// the underlying sampler.
+    pub fn fit_chains(
+        &self,
+        n_chains: usize,
+        n_samples: usize,
+        rng: &mut impl Rng,
+    ) -> Result<Trace, PplError> {
+        if n_chains == 0 {
+            return Err(PplError::InvalidOption("n_chains must be > 0".into()));
+        }
+        let base = vec![0.5; self.dim];
+        let target = ModelTarget {
+            priors: &self.priors,
+            likelihood: &self.likelihood,
+            data: &self.data,
+        };
+        let mut chains = Vec::with_capacity(n_chains);
+        let mut n_div = 0usize;
+        for _ in 0..n_chains {
+            // Disperse the start so the chains explore from different regions;
+            // a single shared start would make R-hat trivially ~1.
+            let start: Vec<f64> = base
+                .iter()
+                .map(|&v| v + 0.1 * randn(rng))
+                .collect();
+            let (samples, d) = nuts_with_divergences(&target, &start, rng, n_samples)?;
+            n_div += d;
+            chains.push(samples);
+        }
+        Ok(Trace::new(chains, n_div))
     }
 }
 
@@ -280,7 +328,8 @@ mod tests {
         });
         let model = m.build().unwrap();
         let mut rng = SplitMix64::seed_from_u64(1);
-        let samples = model.fit(&mut rng, 800).unwrap();
+        let trace = model.fit(&mut rng, 800).unwrap();
+        let samples = trace.combined_samples();
         let mean: f64 = samples.iter().map(|s| s[0]).sum::<f64>() / samples.len() as f64;
         // Data mean is 2.8; weak prior lets the posterior sit near it.
         assert_abs_diff_eq!(mean, 2.8, epsilon = 0.6);
@@ -318,7 +367,8 @@ mod tests {
         });
         let model = m.build().unwrap();
         let mut rng = SplitMix64::seed_from_u64(1);
-        let samples = model.fit(&mut rng, 800).unwrap();
+        let trace = model.fit(&mut rng, 800).unwrap();
+        let samples = trace.combined_samples();
         let mean: f64 = samples.iter().map(|s| s[0]).sum::<f64>() / samples.len() as f64;
         assert_abs_diff_eq!(mean, 2.8, epsilon = 0.6);
     }
@@ -337,8 +387,53 @@ mod tests {
         });
         let model = m.build().unwrap();
         let mut rng = SplitMix64::seed_from_u64(42);
-        let samples = model.fit(&mut rng, 2000).unwrap();
+        let trace = model.fit(&mut rng, 2000).unwrap();
+        let samples = trace.combined_samples();
         let mean: f64 = samples.iter().map(|s| s[0]).sum::<f64>() / samples.len() as f64;
         assert_abs_diff_eq!(mean, 0.7, epsilon = 0.06);
+    }
+
+    #[test]
+    fn multi_chain_fit_reports_diagnostics() {
+        // mu ~ N(0, 5), data | mu ~ N(mu, 1), data mean 2.8.
+        let data = [2.0, 3.0, 2.5, 3.5, 3.0];
+        let mut m = ModelBuilder::new();
+        m.gaussian_parameter(0.0, 5.0);
+        m.set_data(data.to_vec());
+        m.likelihood(|t, v, d| {
+            let mut s = t.constant(0.0);
+            for &x in d.iter() {
+                let z = (v[0] - x) / 1.0;
+                s += -0.5 * z * z;
+            }
+            s
+        });
+        let model = m.build().unwrap();
+        let mut rng = SplitMix64::seed_from_u64(123);
+        let trace = model.fit_chains(4, 800, &mut rng).unwrap();
+        assert_eq!(trace.n_chains(), 4);
+        assert_eq!(trace.dim(), 1);
+        // Converged chains give split-R-hat near 1.
+        let rhat = trace.rhat(0);
+        assert!(rhat.is_finite() && rhat < 1.1, "rhat = {rhat}");
+        // ESS should be a positive fraction of the raw draw count.
+        let ess = trace.ess(0);
+        assert!(ess > 0.0 && ess < trace.n_draws() as f64 + 1.0, "ess = {ess}");
+        // Divergence rate is well defined (0.0 for this well-behaved target).
+        assert!((0.0..=1.0).contains(&trace.divergence_rate()));
+        // The posterior mean is recovered.
+        assert_abs_diff_eq!(trace.mean(0), 2.8, epsilon = 0.6);
+    }
+
+    #[test]
+    fn fit_chains_rejects_zero_chains() {
+        let mut m = ModelBuilder::new();
+        m.gaussian_parameter(0.0, 1.0);
+        let model = m.build().unwrap();
+        let mut rng = SplitMix64::seed_from_u64(1);
+        assert!(matches!(
+            model.fit_chains(0, 10, &mut rng),
+            Err(PplError::InvalidOption { .. })
+        ));
     }
 }
