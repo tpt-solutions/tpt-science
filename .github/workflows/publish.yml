@@ -1,0 +1,40 @@
+name: Publish
+
+# Scope deliverable for phase 5d (see RELEASE.md). This workflow is intentionally
+# gated on `workflow_dispatch` (manual) and verifies that the target crate has
+# `publish = true` before doing anything. Today every crate sets
+# `publish = false`, so this is a no-op until a release decision flips that flag.
+
+on:
+  workflow_dispatch:
+    inputs:
+      crate:
+        description: "Crate to publish (e.g. tpt-sci-ode)"
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify publish flag
+        run: |
+          file="crates/${{ github.event.inputs.crate }}/Cargo.toml"
+          if [ ! -f "$file" ]; then
+            echo "::error::No such crate: $file"
+            exit 1
+          fi
+          if ! grep -q '^publish = true$' "$file"; then
+            echo "::error::$file must set 'publish = true' before publishing (see RELEASE.md)."
+            exit 1
+          fi
+      - name: Dry-run publish
+        run: cargo publish --dry-run -p "${{ github.event.inputs.crate }}"
+      # Real publish (uncomment once the above gates pass and a release
+      # decision is made):
+      # - name: Publish
+      #   run: cargo publish -p "${{ github.event.inputs.crate }}"
+      #   env:
+      #     CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

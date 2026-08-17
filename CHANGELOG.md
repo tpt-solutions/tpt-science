@@ -8,6 +8,25 @@ v0.1.0 covers the implementation of all eight Phase 1–3 crates.
 
 ### Added
 
+- `tpt-sci-quantum` — `State::measure_collapsing()` for post-measurement
+  state collapse (Qiskit/Cirq semantics); `measure()` remains non-destructive.
+- `tpt-sci-image` — `ImageError` type (`error.rs`); `radon_transform`,
+  `filtered_back_projection`, and `naive_back_projection` now return `Result`
+  instead of silently accepting malformed inputs.
+- `tpt-sci-grid` — `operator::derivative_1d` now consumes the `Stencil` enum
+  (previously dead code), so the advertised finite-difference stencils are
+  actually available.
+
+### Changed
+
+- `tpt-sci-ode` — `solve_dense` now builds the solver once and walks a single
+  trajectory (`solver.solve_dense(t_eval)`), removing the previous O(n) redundant
+  re-integration from `t0` for each evaluation point.
+- `tpt-sci-quantum` — `StateError` moved into its own `error.rs` module,
+  matching the per-crate error convention; re-exported from the crate root.
+
+### Added
+
 - `tpt-sci-reaction-network` — from-scratch Catalyst.jl-style species/rate/
   stoichiometry DSL and mass-action ODE builder, depending on `tpt-sci-ode`.
   Provides a programmatic [`ReactionNetwork`] builder and a textual

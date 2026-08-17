@@ -84,6 +84,42 @@ See the crate READMEs for the full API:
 [`tpt-sci-astro`](crates/tpt-sci-astro),
 [`tpt-sci-reaction-network`](crates/tpt-sci-reaction-network).
 
+## Examples
+
+Every crate ships a runnable `examples/` program that is meatier than the
+README snippet — a good first place to see the API in action:
+
+| Crate | Example | Demonstrates |
+|-------|---------|--------------|
+| `tpt-sci-ode` | `vander_pol` | Van der Pol limit-cycle integration |
+| `tpt-sci-quantum` | `bell_ghz` | Bell/GHZ states + measurement statistics |
+| `tpt-sci-reaction-network` | `sir_epidemic` | Full SIR run from the Catalyst.jl-style DSL |
+| `tpt-sci-grid` | `diffusion_operator` | 1-D Laplacian vs. analytic 2nd derivative |
+| `tpt-sci-sim-core` | `coupled_field` | ODE→diffusion cross-scale coupling + checkpoint |
+| `tpt-sci-ppl` | `bayesian_linear` | Bayesian linear regression via from-scratch NUTS |
+| `tpt-sci-image` | `ct_reconstruction` | Parallel-beam CT of a phantom (FBP) |
+| `tpt-sci-physics-rigid` | `bouncing_balls` | Gravity + walls in a rigid-body world |
+| `tpt-sci-astro` | `leo_orbit` | LEO propagation + J2 RAAN regression |
+
+Run any of them with, e.g.:
+
+```sh
+cargo run --example vander_pol -p tpt-sci-ode
+```
+
+## Benchmarking & coverage
+
+- **Benchmarks.** Numerics-heavy crates carry `criterion` benches under
+  `benches/`. Run them with `cargo bench --workspace` (or per-crate). The CI
+  `benches` job runs a shortened measurement so the suite stays fast.
+- **Coverage.** The CI `coverage` job produces an lcov report via
+  `cargo-llvm-cov` and uploads it as a build artifact.
+- **Docs.** The CI `doc` job builds docs with `RUSTDOCFLAGS=-D warnings`,
+  catching rustdoc warnings and broken intra-doc links (doctests are exercised
+  by `cargo test`).
+
+See `RELEASE.md` for the (currently dormant) publish/versioning process.
+
 ## License
 
 Licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE)

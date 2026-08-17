@@ -65,6 +65,40 @@ jobs:
           # No no_std crates in this pillar yet — nothing to build.
           echo "no crates yet — nothing to build"
 
+  # Track line/branch coverage across the workspace with `cargo-llvm-cov` and
+  # publish the lcov report as a build artifact (wire to Codecov by adding a
+  # tokened `codecov/codecov-action` step when coverage gating is desired).
+  coverage:
+    runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - name: Install cargo-llvm-cov
+        uses: taiki1972/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Generate coverage (lcov)
+        run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcov
+          path: lcov.info
+
+  # Run the criterion benchmarks (see the `benches/` dirs). Timing is shrunk so
+  # the job stays fast; run `cargo bench` locally for full measurements.
+  benches:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run benchmarks
+        run: cargo bench --workspace -- --warm-up-time 0.5 --measurement-time 1 --sample-size 10
+
   cargo-deny:
     runs-on: ubuntu-latest
     steps:

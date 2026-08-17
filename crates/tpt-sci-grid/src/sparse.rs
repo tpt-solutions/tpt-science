@@ -80,14 +80,14 @@ impl CsrMatrix {
     pub fn mul_vec(&self, x: &[f64]) -> Vec<f64> {
         assert_eq!(x.len(), self.ncols(), "vector length must match ncols");
         let mut y = vec![0.0; self.nrows];
-        for i in 0..self.nrows {
+        for (i, slot) in y.iter_mut().enumerate() {
             let start = self.row_ptr[i];
             let end = self.row_ptr[i + 1];
             let mut acc = 0.0;
             for k in start..end {
                 acc += self.values[k] * x[self.col_ind[k]];
             }
-            y[i] = acc;
+            *slot = acc;
         }
         y
     }
@@ -156,28 +156,28 @@ pub fn laplacian_2d_sparse(grid: &UniformGrid2D, bc: Boundary) -> CsrMatrix {
             let i = idx(ix, iy);
             let on_boundary = ix == 0 || ix == nx - 1 || iy == 0 || iy == ny - 1;
             if bc == Boundary::Dirichlet && on_boundary {
-                row.push((i, 1.0));
+                rows[i].push((i, 1.0));
                 continue;
             }
             // x-direction neighbours (Neumann clamps off-boundary to the node).
             let xm = if ix > 0 { ix - 1 } else { ix };
             let xp = if ix + 1 < nx { ix + 1 } else { ix };
             if bc == Boundary::Neumann || ix > 0 {
-                row.push((idx(xm, iy), 1.0 / dx2));
+                rows[i].push((idx(xm, iy), 1.0 / dx2));
             }
-            row.push((i, -2.0 / dx2));
+            rows[i].push((i, -2.0 / dx2));
             if bc == Boundary::Neumann || ix + 1 < nx {
-                row.push((idx(xp, iy), 1.0 / dx2));
+                rows[i].push((idx(xp, iy), 1.0 / dx2));
             }
             // y-direction neighbours.
             let ym = if iy > 0 { iy - 1 } else { iy };
             let yp = if iy + 1 < ny { iy + 1 } else { iy };
             if bc == Boundary::Neumann || iy > 0 {
-                row.push((idx(ix, ym), 1.0 / dy2));
+                rows[i].push((idx(ix, ym), 1.0 / dy2));
             }
-            row.push((i, -2.0 / dy2));
+            rows[i].push((i, -2.0 / dy2));
             if bc == Boundary::Neumann || iy + 1 < ny {
-                row.push((idx(ix, yp), 1.0 / dy2));
+                rows[i].push((idx(ix, yp), 1.0 / dy2));
             }
         }
     }
@@ -227,7 +227,7 @@ fn pack_csr(nrows: usize, ncols: usize, rows: &[Vec<(usize, f64)>]) -> CsrMatrix
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
-    use tpt_math_linalg::tpt_math_linalg_dense::{DMatrix, DVector};
+    use tpt_math_linalg::tpt_math_linalg_dense::DVector;
 
     #[test]
     fn sparse_1d_matches_dense_laplacian() {

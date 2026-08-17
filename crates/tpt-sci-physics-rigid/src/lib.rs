@@ -169,8 +169,8 @@ impl Body {
         if self.inertia == 0.0 {
             return;
         }
-        for k in 0..3 {
-            self.angular_velocity[k] += tau[k] * dt / self.inertia;
+        for (k, av) in self.angular_velocity.iter_mut().enumerate() {
+            *av += tau[k] * dt / self.inertia;
         }
     }
 

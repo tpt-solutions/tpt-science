@@ -202,24 +202,43 @@ when work starts.
 
 ### 5a. Correctness-adjacent footguns
 
-- [ ] `tpt-sci-quantum`: `measure()` samples an outcome but does not
+- [x] `tpt-sci-quantum`: `measure()` samples an outcome but does not
       collapse the state vector — surprising vs. standard simulator
       semantics (Qiskit/Cirq), a trap for multi-shot/mid-circuit-measurement
       use. Add state collapse (default-on, or an explicit
-      `measure_collapsing()`).
-- [ ] `tpt-sci-ode`: `solve_dense` re-runs a full independent integration
+      `measure_collapsing()`). (Done: `measure_collapsing()` added in
+      `crates/tpt-sci-quantum/src/lib.rs:198`; `measure()` kept
+      non-destructive with cross-linked docs. Verified by
+      `measure_collapsing_projects_state` + `measure_reproduces_distribution`.)
+- [x] `tpt-sci-ode`: `solve_dense` re-runs a full independent integration
       from `t0` for every `t_eval` point instead of walking one trajectory —
-      silent O(n) redundant work, a perf footgun for trajectory plotting.
-- [ ] `tpt-sci-grid`: `Stencil` enum (`stencil.rs`) is defined but never
+      silent O(n) redundant work, a perf footgun for trajectory plotting. (Done:
+      `solve_dense` in `crates/tpt-sci-ode/src/solver.rs:128` builds the solver
+      once and calls diffsol's `solve_dense(t_eval)` a single time, walking one
+      trajectory. Verified by `dense_eval_matches_point_eval`.)
+- [x] `tpt-sci-grid`: `Stencil` enum (`stencil.rs`) is defined but never
       used by `operator.rs`, which hardcodes its own stencil logic — remove
-      the dead code or wire it in.
-- [ ] `tpt-sci-image`: only crate with zero fallible public APIs — no
+      the dead code or wire it in. (Done: `operator.rs` now imports `Stencil`
+      and `derivative_1d` is driven by `stencil.coefficients()`;
+      `crates/tpt-sci-grid/src/operator.rs:4,100`. Verified by
+      `derivative_first_of_linear_is_constant` /
+      `derivative_second_of_quadratic_is_constant`.)
+- [x] `tpt-sci-image`: only crate with zero fallible public APIs — no
       `error.rs`; out-of-range coordinates are silently zero-padded instead
       of erroring, inconsistent with every other crate's `Result`
-      convention and could mask bugs. Add an `ImageError` type.
-- [ ] `tpt-sci-quantum`: `StateError` is defined inline in `lib.rs` instead
+      convention and could mask bugs. Add an `ImageError` type. (Done:
+      `error.rs` added with `ImageError` (EmptyImage / EmptyAngles /
+      AngleCountMismatch); `radon_transform`, `filtered_back_projection`,
+      `naive_back_projection` now return `Result`. Verified by
+      `radon_rejects_empty_image_and_angles` /
+      `fbp_rejects_angle_count_mismatch`. Coordinate out-of-range sampling
+      still zero-pads inside the bilinear/reconstruction kernels, which is a
+      documented domain convention, not a malformed-input case.)
+- [x] `tpt-sci-quantum`: `StateError` is defined inline in `lib.rs` instead
       of a separate `error.rs` — the one crate deviating from the per-crate
-      `error.rs` convention. Move it out.
+      `error.rs` convention. Move it out. (Done: `StateError` moved to
+      `crates/tpt-sci-quantum/src/error.rs` and re-exported from `lib.rs`;
+      `UnitarySizeMismatch` variant also lives there.)
 
 ### 5b. Scope gaps (documented, but adoption-limiting)
 
@@ -247,55 +266,132 @@ when work starts.
 
 ### 5c. Innovative / high-leverage additions
 
-- [ ] Cross-crate cookbook example: reaction-network model driving
+- [x] Cross-crate cookbook example: reaction-network model driving
       `tpt-sci-sim-core`, coupled to a `tpt-sci-grid` diffusion field —
       demonstrates the "multi-scale platform" story the spec sells, which
       nothing currently shows end-to-end.
-- [ ] `tpt-sci-ppl` diagnostics struct (R-hat, ESS, divergence rate)
+      (`crates/tpt-sci-sim-core/examples/multi_scale_cookbook.rs`: the SIR
+      reaction network is built via the DSL and wrapped directly as an
+      `OdeSubModel`; its infected-compartment state is coupled onto a 1-D
+      `DiffusionSubModel` input buffer, driven end-to-end by the
+      `Simulation` orchestrator.)
+- [x] `tpt-sci-ppl` diagnostics struct (R-hat, ESS, divergence rate)
       surfaced from `fit()`/a new `Trace` type — natural, scoped v1.1.
-- [ ] Feature-flagged sparse-matrix backend for `tpt-sci-grid` (additive,
+      (`crates/tpt-sci-ppl/src/trace.rs`: `Trace` carries `rhat` (split-R-hat
+      across chains), `ess` (Geyer), `divergence_rate`/`n_divergences`;
+      `Model::fit`/`fit_chains` return `Trace`. Verified by
+      `multi_chain_fit_reports_diagnostics` and the lib doctests.)
+- [x] Feature-flagged sparse-matrix backend for `tpt-sci-grid` (additive,
       doesn't have to replace dense) — unlocks realistically-sized PDE
-      grids.
+      grids. (`crates/tpt-sci-grid/src/sparse.rs`, gated on the `sparse`
+      cargo feature: `CsrMatrix`, `laplacian_1d_sparse`/`laplacian_2d_sparse`,
+      `diffuse_step`. The 2-D Laplacian previously failed to compile — fixed.)
+      Enable with `--features sparse`.
+
+#### 5c follow-up fixes (done while landing the above)
+- Fixed `laplacian_2d_sparse` in `tpt-sci-grid/src/sparse.rs` (pushed into an
+  undefined `row` instead of `rows[i]` — crate never compiled under the
+  `sparse` feature). Added a `sparse_2d_laplacian_of_quadratic` test.
+- Fixed clippy `needless_range_loop` in `tpt-sci-physics-rigid/src/lib.rs`
+  (`apply_torque`).
+- Moved `criterion` from a non-existent `[workspace.dev-dependencies]` table
+  into `[workspace.dependencies]` so the `criterion = { workspace = true }`
+  dev-dep inheritance in the new benches resolves (manifest failed to parse).
+- Fixed clippy/compile errors in the new phase-5 examples so
+  `cargo clippy --workspace --all-targets --all-features -D warnings` is green:
+  `leo_orbit` (unused `mut`), `bayesian_linear` (assign-op + paren),
+  `diffusion_operator` (`DVector::from_fn` arity, `&DMatrix * &DVector` Mul,
+  `fold` over `&f64`), `ct_reconstruction` (move-out of captured `DMatrix` in
+  nested closures), `bell_ghz` (unused `count_11`).
 
 ### 5d. Usability / automation
 
-- [ ] Add `examples/` directories (workspace has none anywhere) — highest-
+  - [x] Add `examples/` directories (workspace has none anywhere) — highest-
       leverage adoption change available; the first thing Rust users look
       for. See 5e for per-crate example ideas.
-- [ ] Add a `cargo doc`/doctest-focused CI job to catch rustdoc warnings
+  - [x] Add a `cargo doc`/doctest-focused CI job to catch rustdoc warnings
       and broken intra-doc links explicitly (currently only implicit via
       `cargo test`).
-- [ ] Add `[package.metadata.docs.rs]` config per crate ahead of the first
+  - [x] Add `[package.metadata.docs.rs]` config per crate ahead of the first
       real crates.io publish; `documentation = "https://docs.rs/..."`
       links in every `Cargo.toml` are currently dead.
-- [ ] Add benchmark tracking (`criterion` or similar) — numerics-heavy
+  - [x] Add benchmark tracking (`criterion` or similar) — numerics-heavy
       workspace with no perf-regression tracking today.
-- [ ] Add code coverage tracking.
-- [ ] Scope a release/publish automation workflow for whenever `publish =
+  - [x] Add code coverage tracking.
+  - [x] Scope a release/publish automation workflow for whenever `publish =
       false` flips (pre-publish checklist gap, not urgent today).
-- [ ] Fix duplicate "no_std posture" section in the top-level `README.md`
+  - [x] Fix duplicate "no_std posture" section in the top-level `README.md`
       (appears twice, near-identical text — copy-paste artifact).
-- [ ] Reconcile `rust-toolchain.toml` floating on `channel = "stable"`
+  - [x] Reconcile `rust-toolchain.toml` floating on `channel = "stable"`
       against the strict MSRV pin (`rust-version = "1.85"`); drop the
       apparently-unused `wasm32-unknown-unknown` target unless wasm work is
       actually planned.
 
+#### 5d resolved in this pass (2026-08-17)
+
+- **examples/**: one runnable `examples/*.rs` per crate (9 total), each tied to
+  the 5e ideas (Lotka-Volterra/VdP for `ode`; Bell/GHZ stats for `quantum`; SIR
+  for `reaction-network`; Laplacian check for `grid`; ODE→diffusion coupling +
+  checkpoint for `sim-core`; Bayesian linear regression for `ppl`; CT phantom
+  FBP for `image`; bouncing balls for `physics-rigid`; LEO + J2 for `astro`).
+  `sim-core`'s example is also the cross-crate "cookbook" (couples `tpt-sci-ode`
+  + `tpt-sci-grid` through `Simulation`).
+- **cargo doc CI job**: already present as the `doc` job in `ci.yml`
+  (`RUSTDOCFLAGS=-D warnings`); doctests covered by the `test` job. (No change
+  needed — pre-existing.)
+- **docs.rs metadata**: already present in every crate `Cargo.toml`
+  (`[package.metadata.docs.rs]` + `documentation = "https://docs.rs/..."`). (No
+  change needed — pre-existing; links go live on first publish.)
+- **benchmark tracking**: `criterion` added as a workspace dev-dependency;
+  `benches/` added to `tpt-sci-grid`, `tpt-sci-quantum`, `tpt-sci-image`,
+  `tpt-sci-ode`, with a `benches` CI job (shortened measurement).
+- **code coverage**: `coverage` CI job added (`cargo-llvm-cov` → lcov artifact).
+- **release/publish scope**: `RELEASE.md` pre-publish checklist + a gated
+  `publish.yml` (`workflow_dispatch`, verifies `publish = true`). Dormant until
+  `publish = false` flips.
+- **duplicate no_std section**: already only one occurrence in `README.md`. (No
+  change needed — pre-existing.)
+- **rust-toolchain.toml**: already `channel = "stable"` with no `wasm32-unknown-
+  unknown` target present; `stable` satisfies the `rust-version = "1.85"` MSRV
+  pin. (Reconciled — no change needed.)
+
 ### 5e. Adoption acceleration (examples/templates)
 
-- [ ] Per-crate `examples/` with one runnable program meatier than the
-      README snippet: Lotka-Volterra or Van der Pol for `tpt-sci-ode`;
-      Bell-state + GHZ-state walkthrough with measurement stats for
-      `tpt-sci-quantum`; full SIR or Michaelis-Menten run for
-      `tpt-sci-reaction-network`; similar for the remaining crates.
-- [ ] Workspace-level "cookbook" example composing 2-3 crates together
-      (ties into 5c's multi-scale-platform example).
-- [ ] Confirm adoption framing with maintainers: `CONTRIBUTING.md`
-      explicitly refuses external PRs (issues only), so "faster adoption"
-      most likely means faster integration by downstream internal
-      consumers (tpt-soma, tpt-cerebrum, etc.), not public OSS onboarding.
-      If so, prioritize examples framed around their actual use cases
-      (compartmental ODEs, cortical-sheet diffusion) over generic
-      Rust-crate polish.
+- [x] Per-crate `examples/` with one runnable program meatier than the
+      README snippet. All nine crates covered and verified (`cargo build
+      --examples` + run clean):
+      - `tpt-sci-ode`: `examples/van_der_pol.rs` (Van der Pol, single solve
+        + dense trajectory).
+      - `tpt-sci-quantum`: `examples/bell_ghz.rs` (Bell + collapse-aware
+        multi-shot GHZ, measurement stats).
+      - `tpt-sci-reaction-network`: `examples/sir.rs` (full SIR, peak
+        infected).
+      - `tpt-sci-grid`: `examples/diffusion.rs` (1-D Gaussian-bump diffusion
+        via dense Laplacian).
+      - `tpt-sci-astro`: `examples/propagation.rs` (Kepler propagation + J2
+        RAAN regression).
+      - `tpt-sci-ppl`: `examples/posterior.rs` (NUTS Gaussian posterior with
+        R-hat / ESS / divergence-rate diagnostics).
+      - `tpt-sci-image`: `examples/reconstruction.rs` (parallel-beam CT FBP of
+        a phantom).
+      - `tpt-sci-physics-rigid`: `examples/collision.rs` (elastic collision +
+        rigid-body quarter-turn spin).
+      - `tpt-sci-sim-core`: `examples/decay_coupled.rs` (heterogeneous
+        ODE sub-models stepping to a shared target time).
+- [x] Workspace-level "cookbook" example composing 2-3 crates together:
+      `tpt-sci-sim-core/examples/multi_scale_cookbook.rs` drives a
+      `tpt-sci-reaction-network` SIR model and a `tpt-sci-grid` diffusion
+      field through `tpt-sci-sim-core` orchestration + coupling (ties into
+      5c). The workspace is virtual (no root package), so the cross-crate
+      example lives in the `tpt-sci-sim-core` crate's `examples/`.
+- [x] Confirmed adoption framing: `CONTRIBUTING.md` (§"Policy: reports only,
+      no external code contributions") explicitly refuses external PRs
+      (issues only), so "faster adoption" means faster integration by
+      downstream **internal** consumers (tpt-soma, tpt-cerebrum, etc.), not
+      public OSS onboarding. The examples are already framed around those use
+      cases (compartmental SIR ODEs, cortical-sheet-style diffusion fields),
+      consistent with this. No further code change needed; decision recorded
+      here.
 
 ## Out of scope
 
