@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::error::ReactionNetworkError;
+use crate::ssa::SsaTrajectory;
 
 /// A user-supplied reaction rate law `r(y, p)` over the current state and the
 /// parameter vector.
@@ -412,6 +413,107 @@ impl ReactionSystem {
             .collect()
     }
 
+    /// Per-reaction stochastic propensities `a_j(y)` at state `y`.
+    ///
+    /// For [`CompiledRate::MassAction`] the propensity is the combinatorial
+    /// mass-action term `k · Π_i (y_i)_ν_i` where `(y_i)_ν_i` is the falling
+    /// factorial (so it correctly handles integer reactant counts, e.g. a
+    /// dimerisation `A + A → B` gets rate `k·A·(A−1)`). For non-integer
+    /// stoichiometry the deterministic `y_i^ν_i` is used. For
+    /// [`CompiledRate::Custom`] rates the same differentiable rate expression is
+    /// reused as the propensity (a deterministic approximation).
+    fn propensities(&self, y: &[f64]) -> Vec<f64> {
+        self.reactions
+            .iter()
+            .map(|r| match &r.rate {
+                CompiledRate::MassAction { k } => {
+                    let mut v = self.params[*k];
+                    for &(sp, nu) in &r.reactant_powers {
+                        v *= falling_factorial(y[sp], nu);
+                    }
+                    v
+                }
+                CompiledRate::Custom(f) => f(y, &self.params),
+            })
+            .collect()
+    }
+
+    /// Draw a stochastic trajectory of this network via Gillespie's direct
+    /// method (the exact SSA for the underlying continuous-time Markov chain).
+    ///
+    /// `y0` gives the initial (finite, non-negative) species counts and the
+    /// chain is advanced until `t_max`. `rng` must return uniform variates in
+    /// `[0, 1)`. The returned [`SsaTrajectory`] records the initial state, every
+    /// post-reaction state, and a final state clamped at `t_max`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ReactionNetworkError::StateDimension`] if `y0` does not have one
+    /// entry per species, or [`ReactionNetworkError::InvalidState`] if any
+    /// initial count is non-finite or negative.
+    pub fn simulate_ssa<F: FnMut() -> f64>(
+        &self,
+        y0: &[f64],
+        t_max: f64,
+        rng: &mut F,
+    ) -> Result<SsaTrajectory, ReactionNetworkError> {
+        if y0.len() != self.n_species() {
+            return Err(ReactionNetworkError::StateDimension {
+                got: y0.len(),
+                expected: self.n_species(),
+            });
+        }
+        for (i, &v) in y0.iter().enumerate() {
+            if !v.is_finite() || v < 0.0 {
+                return Err(ReactionNetworkError::InvalidState(format!(
+                    "species {i} count {v} must be finite and non-negative"
+                )));
+            }
+        }
+        let mut state = y0.to_vec();
+        let mut t = 0.0_f64;
+        let mut times = vec![0.0];
+        let mut states = vec![state.clone()];
+        loop {
+            let a = self.propensities(&state);
+            let a0: f64 = a.iter().sum();
+            if a0 <= 0.0 {
+                break;
+            }
+            let r1 = (rng)();
+            if r1 <= 0.0 {
+                break;
+            }
+            let dt = -(1.0 / a0) * r1.ln();
+            let t_next = t + dt;
+            if t_next > t_max {
+                break;
+            }
+            t = t_next;
+            let r2 = (rng)() * a0;
+            let mut cum = 0.0_f64;
+            let mut chosen = 0usize;
+            for (j, &aj) in a.iter().enumerate() {
+                cum += aj;
+                if r2 < cum {
+                    chosen = j;
+                    break;
+                }
+            }
+            for (s, dc) in state
+                .iter_mut()
+                .zip(self.reactions[chosen].stoich_col.iter())
+            {
+                *s += *dc;
+            }
+            times.push(t);
+            states.push(state.clone());
+        }
+        times.push(t_max);
+        states.push(state);
+        Ok(SsaTrajectory { times, states })
+    }
+
     /// Evaluate the ODE right-hand side `dy/dt = S · r(y)` at state `y`,
     /// writing the result into `dydt`. `t` is ignored (CRN kinetics are
     /// autonomous); supply a custom rate law if time dependence is required.
@@ -440,6 +542,29 @@ impl ReactionSystem {
     #[must_use]
     pub fn parameter_names(&self) -> &[String] {
         &self.param_names
+    }
+}
+
+/// Falling factorial `(y)_ν = y·(y−1)·…·(y−ν+1)` for a (typically integer)
+/// stoichiometric order `ν`. Returns `1.0` for `ν == 0`, `0.0` when `y < ν`,
+/// and `y^ν` for non-integer `ν` (so it degrades gracefully to the deterministic
+/// mass-action power when counts are fractional).
+fn falling_factorial(y: f64, nu: f64) -> f64 {
+    if nu == 0.0 {
+        return 1.0;
+    }
+    let m = nu as usize;
+    if (m as f64 - nu).abs() < 1e-12 {
+        if y < m as f64 {
+            return 0.0;
+        }
+        let mut prod = 1.0_f64;
+        for p in 0..m {
+            prod *= y - p as f64;
+        }
+        prod
+    } else {
+        y.powf(nu)
     }
 }
 

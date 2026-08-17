@@ -13,14 +13,6 @@ pub enum ReactionNetworkError {
     #[error("unknown parameter referenced by name: {0}")]
     UnknownParameter(String),
 
-    /// The same species name was registered twice.
-    #[error("duplicate species name: {0}")]
-    DuplicateSpecies(String),
-
-    /// The same parameter name was registered twice.
-    #[error("duplicate parameter name: {0}")]
-    DuplicateParameter(String),
-
     /// A reaction was added with neither reactants nor products.
     #[error("reaction has no reactants and no products (empty reaction)")]
     EmptyReaction,
@@ -30,10 +22,15 @@ pub enum ReactionNetworkError {
     #[error("rate-constant parameter {0} was never defined")]
     UndefinedRateConstant(String),
 
-    /// The initial state passed to [`ReactionSystem::to_ode_problem`] does not
+    /// The initial state passed to [`crate::ReactionSystem::to_ode_problem`] does not
     /// have one entry per species.
     #[error("initial state length {got} does not match number of species {expected}")]
     StateDimension { got: usize, expected: usize },
+
+    /// The initial state for a stochastic (Gillespie) simulation was invalid:
+    /// species counts must be finite and non-negative.
+    #[error("invalid stochastic initial state: {0}")]
+    InvalidState(String),
 
     /// The textual DSL could not be parsed.
     #[error("invalid reaction-network DSL: {0}")]

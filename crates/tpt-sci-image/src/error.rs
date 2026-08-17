@@ -31,4 +31,14 @@ pub enum ImageError {
         /// Number of projection angles supplied.
         n_angles: usize,
     },
+
+    /// A sinogram dimension did not match the expected volume geometry
+    /// (`n_bins = max(nx, ny)`, or `n_z`).
+    #[error("expected dimension {expected} but got {got}")]
+    DimensionMismatch {
+        /// Expected extent (voxels or detector bins).
+        expected: usize,
+        /// Supplied extent.
+        got: usize,
+    },
 }

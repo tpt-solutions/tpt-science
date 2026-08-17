@@ -22,7 +22,7 @@ pub enum StateError {
     #[error("control and target must differ, but both were {0}")]
     SameQubits(usize),
 
-    /// A unitary matrix supplied to [`State::apply_unitary`] had the wrong
+    /// A unitary matrix supplied to [`crate::State::apply_unitary`] had the wrong
     /// dimension for this state's qubit count.
     #[error(
         "unitary must be {expected}x{expected} (2^(n+1) for an n-qubit state), but got {got}x{got}"

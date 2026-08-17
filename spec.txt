@@ -24,7 +24,14 @@ of them currently depend on a shared foundation for it.
 ECOSYSTEM GAP JUSTIFICATION
 - ODE/DAE solving is well-covered by diffsol (JOSS 2026, actively
   maintained, Enzyme-based autodiff, LLVM/Cranelift JIT) — wrap it, don't
-  reimplement.
+  reimplement. LICENSE NOTE: diffsol is MIT, but its `diffsol-la` crate links
+  `nalgebra` (Apache-2.0-ONLY) as a NON-OPTIONAL dependency, so nalgebra is
+  always pulled in transitively even when only the `faer` (MIT) backend is
+  used. Per ADR 0007 this is disqualifying AS-PUBLISHED. Resolution: depend on
+  a TPT-owned FORK of diffsol/diffsol-la/diffsol-nl — same MIT code,
+  re-licensed MIT OR Apache-2.0, with the unconditional `nalgebra` dep
+  removed (tpt-sci-ode needs only the faer backend, so no solver logic is
+  lost). Tracked in todo.md Phase 7.
 - Unstructured FEM/mesh generation is a genuine, unfilled Rust gap (the one
   existing crate, finite_element_method, is explicitly educational; the
   only serious 2026 effort, FrankenSim, is 100+ crates/160k LOC) but is

@@ -16,10 +16,16 @@
 //! stoichiometry matrix and rate vector directly for inspection, parameter
 //! estimation, or coupling into a larger multi-scale model.
 //!
+//! In addition to the deterministic mass-action ODE, the crate provides exact
+//! stochastic trajectories via [`ReactionSystem::simulate_ssa`] (Gillespie's
+//! direct method), so a network can be studied in either the deterministic or
+//! stochastic regime from the same IR.
+//!
 //! This is the **v1** scope from `spec.txt` / `registry.toml`: a CRN IR plus a
-//! mass-action ODE builder. Out of scope for v1 (documented, not built): the
-//! stochastic Gillespie / SSA backend (defer to wrapping `rebop`), SDE/jump
-//! models, SBML I/O, network analysis, and conservation-law elimination.
+//! mass-action ODE builder and a stochastic SSA backend. Still out of scope for
+//! v1 (documented, not built): SDE/jump models, SBML I/O, network analysis, and
+//! conservation-law elimination. (The previous plan deferred the stochastic
+//! backend to wrapping `rebop`; it is now implemented from scratch instead.)
 //!
 //! ## Building models
 //!
@@ -63,9 +69,11 @@
 pub mod error;
 pub mod model;
 pub mod ode;
+pub mod ssa;
 
 pub use error::ReactionNetworkError;
 pub use model::{RateLaw, Reaction, ReactionNetwork, ReactionSystem, Term};
+pub use ssa::SsaTrajectory;
 
 #[cfg(test)]
 mod tests {

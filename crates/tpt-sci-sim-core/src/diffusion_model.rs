@@ -9,7 +9,7 @@ use crate::submodel::SubModel;
 ///
 /// The discrete semi-discrete system is
 /// `∂u/∂t = D · L u + s`, where `L` is the [`laplacian_1d`] assembled by
-/// [`tpt-sci-grid`], `D` is the diffusion coefficient, and `s` is an optional
+/// [`tpt_sci_grid`], `D` is the diffusion coefficient, and `s` is an optional
 /// per-node forcing term. The forcing is held in the model's **input buffer**,
 /// so a coupling can drive the field from another sub-model's state — the
 /// canonical cross-scale pattern (e.g. a fast reaction ODE feeding a slow

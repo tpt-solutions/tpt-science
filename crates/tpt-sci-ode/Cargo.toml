@@ -15,14 +15,23 @@ categories = ["science", "simulation", "mathematics"]
 publish = false
 
 [dependencies]
-diffsol = { workspace = true }
+tpt-math-linalg = { workspace = true }
 tpt-math-numeric = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 
+# Optional verification oracle only (NOT shipped): compare our from-scratch
+# trajectories against diffsol's on a battery of problems. Excluded from
+# `cargo deny` license scanning (deny.toml `include-dev = false`), so it never
+# taints the shipped, dual-licensed graph. Enable with `--features verify-diffsol`.
+diffsol = { version = "0.16.1", default-features = false, features = ["faer"], optional = true }
+
 [dev-dependencies]
 approx = { workspace = true }
 criterion = { workspace = true }
+
+[features]
+verify-diffsol = ["dep:diffsol"]
 
 [lints]
 workspace = true

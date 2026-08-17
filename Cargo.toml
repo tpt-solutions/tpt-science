@@ -39,9 +39,11 @@ tpt-sci-grid = { version = "0.1.0", path = "crates/tpt-sci-grid" }
 tpt-sci-sim-core = { version = "0.1.0", path = "crates/tpt-sci-sim-core" }
 tpt-sci-reaction-network = { version = "0.1.0", path = "crates/tpt-sci-reaction-network" }
 
-# Wrap targets (dual-licensed MIT OR Apache-2.0 — see tpt-rust-map/registry.toml
-# and the ECOSYSTEM GAP JUSTIFICATION / ADR 0007 in spec.txt).
-diffsol = "0.16.1"
+# NOTE: `diffsol` is intentionally NOT a workspace dependency. `tpt-sci-ode`
+# implements its own ODE solvers from scratch (dual-licensed, no Apache-only
+# transitive deps). diffsol is used ONLY as an optional, dev-only verification
+# oracle inside `tpt-sci-ode` (feature `verify-diffsol`, excluded from
+# `cargo deny` via `include-dev = false`), never in the shipped graph.
 
 # Shared external dev/build dependencies.
 thiserror = "2"

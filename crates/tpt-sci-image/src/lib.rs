@@ -7,6 +7,11 @@
 //! * [`filtered_back_projection`] — the classic ram-lak filtered back
 //!   projection (FBP) inverse.
 //!
+//! The same machinery is extended to volumes in the [`volume`] module:
+//! [`volume::radon_transform_3d`] and [`volume::filtered_back_projection_3d`]
+//! reconstruct a [`volume::Volume`] (a `n_x × n_y × n_z` scalar field) under a
+//! parallel-beam geometry that rotates about the `z` axis.
+//!
 //! Everything is hand-rolled: rotations/interpolation are done by coordinate
 //! remapping with bilinear sampling, and the ramp filter lives in the Fourier
 //! domain via [`tpt_math_signal_fft`]. There are no external image or
@@ -34,6 +39,10 @@ use tpt_math_signal_fft::{Complex, fft, ifft_normalized};
 /// Errors returned by the image reconstruction API.
 pub mod error;
 pub use error::ImageError;
+
+/// 3-D tomographic reconstruction (parallel-beam volume CT).
+pub mod volume;
+pub use volume::{Volume, filtered_back_projection_3d, radon_transform_3d};
 
 /// Build an inclusive linearly-spaced vector of `n` points from `start` to
 /// `end`.
@@ -254,6 +263,16 @@ pub fn filtered_back_projection(
         qs.push(ramp_filter(&row));
     }
     let rec = back_project(&qs, angles, nb);
+    // Empirical FBP amplitude normalisation. The continuous filtered
+    // back-projection identity is
+    //     f(x) = (1/π) ∫_0^π [Rf(·,θ) * h](x·n(θ)) dθ ,
+    // with ramp kernel h(t) ∝ |ω| in frequency, sampled here as the raw DFT
+    // ramp `|k|` used by `ramp_filter`. Discretely the detector bins are spaced
+    // Δs = 1, the `n_angles` projections cover [0, π) at Δθ = π/n_angles, and the
+    // back-projection simply sums `n_angles` contributions. Matching the
+    // discrete ramp's DC gain to the continuous kernel and absorbing the Δθ and
+    // Δs pixel-area factors yields the constant `4.0 / (nb · n_angles)`
+    // (Kak & Slaney, *Principles of Computerized Tomographic Imaging*, §3.3).
     let scale = 4.0 / nb as f64 / angles.len() as f64;
     Ok(rec * scale)
 }
@@ -286,6 +305,9 @@ pub fn naive_back_projection(
         .map(|a| (0..nb).map(|j| sinogram[(a, j)]).collect())
         .collect();
     let rec = back_project(&projections, angles, nb);
+    // Same `4.0 / (nb · n_angles)` normalisation as `filtered_back_projection`
+    // (Kak & Slaney, *Principles of Computerized Tomographic Imaging*, §3.3),
+    // applied to the unfiltered adjoint so the two reconstructions share a scale.
     let scale = 4.0 / nb as f64 / angles.len() as f64;
     Ok(rec * scale)
 }

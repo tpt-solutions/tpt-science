@@ -17,11 +17,21 @@ ignore = [
 [licenses]
 # All workspace crates are MIT OR Apache-2.0. The allow-list also permits the
 # permissive licenses of transitive dependencies pulled in by dev/build tooling.
-# NOTE: the wrap targets in this pillar (diffsol) are dual-licensed
-# MIT OR Apache-2.0, satisfying the dual-license policy (ADR 0007). Re-check
-# this list against tpt-rust-map/registry.toml's [[external]] entries whenever
-# a new wrap target is added — Apache-2.0-ONLY crates (rapier, QuantRS2,
-# SciRS2) are explicitly disqualified and must never be added as dependencies.
+# NOTE: wrap targets here are permissive (MIT / MIT OR Apache-2.0 / BSD / ISC /
+# Zlib / Unicode). Apache-2.0-ONLY crates are disqualified (ADR 0007) — e.g.
+# `rapier`, `QuantRS2`, `SciRS2` must never be added.
+#
+# EXCEPTION / ACTION REQUIRED: `diffsol` (the ODE wrap target used by
+# `tpt-sci-ode`) is MIT, BUT its linear-algebra crate `diffsol-la` links
+# `nalgebra` as a NON-OPTIONAL dependency, so `nalgebra` (Apache-2.0-ONLY) is
+# always pulled in transitively. `tpt-sci-ode` uses only the `faer` backend
+# (MIT), so `nalgebra` is dead weight forced by packaging, not by any feature
+# we need. The policy-compliant fix is to depend on a TPT-owned FORK of diffsol
+# (re-licensed MIT OR Apache-2.0 with `nalgebra` removed) — see spec.txt
+# "ECOSYSTEM GAP JUSTIFICATION" and todo.md Phase 7. Until that fork lands,
+# `cargo deny` will flag `nalgebra` (Apache-2.0); this is a known, tracked gap.
+# `nalgebra` is added to the allow-list below ONLY as a temporary, documented
+# accommodation for the pre-fork state and must be removed once the fork ships.
 allow = [
     "MIT",
     "Apache-2.0",

@@ -410,11 +410,17 @@ pub fn eccentric_to_true(ecc: f64, e: f64) -> f64 {
 
 /// Solve Kepler's equation `M = E - e·sin(E)` for `E` via Newton iteration.
 ///
-/// Converges quadratically for `0 ≤ e < 1`; `E` is initialised to `M`.
+/// Converges quadratically for `0 ≤ e < 1`. The iteration is seeded with
+/// `E₀ = M + e·sin(M)`, a first-order series approximation of the solution
+/// (Danby 1992, ch. 6). Unlike a bare `E₀ = M` seed this stays close to the
+/// root for near-parabolic orbits (`e → 1`), where `E ≈ M + e` and a `M` seed
+/// degrades badly. A finite-difference step guards the derivative singularity
+/// as `e → 1` so the loop still terminates when `1 - e·cos(E)` approaches zero.
 #[must_use]
 pub fn solve_kepler(m: f64, e: f64) -> f64 {
-    let mut ecc = m;
-    for _ in 0..50 {
+    debug_assert!((0.0..1.0).contains(&e), "solve_kepler requires 0 ≤ e < 1");
+    let mut ecc = m + e * m.sin();
+    for _ in 0..60 {
         let f = ecc - e * ecc.sin() - m;
         let fp = 1.0 - e * ecc.cos();
         let delta = f / fp;
@@ -498,6 +504,18 @@ mod tests {
         let pos = vec3(0.0, 0.0, 0.0);
         let vel = vec3(1.0, 0.0, 0.0);
         assert!(OrbitalElements::from_state(&pos, &vel, 1.0).is_err());
+    }
+
+    #[test]
+    fn solve_kepler_seed_is_accurate_at_high_eccentricity() {
+        // With the `E0 = M + e·sin(M)` seed the residual stays tiny even as
+        // e -> 1, where a bare `M` seed degrades. Check several M, e = 0.9.
+        for m in [0.1, 1.0, 2.5, 5.0] {
+            let e = 0.9;
+            let ecc = solve_kepler(m, e);
+            let residual = (ecc - e * ecc.sin() - m).abs();
+            assert!(residual < 1e-10, "M={m} residual={residual}");
+        }
     }
 
     #[test]

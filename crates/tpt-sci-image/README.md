@@ -10,14 +10,25 @@ the in-house `tpt-math` substrate:
   (FBP) inverse.
 * `naive_back_projection` — the unfiltered adjoint, shown for comparison.
 
+In addition, the `volume` module extends the same machinery to 3-D parallel-beam
+CT:
+
+* `volume::radon_transform_3d` — the forward Radon transform of a `Volume`
+  (one `n_z × n_bins` sinogram per angle).
+* `volume::filtered_back_projection_3d` — the ram-lak FBP inverse, returning a
+  reconstructed `Volume`.
+
+The 3-D acquisition rotates the beam about the `z` axis, so each `z` slice is
+reconstructed independently (a correct parallel-beam volume geometry; it does
+not model a general cone beam).
+
 Everything is hand-rolled: rotations/interpolation are done by coordinate
 remapping with bilinear sampling, and the ramp filter lives in the Fourier
 domain via `tpt-math-signal-fft`. There are no external image or tomography
 dependencies.
 
-Scope is **2-D parallel-beam CT** rather than fully n-dimensional (the
-"n-dimensional" wording in the original plan is not met; revisit if a vertical
-needs 3-D volumes).
+Scope for the 2-D API is **2-D parallel-beam CT**; the `volume` module provides
+the 3-D volume support that was previously deferred.
 
 Depends on `tpt-math-signal-fft`, `tpt-math-linalg` (published).
 

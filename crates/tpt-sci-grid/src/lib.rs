@@ -1,9 +1,10 @@
 //! # tpt-sci-grid
 //!
 //! Structured finite-difference grids and stencils for the `tpt-science`
-//! pillar: uniform 1-D and tensor-product N-D grids, finite-difference
+//! pillar: uniform 1-D, 2-D and 3-D tensor-product grids, finite-difference
 //! stencil coefficients, and assembly of discrete PDE operators (Laplacians)
 //! on those grids.
+//!
 //!
 //! This crate is built from scratch (no wrap target — see `spec.txt`). It is
 //! motivated by the compartmental-ODE / structured-grid spatial-model needs of
@@ -34,12 +35,14 @@ pub mod sparse;
 pub mod stencil;
 
 pub use error::GridError;
-pub use grid::{Boundary, UniformGrid1D, UniformGrid2D, linspace};
-pub use operator::{derivative_1d, kron, laplacian_1d, laplacian_2d};
+pub use grid::{Boundary, UniformGrid1D, UniformGrid2D, UniformGrid3D, linspace};
+pub use operator::{derivative_1d, kron, laplacian_1d, laplacian_2d, laplacian_3d};
 pub use stencil::Stencil;
 
 #[cfg(feature = "sparse")]
-pub use sparse::{CsrMatrix, diffuse_step, laplacian_1d_sparse, laplacian_2d_sparse};
+pub use sparse::{
+    CsrMatrix, diffuse_step, laplacian_1d_sparse, laplacian_2d_sparse, laplacian_3d_sparse,
+};
 
 /// The `tpt-math` linear-algebra substrate this crate builds on.
 pub use tpt_math_linalg as linalg;

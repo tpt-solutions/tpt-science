@@ -11,7 +11,4 @@ pub enum GridError {
     #[error("invalid domain: x0 ({0}) >= x1 ({1})")]
     InvalidDomain(f64, f64),
 
-    /// A 2-D grid axis was degenerate.
-    #[error("degenerate axis: {0}")]
-    DegenerateAxis(&'static str),
 }

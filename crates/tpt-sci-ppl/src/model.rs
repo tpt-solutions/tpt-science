@@ -1,9 +1,9 @@
 //! A small probabilistic-programming model/DSL built on top of the from-scratch
-//! [`nuts`] sampler.
+//! [`crate::nuts()`] sampler.
 //!
 //! A [`ModelBuilder`] collects parameter priors (expressed as reverse-mode
 //! differentiable closures, so the NUTS gradient is exact) and a likelihood,
-//! then [`Model::build`] freezes them into a model and [`Model::fit`] runs NUTS
+//! then [`ModelBuilder::build`] freezes them into a model and [`Model::fit`] runs NUTS
 //! to draw posterior samples.
 //!
 //! ```rust
@@ -198,17 +198,17 @@ impl Model {
     /// with NUTS, starting from `0.5` in every coordinate (a safe interior
     /// point for both bounded and unbounded priors).
     ///
-    /// Returns a [`Trace`] carrying the draws plus convergence diagnostics
-    /// (effective sample size, split-R-hat, divergence rate). Use
-    /// [`Model::fit_chains`] when you need R-hat (it is undefined for a single
-    /// chain).
+    /// This is a convenience wrapper that runs [`Model::fit_chains`] with two
+    /// dispersed chains, so the returned [`Trace`] always carries a meaningful
+    /// split-R-hat ([`Trace::rhat`] is `NaN` for a single chain). Call
+    /// `fit_chains` directly for finer control over the number of chains or
+    /// `fit_from` for a single, explicitly-seeded chain.
     ///
     /// # Errors
     ///
-    /// Propagates any error from [`Model::fit_from`].
+    /// Propagates any error from the underlying sampler.
     pub fn fit(&self, rng: &mut impl Rng, n_samples: usize) -> Result<Trace, PplError> {
-        let initial = vec![0.5; self.dim];
-        self.fit_from(&initial, rng, n_samples)
+        self.fit_chains(2, n_samples, rng)
     }
 
     /// Draw samples starting from an explicit initial point.

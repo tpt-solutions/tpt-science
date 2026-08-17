@@ -112,10 +112,7 @@ impl Simulation {
             for id in &self.order {
                 let m = self.models.get_mut(id).expect("registered model");
                 if m.time() < target - EPS {
-                    m.advance(dt).map_err(|e| match e {
-                        SimError::Advance(name, msg) => SimError::Advance(name, msg),
-                        other => other,
-                    })?;
+                    m.advance(dt)?;
                 }
             }
             self.apply_couplings()?;

@@ -14,6 +14,13 @@ resolved with the standard two-sphere impulse plus a positional
 (Baumgarte-style) correction to keep overlapping bodies from sinking into one
 another.
 
+Each `Body` is a genuine rigid body, not just a point mass: it carries an
+orientation quaternion and an angular velocity, so torques change its spin and
+its orientation integrates forward under [`Body::spin`]. For a sphere the moment
+of inertia is isotropic (default `(2/5)·m·r²`), captured by a single scalar
+[`Body::inertia`]. Rotation helpers (`quat_mul`, `quat_normalize`,
+`quat_to_matrix`) are also exposed.
+
 Depends on `tpt-math-linalg` (published).
 
 ## Example

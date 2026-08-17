@@ -143,11 +143,6 @@ impl OdeProblem {
                 "initial state y0 must be non-empty".to_string(),
             ));
         }
-        if self.rtol <= 0.0 || self.atol <= 0.0 {
-            return Err(OdeError::Invalid(
-                "rtol and atol must be strictly positive".to_string(),
-            ));
-        }
         Ok(Self {
             rhs: self.rhs.clone(),
             y0,
@@ -160,11 +155,4 @@ impl OdeProblem {
     }
 }
 
-/// Copy the entries of an `NalgebraVec` into a `Vec<f64>` of length `n`.
-pub(crate) fn nalgebra_vec_to_vec(v: &diffsol::NalgebraVec<f64>, n: usize) -> Vec<f64> {
-    let mut out = vec![0.0; n];
-    for i in 0..n {
-        out[i] = v[i];
-    }
-    out
-}
+

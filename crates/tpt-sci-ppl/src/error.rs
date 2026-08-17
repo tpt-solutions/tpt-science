@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-/// Errors raised by [`crate::nuts`] and the [`crate::Model`] DSL.
+/// Errors raised by [`mod@crate::nuts`] and the [`crate::Model`] DSL.
 #[derive(Debug, Error)]
 pub enum PplError {
     /// A model/parameter had the wrong number of dimensions for its data.

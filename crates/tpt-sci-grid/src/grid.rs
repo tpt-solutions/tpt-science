@@ -202,3 +202,200 @@ impl UniformGrid2D {
         linspace(self.y0, self.y1, self.ny)
     }
 }
+
+/// A tensor-product uniform 3-D grid: `nx` nodes in `x` over `[x0, x1]`,
+/// `ny` nodes in `y` over `[y0, y1]`, and `nz` nodes in `z` over `[z0, z1]`.
+///
+/// Nodes are addressed with the lexicographic ordering
+/// `index = ix + iy·nx + iz·nx·ny` (so `x` is the fastest-varying axis and `z`
+/// the slowest). This mirrors [`UniformGrid2D`] (whose own ordering is
+/// `ix + iy·nx`) and is the convention used by [`crate::laplacian_3d`] and the
+/// feature-gated [`crate::laplacian_3d_sparse`].
+#[derive(Debug, Clone)]
+pub struct UniformGrid3D {
+    nx: usize,
+    x0: f64,
+    x1: f64,
+    ny: usize,
+    y0: f64,
+    y1: f64,
+    nz: usize,
+    z0: f64,
+    z1: f64,
+}
+
+impl UniformGrid3D {
+    /// Create a tensor-product 3-D grid. Requires `nx, ny, nz >= 2` and strictly
+    /// ordered domains on every axis.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GridError::TooFewPoints`] if any axis has fewer than 2 nodes, or
+    /// [`GridError::InvalidDomain`] if any axis domain is not strictly ordered.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        nx: usize,
+        x0: f64,
+        x1: f64,
+        ny: usize,
+        y0: f64,
+        y1: f64,
+        nz: usize,
+        z0: f64,
+        z1: f64,
+    ) -> Result<Self, GridError> {
+        if nx < 2 {
+            return Err(GridError::TooFewPoints(2, nx));
+        }
+        if ny < 2 {
+            return Err(GridError::TooFewPoints(2, ny));
+        }
+        if nz < 2 {
+            return Err(GridError::TooFewPoints(2, nz));
+        }
+        if x1 <= x0 {
+            return Err(GridError::InvalidDomain(x0, x1));
+        }
+        if y1 <= y0 {
+            return Err(GridError::InvalidDomain(y0, y1));
+        }
+        if z1 <= z0 {
+            return Err(GridError::InvalidDomain(z0, z1));
+        }
+        Ok(Self {
+            nx,
+            x0,
+            x1,
+            ny,
+            y0,
+            y1,
+            nz,
+            z0,
+            z1,
+        })
+    }
+
+    /// Nodes along the `x` axis.
+    pub fn nx(&self) -> usize {
+        self.nx
+    }
+
+    /// Nodes along the `y` axis.
+    pub fn ny(&self) -> usize {
+        self.ny
+    }
+
+    /// Nodes along the `z` axis.
+    pub fn nz(&self) -> usize {
+        self.nz
+    }
+
+    /// Total node count (`nx * ny * nz`).
+    pub fn len(&self) -> usize {
+        self.nx * self.ny * self.nz
+    }
+
+    /// Whether the grid has zero nodes (always `false` for a valid grid).
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Spacing along `x`.
+    pub fn dx(&self) -> f64 {
+        (self.x1 - self.x0) / (self.nx as f64 - 1.0)
+    }
+
+    /// Spacing along `y`.
+    pub fn dy(&self) -> f64 {
+        (self.y1 - self.y0) / (self.ny as f64 - 1.0)
+    }
+
+    /// Spacing along `z`.
+    pub fn dz(&self) -> f64 {
+        (self.z1 - self.z0) / (self.nz as f64 - 1.0)
+    }
+
+    /// Left endpoint of the `x` axis.
+    pub fn x0(&self) -> f64 {
+        self.x0
+    }
+
+    /// Right endpoint of the `x` axis.
+    pub fn x1(&self) -> f64 {
+        self.x1
+    }
+
+    /// Lower endpoint of the `y` axis.
+    pub fn y0(&self) -> f64 {
+        self.y0
+    }
+
+    /// Upper endpoint of the `y` axis.
+    pub fn y1(&self) -> f64 {
+        self.y1
+    }
+
+    /// Lower endpoint of the `z` axis.
+    pub fn z0(&self) -> f64 {
+        self.z0
+    }
+
+    /// Upper endpoint of the `z` axis.
+    pub fn z1(&self) -> f64 {
+        self.z1
+    }
+
+    /// `x` node coordinates.
+    pub fn x_coordinates(&self) -> Vec<f64> {
+        linspace(self.x0, self.x1, self.nx)
+    }
+
+    /// `y` node coordinates.
+    pub fn y_coordinates(&self) -> Vec<f64> {
+        linspace(self.y0, self.y1, self.ny)
+    }
+
+    /// `z` node coordinates.
+    pub fn z_coordinates(&self) -> Vec<f64> {
+        linspace(self.z0, self.z1, self.nz)
+    }
+
+    /// Lexicographic node index `ix + iy·nx + iz·nx·ny`.
+    #[must_use]
+    pub fn index(&self, ix: usize, iy: usize, iz: usize) -> usize {
+        ix + iy * self.nx + iz * self.nx * self.ny
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn grid3d_rejects_invalid() {
+        assert!(UniformGrid3D::new(1, 0.0, 1.0, 2, 0.0, 1.0, 2, 0.0, 1.0).is_err());
+        assert!(UniformGrid3D::new(2, 1.0, 0.0, 2, 0.0, 1.0, 2, 0.0, 1.0).is_err());
+        assert!(UniformGrid3D::new(2, 0.0, 1.0, 2, 0.0, 1.0, 2, 1.0, 0.0).is_err());
+    }
+
+    #[test]
+    fn grid3d_index_is_lexicographic() {
+        let g = UniformGrid3D::new(3, 0.0, 1.0, 4, 0.0, 1.0, 5, 0.0, 1.0).unwrap();
+        assert_eq!(g.len(), 60);
+        assert_eq!(g.index(0, 0, 0), 0);
+        assert_eq!(g.index(1, 0, 0), 1);
+        assert_eq!(g.index(0, 1, 0), 3);
+        assert_eq!(g.index(0, 0, 1), 12);
+        // All indices are distinct and in range.
+        let mut seen = vec![false; g.len()];
+        for iz in 0..g.nz() {
+            for iy in 0..g.ny() {
+                for ix in 0..g.nx() {
+                    let k = g.index(ix, iy, iz);
+                    assert!(!seen[k]);
+                    seen[k] = true;
+                }
+            }
+        }
+    }
+}

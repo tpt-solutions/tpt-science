@@ -15,6 +15,18 @@ The assembled operators are returned as `DMatrix` / `DVector` from the
 
 Depends on `tpt-math-linalg` (published).
 
+## Features
+
+* Uniform 1-D, 2-D and 3-D tensor-product grids
+  (`UniformGrid1D` / `UniformGrid2D` / `UniformGrid3D`).
+* Discrete Laplacians in 1-D, 2-D and 3-D (`laplacian_1d` / `laplacian_2d` /
+  `laplacian_3d`), with homogeneous Dirichlet or Neumann boundaries.
+* Feature-gated sparse backend (enable the `sparse` feature): a CSR
+  `CsrMatrix` plus sparse Laplacian assemblers (`laplacian_1d_sparse`,
+  `laplacian_2d_sparse`, `laplacian_3d_sparse`) and an explicit-Euler
+  `diffuse_step`, so realistically sized 2-D/3-D PDE grids avoid the O(n²)
+  memory cost of the dense operators.
+
 ## Example
 
 ```rust

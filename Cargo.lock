@@ -1727,6 +1727,7 @@ dependencies = [
  "criterion",
  "diffsol",
  "thiserror 2.0.20",
+ "tpt-math-linalg",
  "tpt-math-numeric",
 ]
 

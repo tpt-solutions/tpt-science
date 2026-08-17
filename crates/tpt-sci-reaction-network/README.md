@@ -49,12 +49,15 @@ assert!((y[e] + y[se] - 10.0).abs() < 1e-6);
 
 **v1 (this crate):** a CRN IR (species / parameters / reactions), mass-action
 rate laws (plus custom non-mass-action rate closures), a stoichiometry matrix
-and reaction-rate builder, and an `OdeProblem` bridge into `tpt-sci-ode`. A
-textual Catalyst.jl-style DSL (`kB, S + E --> SE`) is provided for convenience.
+and reaction-rate builder, an `OdeProblem` bridge into `tpt-sci-ode`, and an
+exact stochastic backend ([`ReactionSystem::simulate_ssa`] — Gillespie's direct
+method). A textual Catalyst.jl-style DSL (`kB, S + E --> SE`) is provided for
+convenience.
 
-**Out of v1 (documented, not built):** the stochastic Gillespie / SSA backend
-(defer to wrapping [`rebop`](https://crates.io/crates/rebop), MIT), SDE/jump
-models, SBML I/O, network analysis, and conservation-law elimination.
+**Out of v1 (documented, not built):** SDE/jump models, SBML I/O, network
+analysis, and conservation-law elimination. (The stochastic SSA backend was
+previously deferred to wrapping [`rebop`](https://crates.io/crates/rebop), MIT;
+it is now implemented from scratch instead.)
 
 ## License
 

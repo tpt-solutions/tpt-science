@@ -7,7 +7,8 @@
 //! here let callers work with realistically-sized 1-D/2-D grids without the
 //! O(n²) memory cost of a dense [`DMatrix`](tpt_math_linalg::tpt_math_linalg_dense::DMatrix).
 
-use crate::grid::{Boundary, UniformGrid1D, UniformGrid2D};
+use crate::grid::{Boundary, UniformGrid1D, UniformGrid2D, UniformGrid3D};
+use crate::operator::laplacian_3d_rows;
 
 /// A real, compressed-sparse-row (CSR) matrix.
 ///
@@ -185,6 +186,18 @@ pub fn laplacian_2d_sparse(grid: &UniformGrid2D, bc: Boundary) -> CsrMatrix {
     pack_csr(n, n, &rows)
 }
 
+/// Assemble the discrete 3-D Laplacian (`d²/dx² + d²/dy² + d²/dz²`) on a
+/// tensor-product grid as a [`CsrMatrix`], using node ordering
+/// `index = ix + iy·nx + iz·nx·ny` and the standard 7-point stencil. Mirrors
+/// [`crate::laplacian_3d`] (it shares the same row assembly) but without forming
+/// a dense `n³ × n³` matrix.
+#[must_use]
+pub fn laplacian_3d_sparse(grid: &UniformGrid3D, bc: Boundary) -> CsrMatrix {
+    let rows = laplacian_3d_rows(grid, bc);
+    let n = grid.len();
+    pack_csr(n, n, &rows)
+}
+
 /// One explicit-Euler diffusion step `u_next = u + dt · D · (L · u)` for a field
 /// `u` on a grid with diffusion coefficient `D` and Laplacian `L`.
 ///
@@ -200,6 +213,10 @@ pub fn diffuse_step(u: &[f64], laplacian: &CsrMatrix, dt: f64, diffusion: f64) -
 }
 
 /// Pack per-row `(col, value)` lists into CSR storage.
+///
+/// Duplicate column entries within a row (e.g. the separate per-axis diagonal
+/// contributions of a 3-D Laplacian) are merged by summing their values, so the
+/// resulting matrix has at most one entry per `(row, column)` pair.
 fn pack_csr(nrows: usize, ncols: usize, rows: &[Vec<(usize, f64)>]) -> CsrMatrix {
     let mut row_ptr = Vec::with_capacity(nrows + 1);
     let mut col_ind = Vec::new();
@@ -207,10 +224,21 @@ fn pack_csr(nrows: usize, ncols: usize, rows: &[Vec<(usize, f64)>]) -> CsrMatrix
     let mut offset = 0;
     row_ptr.push(0);
     for r in rows {
-        for &(c, v) in r {
+        // Sort by column, then coalesce equal columns.
+        let mut entries = r.clone();
+        entries.sort_by_key(|&(c, _)| c);
+        let mut i = 0;
+        while i < entries.len() {
+            let (c, mut v) = entries[i];
+            let mut j = i + 1;
+            while j < entries.len() && entries[j].0 == c {
+                v += entries[j].1;
+                j += 1;
+            }
             col_ind.push(c);
             values.push(v);
             offset += 1;
+            i = j;
         }
         row_ptr.push(offset);
     }
@@ -289,5 +317,46 @@ mod tests {
         let grad0: f64 = u.windows(2).map(|w| (w[1] - w[0]).abs()).sum();
         let grad1: f64 = u1.windows(2).map(|w| (w[1] - w[0]).abs()).sum();
         assert!(grad1 < grad0, "diffusion should smooth the parabola");
+    }
+
+    #[test]
+    fn sparse_3d_matches_dense_laplacian() {
+        let g = UniformGrid3D::new(9, 0.0, 1.0, 9, 0.0, 1.0, 9, 0.0, 1.0).unwrap();
+        let sparse = laplacian_3d_sparse(&g, Boundary::Dirichlet);
+        let dense = crate::laplacian_3d(&g, Boundary::Dirichlet);
+        assert_eq!(sparse.nrows(), dense.nrows());
+        assert_eq!(sparse.ncols(), dense.ncols());
+        for i in 0..sparse.nrows() {
+            let start = sparse.row_ptr[i];
+            let end = sparse.row_ptr[i + 1];
+            for k in start..end {
+                assert_abs_diff_eq!(
+                    sparse.values[k],
+                    dense[(i, sparse.col_ind[k])],
+                    epsilon = 1e-12
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sparse_3d_laplacian_of_quadratic() {
+        // u = (x(1-x) + y(1-y) + z(1-z))/6  ->  ∇²u = -1.
+        let g = UniformGrid3D::new(15, 0.0, 1.0, 15, 0.0, 1.0, 15, 0.0, 1.0).unwrap();
+        let l = laplacian_3d_sparse(&g, Boundary::Dirichlet);
+        let xs = g.x_coordinates();
+        let ys = g.y_coordinates();
+        let zs = g.z_coordinates();
+        let u: Vec<f64> = (0..g.len())
+            .map(|k| {
+                let ix = k % g.nx();
+                let iy = (k / g.nx()) % g.ny();
+                let iz = k / (g.nx() * g.ny());
+                (xs[ix] * (1.0 - xs[ix]) + ys[iy] * (1.0 - ys[iy]) + zs[iz] * (1.0 - zs[iz])) / 6.0
+            })
+            .collect();
+        let lu = l.mul_vec(&u);
+        let mid = g.len() / 2;
+        assert_abs_diff_eq!(lu[mid], -1.0, epsilon = 5e-2);
     }
 }

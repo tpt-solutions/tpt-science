@@ -242,27 +242,31 @@ when work starts.
 
 ### 5b. Scope gaps (documented, but adoption-limiting)
 
-- [ ] `tpt-sci-astro`: two-body/Keplerian only — no J2, drag, third-body,
-      or N-body propagation. Biggest capability gap for real
-      mission-design use; scope a J2 perturbation model if a consumer
-      needs it.
-- [ ] `tpt-sci-grid`: dense `DMatrix` only (O(n²) memory), 1D/2D max, no
-      sparse backend, no 3D — despite motivating cortical-sheet/cable-
-      equation use cases that often need volumes.
-- [ ] `tpt-sci-physics-rigid`: naming/scope mismatch — "rigid-body physics"
-      but no rotation/torque/orientation at all, point-mass sphere dynamics
-      only. No friction, O(n²) collision with no broad-phase. Either scope
-      down the name/docs or extend toward actual rigid-body mechanics.
-- [ ] `tpt-sci-ppl`: no convergence diagnostics (no R-hat, no ESS;
-      divergences tracked internally but silently discarded), no
-      multi-chain support, `fit()` returns a bare `Vec<Vec<f64>>` instead
-      of a `Trace`/`Sample` type. Most likely gap to block real Bayesian
-      workflows.
-- [ ] `tpt-sci-image`: 2D parallel-beam CT only, no 3D/volume support
-      (known deviation from the original "n-dimensional" plan).
-- [ ] `tpt-sci-reaction-network`: no stochastic SSA/Gillespie, no SDE/jump,
-      no SBML I/O — already deferred with `rebop` flagged as the future SSA
-      wrap target; lowest-priority gap of the set.
+- [x] `tpt-sci-astro`: J2 perturbation model delivered — `OrbitalElements::propagate_j2`
+      and `j2_secular_rates` give the first-order secular nodal-regression /
+      apsidal-precession rates (`EARTH_J2` / `EARTH_RADIUS_EQ` supplied). Drag,
+      third-body, and N-body remain out of scope (as scoped).
+- [x] `tpt-sci-grid`: feature-gated sparse backend (`sparse` feature: `CsrMatrix`,
+      `laplacian_*_sparse`, `diffuse_step`) was already present; added 3-D
+      support — `UniformGrid3D`, dense `laplacian_3d`, and sparse
+      `laplacian_3d_sparse` (shared row assembly so dense == sparse). Both
+      Dirichlet and Neumann boundaries.
+- [x] `tpt-sci-physics-rigid`: rotation/torque/orientation delivered — `Body`
+      carries an orientation quaternion + angular velocity + isotropic
+      `inertia`; `apply_torque` / `spin` / `quat_to_matrix` etc. Friction and
+      broad-phase remain out of scope (noted in README).
+- [x] `tpt-sci-ppl`: convergence diagnostics delivered — `fit()` / `fit_chains()`
+      return a `Trace` exposing R-hat (split-`Trace::rhat`), ESS
+      (`Trace::ess`, Geyer), and the divergence rate (`Trace::divergence_rate`);
+      multi-chain supported via `fit_chains`.
+- [x] `tpt-sci-image`: 3-D volume CT delivered — `volume` module with
+      `radon_transform_3d` and `filtered_back_projection_3d` (`Volume` type),
+      parallel-beam geometry rotating about `z` (each `z` slice reconstructed
+      independently). 2-D API unchanged.
+- [x] `tpt-sci-reaction-network`: stochastic SSA delivered — `simulate_ssa`
+      (Gillespie direct method) on `ReactionSystem`, with combinatorial
+      mass-action propensities and a `SsaTrajectory` result. SDE/jump, SBML
+      I/O, network analysis, conservation laws remain out of scope.
 
 ### 5c. Innovative / high-leverage additions
 
@@ -356,10 +360,22 @@ when work starts.
 - **rust-toolchain.toml**: already `channel = "stable"` with no `wasm32-unknown-
   unknown` target present; `stable` satisfies the `rust-version = "1.85"` MSRV
   pin. (Reconciled — no change needed.)
-- **fmt drift**: `cargo fmt --check` was failing repo-wide under the current
-  stable rustfmt (toolchain-version heuristic drift in committed `lib.rs` and
-  pre-existing examples). Ran `cargo fmt` to normalize the whole workspace so
-  the `fmt` CI job is green again (mechanical; no behavioural change).
+- **CI hygiene — pre-existing toolchain drift (fmt / doc / clippy)**: under the
+  current stable rustfmt/rustdoc/clippy the repo did not actually pass its own
+  CI gates (committed `lib.rs` and pre-existing examples were formatted with an
+  older rustfmt; several intra-doc links and clippy lints were broken). This
+  pass fixed them so all three jobs are green again:
+  - `fmt`: ran `cargo fmt` to normalize the whole workspace (mechanical; no
+    behavioural change).
+  - `doc` (`RUSTDOCFLAGS=-D warnings`): fixed broken intra-doc links —
+    ambiguous `[`crate::nuts`]` (ppl), `[`State::apply_unitary`]` (quantum),
+    `[`nuts`]`/`[`Model::build`]` (ppl model.rs), `crate::laplacian_3d(_sparse)`
+    references (grid), `[`ReactionSystem::to_ode_problem`]` (reaction-network),
+    and `[`tpt-sci-grid`]` (sim-core).
+  - `clippy --all-targets --all-features -D warnings` (claimed clean in Phase 4
+    but wasn't under current clippy): collapsed 6 `collapsible-if`s and added a
+    `# Panics` doc in `tpt-sci-grid/src/sparse.rs` + `operator.rs`, and allowed
+    `too_many_arguments` on `UniformGrid3D::new` in `grid.rs`.
 
 ### 5e. Adoption acceleration (examples/templates)
 
@@ -406,3 +422,142 @@ multi-year-scale problem not attempted alongside the other three pillars
 here. Revisit only if `tpt-sci-grid` proves insufficient for a specific
 vertical, and if so, treat it as its own repo, not a `tpt-science`
 addition (see spec.txt ECOSYSTEM GAP JUSTIFICATION and OUT OF SCOPE).
+
+## Phase 6 — Platform review follow-ups (2026-08-17)
+
+Findings from a full-workspace review (build/test/clippy all green under
+`--all-features`; no `todo!`/`unimplemented!`/stubs; only one `panic!` in an
+example). These items were triaged and fixed in the same pass.
+
+### 6a. Functional bug (fixed)
+
+- [x] **CI never ran.** `.github/workflows/ci.yml` triggered on `branches:
+  [main]`, but the default branch is `master` (`git branch` confirms). Changed
+  both `push` and `pull_request` triggers to `master` so the pipeline actually
+  executes. (`ci.yml:5,7`)
+
+### 6b. Dead / unreachable API surface (fixed)
+
+- [x] Removed `GridError::DegenerateAxis` from `tpt-sci-grid` — defined but
+  never constructed (grid axes are validated by `TooFewPoints` /
+  `InvalidDomain`). (`crates/tpt-sci-grid/src/error.rs`)
+- [x] Removed `ReactionNetworkError::DuplicateSpecies` and
+  `::DuplicateParameter` from `tpt-sci-reaction-network` — species/parameter
+  registration is idempotent (`ReactionNetwork::species`/`parameter` return the
+  existing index), so duplicates can never occur.
+  (`crates/tpt-sci-reaction-network/src/error.rs`)
+- [x] Simplified the redundant `match` in `Simulation::step_until`
+  (`tpt-sci-sim-core/src/sim.rs`): the `advance(dt).map_err(|e| match e { ... }`
+  was a no-op re-wrap; replaced with a plain `advance(dt)?`.
+- [x] Removed the dead second `rtol`/`atol` validation in `OdeProblem::respawn`
+  (`tpt-sci-ode/src/problem.rs`): tolerances are guaranteed positive by
+  `build()` and `respawn` clones from a built problem, so the re-check was
+  unreachable.
+
+### 6c. Documented, not fixed (tracked for later)
+
+- [x] `tpt-sci-astro`: `solve_kepler` initialises at `ecc = m` (not `m + e`);
+  accuracy degrades for `e` approaching 1. Add a better seed and/or a guard.
+  (Done: `crates/tpt-sci-astro/src/lib.rs:415` now seeds Newton at `E₀ = M +
+  e·sin(M)` — Danby's first-order series seed — which stays close to the root
+  for `e → 1`; added a `debug_assert!` bounds guard on `0 ≤ e < 1` and a
+  `solve_kepler_seed_is_accurate_at_high_eccentricity` test at `e = 0.9`.)
+- [x] `tpt-sci-ppl`: `Trace::rhat` returns `NaN` for a single chain; consider
+  making `fit_chains(1, …)` the default `fit` so `rhat` is always meaningful.
+  (Done: `Model::fit` in `crates/tpt-sci-ppl/src/model.rs:209` now delegates to
+  `fit_chains(2, …)` (two dispersed chains), so the returned `Trace` always
+  carries a meaningful split-R-hat; `fit_from` remains the single-chain escape
+  hatch. `rhat` is still `NaN` only for a genuinely single-chain trace.)
+- [x] `tpt-sci-image`: the empirical FBP amplitude scale (`4.0 / nb`,
+  `lib.rs` / `volume.rs`) needs a ram-lak-normalization derivation/citation in
+  a doc comment for maintainability. (Done: doc comments added at
+  `crates/tpt-sci-image/src/lib.rs:265` and `volume.rs:280` citing Kak & Slaney,
+  *Principles of Computerized Tomographic Imaging*, §3.3, and deriving the
+  `4.0 / (nb·n_angles)` constant from the discrete ramp filter's DC gain plus
+  the Δθ/Δs pixel-area factors. Also fixed a pre-existing broken
+  `crate::UniformGrid3D` intra-doc link in `volume.rs`.)
+- [x] `tpt-sci-grid`: mark the dense `laplacian_3d` path as a memory trap at
+  realistic sizes and steer users to the `sparse` feature in docs. (Done:
+  `crates/tpt-sci-grid/src/operator.rs:104` now carries a `## Memory note`
+  warning that the dense operator is `Θ(n²)` — a `128³` grid is ~2 GiB — and
+  points users to the feature-gated `laplacian_3d_sparse`.)
+
+## Phase 7 — Replace diffsol with an in-house, dual-licensed ODE engine
+
+Decision (2026-08-17): **do NOT fork diffsol.** Build the ODE solver from
+scratch inside this repo so the shipped crate is 100% TPT-owned code under
+`MIT OR Apache-2.0`, with no `diffsol` / `nalgebra` / `faer` in the shipped
+dependency graph. `diffsol` is retained ONLY as an *optional* verification
+oracle (dev-dependency, feature `verify-diffsol`, excluded from `cargo deny`
+via `include-dev = false`) to regression-compare trajectories.
+
+Open questions to resolve before coding (see tracked tasks 7.0):
+- **7.0a Crate placement:** (A) keep the engine inside `tpt-sci-ode`
+  (fastest, preserves the `OdeProblem` API that `tpt-sci-reaction-network` and
+  `tpt-sci-sim-core` already depend on) vs (B) new `tpt-math-ode` in the
+  sibling `tpt-math` repo (cleaner "math primitive" home, matches how
+  `tpt-math-linalg`/`tpt-math-prob` are organised, but crosses repo
+  boundaries). Engine code should be written so it can be lifted into (B) later.
+- **7.0b Linear-algebra backend:** implement a small in-crate dense LA
+  (matrix + LU w/ partial pivoting + finite-difference Jacobian). DO NOT depend
+  on `faer`/`nalgebra` (faer is MIT-only and is what `tpt-math-linalg` wraps;
+  pulling it would re-introduce a non-dual-licensed transitive dep). Small
+  systems here (≤ few hundred states) make a self-contained LA fine.
+
+"Better than diffsol" — realistic targets (we do NOT try to beat its Enzyme
+autodiff + LLVM/Cranelift JIT, sparse LA, or sensitivity/adjoints):
+- Fully dual-licensed, zero Apache/MIT-only-heavy transitive deps.
+- `f32`/`f64`-generic over `tpt_math_numeric::Scalar` (diffsol is hardcoded
+  `f64`/faer); `no_std`-friendly core.
+- Closure-first, no JIT → deterministic, reproducible, no LLVM build/runtime dep
+  (we only ever used diffsol's closure path anyway).
+- Built-in Hermite dense-output interpolation so `solve_dense` is exact between
+  accepted steps (vs diffsol's snapshot `solve_dense`).
+- Identical public API (`OdeProblem`/`OdeProblemBuilder`/`Method`/`solve`/
+  `solve_dense`) so downstream crates are unchanged.
+
+### Tracked tasks
+
+- [ ] **7.0** Resolve 7.0a (crate placement) and 7.0b (LA backend) decisions.
+- [ ] **7.1** Add in-crate dense linear algebra module: `DMat` (row-major),
+      LU decomposition with partial pivoting, `mat_vec`, `add_scaled_identity`,
+      finite-difference full Jacobian builder. Unit-tested on a known system
+      (e.g. solve a 3×3 linear system; verify Jacobian of `f(y)=Ay`).
+- [ ] **7.2** Implement explicit `Tsit45` (embedded 4(5), adaptive step).
+- [ ] **7.3** Implement `TrBdf2` (SDIRK, A-stable, embedded error control).
+- [ ] **7.4** Implement `Esdirk34` (ESDIRK order 3(4)).
+- [ ] **7.5** Implement `Bdf` (variable-order 1–5 backward differentiation;
+      classic BDF α-coefficients, Newton corrector with the 7.1 LU, numerical
+      Jacobian, order/step-size control). Hardest; analytic tests gate it.
+- [ ] **7.6** Shared adaptive-step driver with Hermite dense-output so
+      `solve_dense` lands exactly on each `t_eval` (or interpolates). Drives all
+      four methods.
+- [ ] **7.7** Rewire `OdeProblem`/`OdeProblemBuilder`/`Method`/`solve`/
+      `solve_dense` onto the new engine. Preserve the exact public signature
+      (including `Rhs = Fn(f64, &[f64], &mut [f64])` and `Vec<f64>` returns) so
+      `tpt-sci-reaction-network` and `tpt-sci-sim-core` need no changes.
+- [ ] **7.8** Remove `diffsol` from shipped deps in `tpt-sci-ode/Cargo.toml`
+      and the workspace `[workspace.dependencies]`. Add optional dev-dependency
+      `diffsol` gated behind `verify-diffsol` feature; add
+      `[[test]]`/module comparing our trajectories vs diffsol on: exp decay,
+      harmonic oscillator, van der Pol (stiff), SIR (via reaction-network RHS),
+      Robertson (very stiff). Keep existing analytic-comparison tests as the
+      always-on correctness gate.
+- [ ] **7.9** `deny.toml`: add `include-dev = false` under `[licenses]` (so the
+      optional `diffsol` dev-dep / `nalgebra` is excluded from the license
+      scan, matching the "shipped deps" policy). Remove the now-false
+      "diffsol dual-licensed" notes; document diffsol as a verification oracle
+      only.
+- [ ] **7.10** Update `spec.txt` (ODE section: built from scratch, diffsol is
+      verify-only) and retire the fork narrative.
+- [ ] **7.11** Verify: `cargo check --workspace`, `cargo test -p tpt-sci-ode`,
+      `cargo test -p tpt-sci-ode --features verify-diffsol` (within tolerance),
+      `cargo tree -p tpt-sci-ode -i nalgebra` → empty for the shipped graph,
+      `cargo deny licenses` clean. Re-run `tpt-sci-reaction-network` and
+      `tpt-sci-sim-core` tests to confirm API unchanged.
+
+### Out of scope (v1)
+- DiffSL / LLVM / Cranelift JIT codegen for user RHS (we only use closures).
+- Sparse LA (dense only; matches current `tpt-sci-ode` usage).
+- Sensitivity analysis / adjoints (diffsol strengths we consciously skip).
+- `f32`/generic path is a stretch goal behind the `Scalar` trait; v1 ships `f64`.
