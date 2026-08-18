@@ -59,6 +59,53 @@ ECOSYSTEM GAP JUSTIFICATION
   Audit before building — don't duplicate for tpt-astrobus/tpt-zenith/
   tpt-selenograph.
 
+EXPANDED VISION (2026-08): ADVANCED SCIENTIFIC METHODS
+Ten additional crates, motivated by four downstream verticals
+(tpt-materials, tpt-medical, tpt-earth, tpt-process) that are already
+decided elsewhere in the roadmap but do not yet exist as repos or
+tpt-vertical-map/registry.toml entries — treated as given, not a gap to
+resolve here. Each crate below got the same wrap-vs-build ecosystem-gap
+research pass the original nine got (WebSearch against crates.io/lib.rs,
+license-checked per ADR 0007: MIT OR Apache-2.0 or more permissive only,
+Apache-2.0-only AND copyleft both disqualifying):
+- Molecular dynamics: lumol (BSD-3-Clause, passes the license bar) is the
+  only real Rust MD engine but is self-labeled alpha with WIP sibling
+  crates and unclear current maintenance — not trusted as a foundation-
+  pillar dependency. tpt-sci-md is build-from-scratch.
+- Electronic-structure DFT: no Rust crate does Kohn-Sham LDA/GGA/band-
+  structure DFT at all — a genuine, large gap, comparable in scale to why
+  unstructured FEM was deferred (see OUT OF SCOPE below). tpt-sci-dft-
+  electronic is build-from-scratch, v1 scoped explicitly to simple/1-D
+  systems, audit-first against tpt-spectra and the future tpt-materials
+  repo before committing to a full build.
+- Classical/soft-matter DFT: feos-dft (MIT OR Apache-2.0, actively
+  published) solves a real but different problem — density profiles,
+  adsorption isotherms, surface tension — from electronic-structure DFT.
+  Passes ADR 0007 cleanly; tpt-sci-dft-classical wraps feos-dft.
+- CFD (incompressible Navier-Stokes, finite volume, k-epsilon/k-omega SST
+  turbulence): only serious candidate, pravash, is GPL-3.0-only —
+  disqualified same as Apache-2.0-only. tpt-sci-cfd-core is build-from-
+  scratch, kept independent of the sibling tpt-fem/tpt-physics repos (no
+  cross-repo dependency, despite conceptual FEM/FSI/multiphysics overlap).
+- Hemodynamics (compliant vessels, Womersley flow, non-Newtonian
+  viscosity): no Rust crate exists for this niche. tpt-sci-hemodynamics is
+  build-from-scratch on tpt-sci-cfd-core/tpt-sci-ode, independent of
+  tpt-fem.
+- Cardiac electrophysiology (Hodgkin-Huxley, bidomain): no Rust crate
+  exists. tpt-sci-electrophys is build-from-scratch.
+- Climate (energy balance, radiative transfer, atmospheric chemistry): no
+  Rust crate exists; real codes (DISORT, LBLRTM, CRTM) are Fortran/C with
+  no Rust port. tpt-sci-climate is build-from-scratch.
+- Ocean (primitive equations, shallow water, circulation): only
+  candidate, pravash, is GPL-3.0-only — same disqualification as CFD.
+  tpt-sci-ocean is build-from-scratch.
+- Advanced reaction kinetics (Arrhenius, Langmuir-Hinshelwood/surface
+  catalysis): no Rust crate exists. tpt-sci-kinetics is build-from-
+  scratch, extending tpt-sci-reaction-network's mass-action CRN engine
+  rather than duplicating it.
+`pravash` (GPL-3.0-only) is recorded in tpt-rust-map/registry.toml as an
+excluded [[external]] entry so it isn't silently re-proposed.
+
 CORE PRINCIPLES
 Every crate here is motivated by a named existing repo's need — no crate
 is added speculatively. Wrap an external crate whenever one exists and
@@ -133,6 +180,58 @@ CRATE INVENTORY
     primitives. Audit tpt-system-zero before writing anything — its own
     description suggests this may already exist there. Depends on:
     tpt-math-linalg.
+
+  tpt-sci-md
+    Build from scratch (lumol audited and rejected — alpha/unmaintained,
+    see EXPANDED VISION above). Classical molecular dynamics: Lennard-
+    Jones/EAM potentials, radial distribution functions. Motivated by:
+    tpt-materials (planned vertical). Depends on: tpt-math-linalg.
+
+  tpt-sci-dft-electronic
+    FLAGGED, needs-audit-first (audit tpt-spectra and the future
+    tpt-materials repo). Build from scratch, v1 scoped to simple/1-D
+    systems — electronic-structure (Kohn-Sham) DFT: basic LDA/GGA, band
+    structure. Motivated by: tpt-materials (planned vertical). Depends
+    on: tpt-math-linalg.
+
+  tpt-sci-dft-classical
+    Wrap feos-dft (MIT OR Apache-2.0). Classical/soft-matter DFT: density
+    profiles, adsorption isotherms, pair correlation functions, surface
+    tension. Motivated by: tpt-materials (planned vertical).
+
+  tpt-sci-cfd-core
+    Build from scratch (pravash audited and rejected — GPL-3.0-only).
+    Incompressible Navier-Stokes (finite volume), k-epsilon/k-omega SST
+    turbulence. Kept independent of tpt-fem/tpt-physics. Motivated by:
+    tpt-process, tpt-earth. Depends on: tpt-math-linalg.
+
+  tpt-sci-hemodynamics
+    Build from scratch. Blood flow in compliant vessels: 1-D vessel-
+    network solver, Womersley flow, non-Newtonian viscosity. Motivated
+    by: tpt-medical (planned vertical). Depends on: tpt-sci-cfd-core,
+    tpt-sci-ode.
+
+  tpt-sci-electrophys
+    Build from scratch. Cardiac electrophysiology: Hodgkin-Huxley action
+    potential models, bidomain equations. Motivated by: tpt-medical
+    (planned vertical). Depends on: tpt-sci-ode, tpt-sci-grid.
+
+  tpt-sci-climate
+    Build from scratch. Energy balance models, radiative transfer, basic
+    atmospheric chemistry. Motivated by: tpt-earth (planned vertical).
+    Depends on: tpt-sci-ode, tpt-math-linalg.
+
+  tpt-sci-ocean
+    Build from scratch (pravash audited and rejected — GPL-3.0-only).
+    Primitive equations, shallow water models, ocean circulation.
+    Motivated by: tpt-earth (planned vertical). Depends on:
+    tpt-sci-cfd-core.
+
+  tpt-sci-kinetics
+    Build from scratch. Advanced reaction kinetics: Arrhenius rate laws,
+    Langmuir-Hinshelwood surface/heterogeneous-catalysis kinetics.
+    Motivated by: tpt-process (planned vertical). Depends on:
+    tpt-sci-reaction-network.
 
 OUT OF SCOPE
 Unstructured FEM/mesh generation — see ECOSYSTEM GAP JUSTIFICATION above.

@@ -32,6 +32,10 @@ tpt-math-autodiff-rev = "0.1.0"
 tpt-math-prob-bayes = "0.1.0"
 tpt-math-prob-core = "0.1.0"
 num-complex = "0.4"
+# Wrap target for tpt-sci-dft-classical (classical/soft-matter DFT), MIT OR
+# Apache-2.0, added by the 2026-08 spec2.txt expansion pass. Not yet pulled
+# into any crate's [dependencies] until tpt-sci-dft-classical is scaffolded.
+feos-dft = "0.6"
 
 # In-repo crate dependencies (referenced by `workspace = true`).
 tpt-sci-ode = { version = "0.1.0", path = "crates/tpt-sci-ode" }
