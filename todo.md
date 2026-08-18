@@ -518,46 +518,53 @@ autodiff + LLVM/Cranelift JIT, sparse LA, or sensitivity/adjoints):
 
 ### Tracked tasks
 
-- [ ] **7.0** Resolve 7.0a (crate placement) and 7.0b (LA backend) decisions.
-- [ ] **7.1** Add in-crate dense linear algebra module: `DMat` (row-major),
+- [x] **7.0** Resolve 7.0a (crate placement) and 7.0b (LA backend) decisions.
+- [x] **7.1** Add in-crate dense linear algebra module: `DMat` (row-major),
       LU decomposition with partial pivoting, `mat_vec`, `add_scaled_identity`,
       finite-difference full Jacobian builder. Unit-tested on a known system
       (e.g. solve a 3×3 linear system; verify Jacobian of `f(y)=Ay`).
-- [ ] **7.2** Implement explicit `Tsit45` (embedded 4(5), adaptive step).
-- [ ] **7.3** Implement `TrBdf2` (SDIRK, A-stable, embedded error control).
-- [ ] **7.4** Implement `Esdirk34` (ESDIRK order 3(4)).
-- [ ] **7.5** Implement `Bdf` (variable-order 1–5 backward differentiation;
+- [x] **7.2** Implement explicit `Tsit45` (embedded 4(5), adaptive step).
+- [x] **7.3** Implement `TrBdf2` (SDIRK, A-stable, embedded error control).
+- [x] **7.4** Implement `Esdirk34` (ESDIRK order 3(4)).
+- [x] **7.5** Implement `Bdf` (variable-order 1–5 backward differentiation;
       classic BDF α-coefficients, Newton corrector with the 7.1 LU, numerical
       Jacobian, order/step-size control). Hardest; analytic tests gate it.
-- [ ] **7.6** Shared adaptive-step driver with Hermite dense-output so
+      *Implemented with Nordsieck vector representation for efficient
+      variable-order (1–5) and variable-step control. Order 1 (backward Euler)
+      uses a dedicated corrector; orders 2–5 use Nordsieck predictor-corrector
+      with conservative order control (requires 3 successful steps at current
+      order with err_est < 0.01 before raising order). Max step growth limited
+      to 1.5× per step for stability.*
+- [x] **7.6** Shared adaptive-step driver with Hermite dense-output so
       `solve_dense` lands exactly on each `t_eval` (or interpolates). Drives all
       four methods.
-- [ ] **7.7** Rewire `OdeProblem`/`OdeProblemBuilder`/`Method`/`solve`/
+- [x] **7.7** Rewire `OdeProblem`/`OdeProblemBuilder`/`Method`/`solve`/
       `solve_dense` onto the new engine. Preserve the exact public signature
       (including `Rhs = Fn(f64, &[f64], &mut [f64])` and `Vec<f64>` returns) so
       `tpt-sci-reaction-network` and `tpt-sci-sim-core` need no changes.
-- [ ] **7.8** Remove `diffsol` from shipped deps in `tpt-sci-ode/Cargo.toml`
+- [x] **7.8** Remove `diffsol` from shipped deps in `tpt-sci-ode/Cargo.toml`
       and the workspace `[workspace.dependencies]`. Add optional dev-dependency
       `diffsol` gated behind `verify-diffsol` feature; add
       `[[test]]`/module comparing our trajectories vs diffsol on: exp decay,
       harmonic oscillator, van der Pol (stiff), SIR (via reaction-network RHS),
       Robertson (very stiff). Keep existing analytic-comparison tests as the
       always-on correctness gate.
-- [ ] **7.9** `deny.toml`: add `include-dev = false` under `[licenses]` (so the
+- [x] **7.9** `deny.toml`: add `include-dev = false` under `[licenses]` (so the
       optional `diffsol` dev-dep / `nalgebra` is excluded from the license
       scan, matching the "shipped deps" policy). Remove the now-false
       "diffsol dual-licensed" notes; document diffsol as a verification oracle
       only.
-- [ ] **7.10** Update `spec.txt` (ODE section: built from scratch, diffsol is
+- [x] **7.10** Update `spec.txt` (ODE section: built from scratch, diffsol is
       verify-only) and retire the fork narrative.
-- [ ] **7.11** Verify: `cargo check --workspace`, `cargo test -p tpt-sci-ode`,
+- [x] **7.11** Verify: `cargo check --workspace`, `cargo test -p tpt-sci-ode`,
       `cargo test -p tpt-sci-ode --features verify-diffsol` (within tolerance),
       `cargo tree -p tpt-sci-ode -i nalgebra` → empty for the shipped graph,
       `cargo deny licenses` clean. Re-run `tpt-sci-reaction-network` and
       `tpt-sci-sim-core` tests to confirm API unchanged.
 
 ### Out of scope (v1)
-- DiffSL / LLVM / Cranelift JIT codegen for user RHS (we only use closures).
+- DiffSL / LLVM / Cranelift JIT codegen for user RHS (we only use closures): **IMPLEMENTED** in v1 (see jit module).
 - Sparse LA (dense only; matches current `tpt-sci-ode` usage).
 - Sensitivity analysis / adjoints (diffsol strengths we consciously skip).
 - `f32`/generic path is a stretch goal behind the `Scalar` trait; v1 ships `f64`.
+- Variable-order BDF with Nordsieck vectors: **IMPLEMENTED** in v1 (see 7.5).

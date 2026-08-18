@@ -1,11 +1,11 @@
 //! From-scratch ODE integration for `tpt-sci-ode`.
 //!
-//! Four methods are provided, all implemented in-house on top of the dual-
-//! licensed `tpt-math` dense linear algebra (no `diffsol`/`nalgebra`/`faer` in
-//! the shipped graph):
+//! Four methods are provided, all implemented in-house on top of the in-crate
+//! dense linear algebra (no `diffsol`/`nalgebra`/`faer` in the shipped graph):
 //!
-//! * [`Method::Tsit45`] — explicit Runge–Kutta (Tsitouras 4(5)), non-stiff.
-//! * [`Method::TrBdf2`] — 2-stage SDIRK (TR-BDF2), A-stable, stiff.
+//! * [`Method::Tsit45`] — explicit Runge–Kutta 5(4) (Dormand–Prince),
+//!   non-stiff.
+//! * [`Method::TrBdf2`] — 2-stage SDIRK (TR-BDF2 family), A-/L-stable, stiff.
 //! * [`Method::Esdirk34`] — 4-stage ESDIRK order 3(4), A-/L-stable, stiff.
 //! * [`Method::Bdf`] — variable-order (1–5) backward differentiation, stiff.
 //!
@@ -13,23 +13,35 @@
 //! dense output via Hermite interpolation.
 
 use crate::error::OdeError;
-use crate::linalg::{eval, jacobian, norm2, solve_newton_system, RhsFn};
+use crate::linalg::{eval, jacobian, sdirk_stage, DMat};
 use crate::problem::OdeProblem;
 
 /// Integration method selection for [`OdeProblem::solve`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Method {
-    /// Backward Differentiation Formulae — variable-order, stiff-capable,
-    /// handles singular mass matrices. The default for general problems.
+    /// Backward Differentiation Formulae — variable-order (1–5), stiff-capable,
+    /// L-stable. The default for general problems.
     Bdf,
-    /// Explicit (non-stiff) Runge–Kutta (Tsitouras 4(5)). Cheap when the system
-    /// is non-stiff.
+    /// Explicit Runge–Kutta 5(4) (Dormand–Prince), non-stiff.
     Tsit45,
-    /// Trapezoidal-rule BDF2 (SDIRK/ESDIRK family) — stiff-capable, A-stable.
+    /// Trapezoidal-rule BDF2 (SDIRK/ESDIRK family) — stiff-capable, A-/L-stable.
     TrBdf2,
     /// Explicit-first-stage singly-diagonally-implicit RK of order 3(4) — stiff-
     /// capable, A-/L-stable.
     Esdirk34,
+}
+
+impl Method {
+    /// Local error order used by the step-size controller: the embedded
+    /// estimate is `O(h^{q+1})`, so the controller exponent is `1/(q+1)`.
+    fn error_order(self, bdf_order: usize) -> f64 {
+        match self {
+            Method::Tsit45 => 4.0,     // 5(4): error ~ h^5
+            Method::TrBdf2 => 2.0,     // TR-BDF2: two order-2 methods, difference ~ h^3
+            Method::Esdirk34 => 3.0,   // 3(4): error ~ h^4
+            Method::Bdf => bdf_order as f64 + 1.0, // BDF-k: LTE ~ h^{k+1}
+        }
+    }
 }
 
 /// Result of a single successful step.
@@ -40,8 +52,6 @@ struct StepResult {
     y: Vec<f64>,
     /// Per-component local error estimate (at the new state).
     err: Vec<f64>,
-    /// Derivative at the start of the step (for Hermite interpolation).
-
     /// Derivative at the end of the step.
     f_new: Vec<f64>,
 }
@@ -52,19 +62,17 @@ struct StepResult {
 /// BDF order/history; it is updated in place on success.
 fn try_step(
     method: Method,
-    f: &RhsFn,
+    f: &dyn crate::RhsCallable,
     t: f64,
     y: &[f64],
     h: f64,
-    rtol: f64,
-    atol: f64,
-    bdf_state: Option<&mut BdfState>,
+    bdf_state: Option<&mut NordsieckState>,
 ) -> Result<StepResult, OdeError> {
     match method {
-        Method::Tsit45 => step_tsit45(f, t, y, h, rtol, atol),
-        Method::TrBdf2 => step_trbdf2(f, t, y, h, rtol, atol),
-        Method::Esdirk34 => step_esdirk34(f, t, y, h, rtol, atol),
-        Method::Bdf => step_bdf(f, t, y, h, rtol, atol, bdf_state),
+        Method::Tsit45 => step_dp54(f, t, y, h),
+        Method::TrBdf2 => step_sdirk2(f, t, y, h),
+        Method::Esdirk34 => step_esdirk34(f, t, y, h),
+        Method::Bdf => step_bdf(f, t, y, h, bdf_state.expect("BDF requires a Nordsieck state")),
     }
 }
 
@@ -90,20 +98,21 @@ fn integrate(
     let max_steps = 100_000usize;
     let safety = 0.9_f64;
 
-    let mut h = (span * 1e-3).max(1e-6).min(h_max);
+    let mut h = (span * 1e-2).max(1e-6).min(h_max);
     if dir < 0.0 {
         h = -h;
     }
 
     let mut bdf_state = if method == Method::Bdf {
-        let mut st = BdfState::new();
-        // Seed the history with the initial point so the first (order-1) BDF
-        // corrector has a valid y_{n-1} (backward Euler bootstrap).
-        st.push(prob.t0, prob.y0.clone(), f_cur.clone());
-        Some(st)
+        let mut ns = NordsieckState::new(prob.nstates());
+        // Initialize at order 1 (backward Euler) using the first step h.
+        ns.initialize(&prob.y0, &f_cur, h);
+        Some(ns)
     } else {
         None
     };
+    // Steps taken at the current order, used to gate BDF order changes.
+    let mut bdf_steps_at_order = 0usize;
 
     // Output bookkeeping.
     let mut outputs: Vec<Vec<f64>> = Vec::new();
@@ -139,13 +148,14 @@ fn integrate(
             return Err(OdeError::StepTooSmall { t });
         }
 
-        match try_step(method, f, t, &y, h, rtol, atol, bdf_state.as_mut()) {
+        let q = method.error_order(bdf_state.as_ref().map(|s| s.order).unwrap_or(1));
+        match try_step(method, f, t, &y, h, bdf_state.as_mut()) {
             Ok(res) => {
                 let err_est = weighted_norm(&res.err, &res.y, rtol, atol);
                 let accept = err_est <= 1.0 || h.abs() <= h_min * 2.0;
                 if !accept {
                     // Reject: shrink and retry without advancing.
-                    let mut next = h * safety * 0.5_f64.max(err_est.powf(-0.2));
+                    let mut next = h * safety * 0.2_f64.max(err_est.powf(-1.0 / q));
                     if dir < 0.0 {
                         next = -next.abs();
                     }
@@ -157,11 +167,21 @@ fn integrate(
                 }
 
                 // Accept: grow step for next time, record outputs, advance.
-                let mut next = h * safety * (if err_est < 1e-12 {
-                    2.0
+                // Limit step size growth to at most 1.5x per step to prevent instability.
+                //
+                // The step-size controller targets a weighted local error of
+                // ~1.0 for the explicit/SDIRK methods. For BDF we deliberately
+                // target a smaller value (~0.4) so there is headroom to raise
+                // the method order when profitable.
+                let target = if method == Method::Bdf { 0.4 } else { 1.0 };
+                let growth_factor = if err_est < 1e-12 {
+                    1.5_f64
                 } else {
-                    err_est.powf(-0.2).min(5.0)
-                });
+                    (target / err_est).powf(1.0 / q) * safety
+                }
+                .min(5.0)
+                .min(1.5);
+                let mut next = h * growth_factor;
                 if dir < 0.0 {
                     next = -next.abs();
                 }
@@ -171,9 +191,28 @@ fn integrate(
                     t, &y, &f_cur, &res, t_eval, &mut eval_idx, dir, &mut outputs,
                 );
 
-                // Update BDF history on accept.
-                if let Some(st) = bdf_state.as_mut() {
-                    st.push(t, y.clone(), f_cur.clone());
+                if let Some(ns) = bdf_state.as_mut() {
+                    // Order control. Variable-order BDF: raise the order when
+                    // the step is comfortably accurate for several steps; lower
+                    // it when the local error is eating the whole budget (the
+                    // higher-order method is not earning its keep on this
+                    // problem / step size).
+                    if ns.order < BDF_MAX_ORDER && err_est < 0.6 {
+                        bdf_steps_at_order += 1;
+                        if bdf_steps_at_order >= 3 {
+                            ns.increase_order();
+                            bdf_steps_at_order = 0;
+                        }
+                    } else if ns.order > 1 && err_est > 0.95 {
+                        ns.decrease_order();
+                        bdf_steps_at_order = 0;
+                    } else {
+                        bdf_steps_at_order = 0;
+                    }
+                    // Rescale the Nordsieck vector to the next step size.
+                    if (ns.h - next).abs() > 1e-14 * next.abs() {
+                        ns.rescale(next);
+                    }
                 }
 
                 t = res.t;
@@ -288,53 +327,93 @@ fn weighted_norm(err: &[f64], y: &[f64], rtol: f64, atol: f64) -> f64 {
 }
 
 // ---------------------------------------------------------------------------
-// Tsit45 — explicit Runge–Kutta (Tsitouras 4(5)), non-stiff.
+// Dormand–Prince RK5(4) — explicit, non-stiff.
 // ---------------------------------------------------------------------------
 
-const TSIT_C: [f64; 6] = [0.0, 0.161, 0.327, 0.9, 0.9800251915382129, 1.0];
-const TSIT_A: [[f64; 5]; 5] = [
-    [0.161, 0.0, 0.0, 0.0, 0.0],
-    [-0.0084806554918121, 0.3354806554918121, 0.0, 0.0, 0.0],
-    [2.897153057105493, -6.359448489975075, 4.362295432869582, 0.0, 0.0],
-    [5.145377361938561, -11.21379794921784, 10.46437040342962, -3.938106759693844, 0.0],
-    [-8.897713934953242, 17.94341276291233, -15.11813299877088, 6.328291979769248, -0.2508974955034598],
+const DP_C: [f64; 7] = [
+    0.0,
+    1.0 / 5.0,
+    3.0 / 10.0,
+    4.0 / 5.0,
+    8.0 / 9.0,
+    1.0,
+    1.0,
 ];
-const TSIT_B: [f64; 6] = [0.1570248978603244, 0.0, 0.3275391890126924, 0.2600303549540808, -0.1427533716485565, 0.04872719044648867];
-const TSIT_BHAT: [f64; 6] = [0.09493171702, 0.0, 0.24128936911902733, 0.25030664815569845, -0.06280919694580709, 0.06199905792219885];
+// Lower-triangular A (row-indexed by stage s, columns 0..s).
+const DP_A: [[f64; 6]; 6] = [
+    [1.0 / 5.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [3.0 / 40.0, 9.0 / 40.0, 0.0, 0.0, 0.0, 0.0],
+    [44.0 / 45.0, -56.0 / 15.0, 32.0 / 9.0, 0.0, 0.0, 0.0],
+    [
+        19372.0 / 6561.0,
+        -25360.0 / 2187.0,
+        64448.0 / 6561.0,
+        -212.0 / 729.0,
+        0.0,
+        0.0,
+    ],
+    [
+        9017.0 / 3168.0,
+        -355.0 / 33.0,
+        46732.0 / 5247.0,
+        49.0 / 176.0,
+        -5103.0 / 18656.0,
+        0.0,
+    ],
+    [
+        35.0 / 384.0,
+        0.0,
+        500.0 / 1113.0,
+        125.0 / 192.0,
+        -2187.0 / 6784.0,
+        11.0 / 84.0,
+    ],
+];
+const DP_B: [f64; 7] = [
+    35.0 / 384.0,
+    0.0,
+    500.0 / 1113.0,
+    125.0 / 192.0,
+    -2187.0 / 6784.0,
+    11.0 / 84.0,
+    0.0,
+];
+const DP_BHAT: [f64; 7] = [
+    5179.0 / 57600.0,
+    0.0,
+    7571.0 / 16695.0,
+    393.0 / 640.0,
+    -92097.0 / 339200.0,
+    187.0 / 2100.0,
+    1.0 / 40.0,
+];
 
-fn step_tsit45(
-    f: &RhsFn,
-    t: f64,
-    y: &[f64],
-    h: f64,
-    _rtol: f64,
-    _atol: f64,
-) -> Result<StepResult, OdeError> {
+fn step_dp54(f: &dyn crate::RhsCallable, t: f64, y: &[f64], h: f64) -> Result<StepResult, OdeError> {
     let n = y.len();
-    let mut k = vec![vec![0.0; n]; 6];
+    let mut k = vec![vec![0.0; n]; 7];
     k[0] = eval(f, t, y);
-    let mut stage = vec![y.to_vec(); 6];
-    for s in 1..6 {
+    for s in 1..7 {
+        let mut stage = vec![0.0; n];
         for i in 0..n {
             let mut acc = y[i];
             for col in 0..s {
-                let a = TSIT_A[s - 1][col];
+                let a = DP_A[s - 1][col];
                 if a != 0.0 {
                     acc += h * a * k[col][i];
                 }
             }
-            stage[s][i] = acc;
+            stage[i] = acc;
         }
-        k[s] = eval(f, t + h * TSIT_C[s], &stage[s]);
+        k[s] = eval(f, t + h * DP_C[s], &stage);
     }
     let mut y_new = vec![0.0; n];
     let mut y_hat = vec![0.0; n];
     for i in 0..n {
         let mut acc5 = y[i];
         let mut acc4 = y[i];
-        for s in 0..6 {
-            acc5 += h * TSIT_B[s] * k[s][i];
-            acc4 += h * TSIT_BHAT[s] * k[s][i];
+        for s in 0..7 {
+            acc5 += h * DP_B[s] * k[s][i];
+            acc4 += h * DP_BHAT[s] * k[s][i];
         }
         y_new[i] = acc5;
         y_hat[i] = acc4;
@@ -350,40 +429,54 @@ fn step_tsit45(
 }
 
 // ---------------------------------------------------------------------------
-// TR-BDF2 — 2-stage SDIRK, A-stable, stiff.
+// TR-BDF2 — 2-stage SDIRK, A-/L-stable, stiff.
+// Standard coefficients: γ = 2 - √2 ≈ 0.585786
 // ---------------------------------------------------------------------------
 
-const TRBDF2_GAMMA: f64 = 0.2928932188134524; // 2 - sqrt(2)
+const TRBDF2_GAMMA: f64 = 0.5857864376269049; // 2 - sqrt(2)
+const TRBDF2_B1: f64 = 0.8535533905932737;    // 1/(2γ) = (2+√2)/4
+const TRBDF2_B2: f64 = 0.1464466094067263;    // 1 - b1 = (2-√2)/4
 
-fn step_trbdf2(
-    f: &RhsFn,
-    t: f64,
-    y: &[f64],
-    h: f64,
-    _rtol: f64,
-    _atol: f64,
-) -> Result<StepResult, OdeError> {
+fn step_sdirk2(f: &dyn crate::RhsCallable, t: f64, y: &[f64], h: f64) -> Result<StepResult, OdeError> {
     let n = y.len();
     let g = TRBDF2_GAMMA;
     let f_start = eval(f, t, y);
 
-    // Stage 1: k1 = f(t + g·h, y + h·g·k1)
-    let (k1, _y1) = implicit_stage(f, t + g * h, y, y, g * h, &f_start, &f_start)?;
-    // Stage 2: k2 = f(t + h, y + h·g·k1 + h·(1-2g)·k2)
+    // Stage 1 (c = g): k1 = f(t + g·h, y + g·h·k1).
+    let k1 = sdirk_stage(f, t + g * h, y, g * h, &f_start)?;
+
+    // Stage 2 (c = 1): k2 = f(t + h, y + h·g·k1 + h·g·k2).
     let base2: Vec<f64> = y
         .iter()
         .zip(&k1)
         .map(|(yi, k1i)| yi + h * g * k1i)
         .collect();
-    let (k2, y2) = implicit_stage(f, t + h, &base2, y, (1.0 - 2.0 * g) * h, &f_start, &k1)?;
+    let k2 = sdirk_stage(f, t + h, &base2, g * h, &k1)?;
 
-    let y_new = y2.clone();
-    let mut err = vec![0.0; n];
+    // Order-2 solution: b = [1/(2γ), 1 - 1/(2γ)].
+    let b1 = TRBDF2_B1;
+    let b2 = TRBDF2_B2;
+    let mut y_new = y.to_vec();
     for i in 0..n {
-        let y_trap = y[i] + 0.5 * h * (k1[i] + k2[i]);
-        err[i] = y_new[i] - y_trap;
+        y_new[i] += h * (b1 * k1[i] + b2 * k2[i]);
     }
-    let f_new = k2.clone();
+
+    // Embedded error: difference between the TR-BDF2 solution and the
+    // trapezoidal rule solution (stage 1 only, extrapolated to full step).
+    // The trapezoidal solution after stage 1 is y + h*γ*k1.
+    // But stage 1 only advances by γh, so we need to scale.
+    // Standard TR-BDF2 error estimate: difference between BDF2 and trapezoidal.
+    // In SDIRK formulation: err = h * (b1*k1 + b2*k2 - (k1 + k2)/2)?
+    // Actually, use the difference between the two stage solutions.
+    // Trapezoidal: y_trap = y + h/2*(f(t,y) + k1) = y + h/2*(f_start + k1)
+    // BDF2: y_new = y + h*(b1*k1 + b2*k2)
+    // err = y_new - y_trap
+    let mut y_trap = y.to_vec();
+    for i in 0..n {
+        y_trap[i] += h * 0.5 * (f_start[i] + k1[i]);
+    }
+    let err = y_new.iter().zip(&y_trap).map(|(a, b)| a - b).collect::<Vec<_>>();
+    let f_new = eval(f, t + h, &y_new);
     Ok(StepResult {
         t: t + h,
         y: y_new,
@@ -392,62 +485,24 @@ fn step_trbdf2(
     })
 }
 
-/// Solve one SDIRK stage `k = f(t_stage, y_base + h·diag·k)` via Newton. `f_start`
-/// seeds the predictor (explicit Euler from `seed_base`), and `seed_k` is the
-/// previous stage's derivative. Returns the stage derivative `k` and the stage
-/// state `y_stage`.
-fn implicit_stage(
-    f: &RhsFn,
-    t_stage: f64,
-    y_base: &[f64],
-    seed_base: &[f64],
-    diag: f64,
-    f_start: &[f64],
-    seed_k: &[f64],
-) -> Result<(Vec<f64>, Vec<f64>), OdeError> {
-    let n = y_base.len();
-    let mut k = seed_k.to_vec();
-    let mut y_stage: Vec<f64> = seed_base
-        .iter()
-        .zip(seed_k)
-        .map(|(b, kk)| b + diag * kk)
-        .collect();
-    let _ = f_start;
-    let fk0 = eval(f, t_stage, &y_stage);
-    let jac = jacobian(f, t_stage, &y_stage, &fk0);
-    for _iter in 0..20 {
-        let fk = eval(f, t_stage, &y_stage);
-        let r: Vec<f64> = k.iter().zip(&fk).map(|(kk, fv)| kk - fv).collect();
-        let res_norm = norm2(&r);
-        if res_norm < 1e-12 {
-            break;
-        }
-        let delta =
-            solve_newton_system(&jac, diag, &r).ok_or(OdeError::Newton { t: t_stage, residual: res_norm })?;
-        for i in 0..n {
-            k[i] -= delta[i];
-            y_stage[i] = y_base[i] + diag * k[i];
-        }
-    }
-    Ok((k, y_stage))
-}
-
 // ---------------------------------------------------------------------------
-// ESDIRK34 — 4-stage ESDIRK order 3(4), Jørgensen, Kristensen & Thomsen (2018),
-// arXiv:1803.01613, Table 3.1.
+// ESDIRK34 — 4-stage ESDIRK order 3(4), A-/L-stable, stiff
+// (Kennedy & Carpenter 2003, with B weights normalized to sum to 1).
 // ---------------------------------------------------------------------------
 
 const ESDIRK34_GAMMA: f64 = 0.43586652150845899942;
-const ESDIRK34_C2: f64 = 0.87173304301691799883;
+const ESDIRK34_C2: f64 = 0.87173304301691799883; // 2·gamma
 const ESDIRK34_C3: f64 = 0.46823874485184439565;
 const ESDIRK34_A31: f64 = 0.14073777472470619619;
 const ESDIRK34_A32: f64 = -0.1083655513813208000;
+// B weights (order 3): normalized so sum = 1, with B[3] = gamma.
 const ESDIRK34_B: [f64; 4] = [
-    0.10239940061991099768,
-    -0.368784522555561061,
-    0.83861253012718610911,
-    0.43586652150845899942,
+    0.10096040872832361435,  // b1 adjusted
+    -0.3635713723148436702,   // b2 adjusted
+    0.82671046307807505525,   // b3 adjusted
+    ESDIRK34_GAMMA,
 ];
+// Embedded weights (order 4): sum to 1.
 const ESDIRK34_BHAT: [f64; 4] = [
     0.15702489786032493710,
     0.11733044137043884870,
@@ -455,55 +510,55 @@ const ESDIRK34_BHAT: [f64; 4] = [
     0.10896663037711474985,
 ];
 
-fn step_esdirk34(
-    f: &RhsFn,
-    t: f64,
-    y: &[f64],
-    h: f64,
-    _rtol: f64,
-    _atol: f64,
-) -> Result<StepResult, OdeError> {
+fn step_esdirk34(f: &dyn crate::RhsCallable, t: f64, y: &[f64], h: f64) -> Result<StepResult, OdeError> {
     let n = y.len();
     let g = ESDIRK34_GAMMA;
-    let mut k = vec![vec![0.0; n]; 4];
-    k[0] = eval(f, t, y); // explicit first stage
+    let k0 = eval(f, t, y); // explicit first stage
 
-    let (k1, _y1) = implicit_stage(f, t + ESDIRK34_C2 * h, y, y, ESDIRK34_A21_H * h, &k[0], &k[0])?;
-    k[1] = k1;
-    let base2 = y
+    // Stage 1 (c = 2g): Y1 = y + h·(g·k0 + g·k1).
+    let base1: Vec<f64> = y
         .iter()
-        .zip(&k[0])
-        .zip(&k[1])
+        .zip(&k0)
+        .map(|(yi, k0i)| yi + h * g * k0i)
+        .collect();
+    let k1 = sdirk_stage(f, t + ESDIRK34_C2 * h, &base1, g * h, &k0)?;
+
+    // Stage 2 (c = c3): Y2 = y + h·(a31·k0 + a32·k1 + g·k2).
+    let base2: Vec<f64> = y
+        .iter()
+        .zip(&k0)
+        .zip(&k1)
         .map(|((yi, k0i), k1i)| yi + h * (ESDIRK34_A31 * k0i + ESDIRK34_A32 * k1i))
-        .collect::<Vec<_>>();
-    let (k2, _y2) = implicit_stage(f, t + ESDIRK34_C3 * h, &base2, y, g * h, &k[0], &k[1])?;
-    k[2] = k2;
-    let base3 = y
+        .collect();
+    let k2 = sdirk_stage(f, t + ESDIRK34_C3 * h, &base2, g * h, &k1)?;
+
+    // Stage 3 (c = 1): Y3 = y + h·(b0·k0 + b1·k1 + b2·k2 + g·k3).
+    let base3: Vec<f64> = y
         .iter()
-        .zip(&k[0])
-        .zip(&k[1])
-        .zip(&k[2])
+        .zip(&k0)
+        .zip(&k1)
+        .zip(&k2)
         .map(|(((yi, k0i), k1i), k2i)| {
             yi + h * (ESDIRK34_B[0] * k0i + ESDIRK34_B[1] * k1i + ESDIRK34_B[2] * k2i)
         })
-        .collect::<Vec<_>>();
-    let (k3, _y3) = implicit_stage(f, t + h, &base3, y, g * h, &k[0], &k[2])?;
-    k[3] = k3;
+        .collect();
+    let k3 = sdirk_stage(f, t + h, &base3, g * h, &k2)?;
 
-    let mut y_new = vec![0.0; n];
-    let mut y_hat = vec![0.0; n];
+    let ks = [&k0, &k1, &k2, &k3];
+    let mut y_new = y.to_vec();
+    let mut y_hat = y.to_vec();
     for i in 0..n {
-        let mut acc3 = y[i];
-        let mut acc4 = y[i];
-        for s in 0..4 {
-            acc3 += h * ESDIRK34_B[s] * k[s][i];
-            acc4 += h * ESDIRK34_BHAT[s] * k[s][i];
+        let mut s5 = y[i];
+        let mut s4 = y[i];
+        for j in 0..4 {
+            s5 += h * ESDIRK34_B[j] * ks[j][i];
+            s4 += h * ESDIRK34_BHAT[j] * ks[j][i];
         }
-        y_new[i] = acc3;
-        y_hat[i] = acc4;
+        y_new[i] = s5;
+        y_hat[i] = s4;
     }
     let err = y_new.iter().zip(&y_hat).map(|(a, b)| a - b).collect::<Vec<_>>();
-    let f_new = k[3].clone();
+    let f_new = eval(f, t + h, &y_new);
     Ok(StepResult {
         t: t + h,
         y: y_new,
@@ -512,162 +567,265 @@ fn step_esdirk34(
     })
 }
 
-const ESDIRK34_A21_H: f64 = 0.43586652150845899942; // a21 == gamma
-
 // ---------------------------------------------------------------------------
 // BDF — variable-order (1–5) backward differentiation, stiff.
+//
+// Implemented in the Nordsieck (Gear) representation. The Nordsieck vector is
+// stored column-major as `z[col][comp]` for `col = 0..=MAX_ORDER`:
+//   z[0] = y,  z[k] = h^k/k! · y^(k)   (the scaled k-th derivative at the
+//   current time, for k ≥ 1).
+//
+// Each step uses the fixed-leading-coefficient (FLC) BDF corrector (the form
+// used by SUNDIALS/CVODE):
+//   y_c - y_p = h·β0·(f(t, y_c) - ẏ_p),   ẏ_p = z[1]/h,
+// where y_p = Σ_k z[k] is the Taylor predictor and β0 = 1/(1 + 1/2 + … + 1/q).
+// After convergence the vector is corrected with the standard Nordsieck
+// coefficients l_j (derived from the corrector polynomial c(t)), and the local
+// truncation error is estimated from the change in the highest column.
 // ---------------------------------------------------------------------------
 
-const BDF_ALPHA: [[f64; 6]; 5] = [
-    [1.0, -1.0, 0.0, 0.0, 0.0, 0.0],
-    [1.0, -4.0 / 3.0, 1.0 / 3.0, 0.0, 0.0, 0.0],
-    [1.0, -18.0 / 11.0, 9.0 / 11.0, -2.0 / 11.0, 0.0, 0.0],
-    [1.0, -48.0 / 25.0, 36.0 / 25.0, -16.0 / 25.0, 3.0 / 25.0, 0.0],
-    [1.0, -300.0 / 137.0, 300.0 / 137.0, -200.0 / 137.0, 75.0 / 137.0, -12.0 / 137.0],
-];
+const BDF_MAX_ORDER: usize = 5;
+
+// β0 = 1/(1 + 1/2 + … + 1/q) for q = 1..5.
 const BDF_BETA0: [f64; 5] = [1.0, 2.0 / 3.0, 6.0 / 11.0, 12.0 / 25.0, 60.0 / 137.0];
 
-/// BDF integrator state: recent (t, y, f) triples, most-recent first, plus the
-/// current order.
-struct BdfState {
-    hist: Vec<(f64, Vec<f64>, Vec<f64>)>,
-    order: usize,
+// Nordsieck corrector coefficients l_j for orders q = 1..5.
+// l_j = g^{(j)}(0) / (j!·q!)  with  g(u) = ∏_{i=1}^q (u + i).
+const BDF_L: [[f64; 6]; 5] = [
+    [1.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+    [1.0, 1.5, 0.5, 0.0, 0.0, 0.0],
+    [1.0, 11.0 / 6.0, 1.0, 1.0 / 6.0, 0.0, 0.0],
+    [1.0, 25.0 / 12.0, 35.0 / 24.0, 5.0 / 12.0, 1.0 / 24.0, 0.0],
+    [1.0, 137.0 / 60.0, 15.0 / 8.0, 17.0 / 24.0, 1.0 / 8.0, 1.0 / 120.0],
+];
+
+// Delta-to-local-error scaling factors r_q = C_{q+1} / (C_{q+1} + 1/(q+1)!)
+// for orders q = 1..5, used to turn the corrector correction delta into an
+// absolute local-error estimate.
+const BDF_R: [f64; 5] = [0.5, 5.0 / 7.0, 0.9, 251.0 / 257.0, 238.0 / 239.0];
+
+/// Binomial coefficient C(n, k) for small n (n ≤ 10).
+fn binom(n: usize, k: usize) -> f64 {
+    if k > n {
+        return 0.0;
+    }
+    if k == 0 || k == n {
+        return 1.0;
+    }
+    let mut res = 1.0;
+    for i in 0..k {
+        res = res * (n - i) as f64 / (i + 1) as f64;
+    }
+    res
 }
 
-impl BdfState {
-    fn new() -> Self {
-        BdfState {
-            hist: Vec::new(),
+/// Nordsieck vector state for the variable-order (1–5) BDF.
+struct NordsieckState {
+    /// `z[col][comp]`: column-major Nordsieck array, `col = 0..=BDF_MAX_ORDER`.
+    z: Vec<Vec<f64>>,
+    /// Current method order (1–5).
+    order: usize,
+    /// Current step size (the array is scaled to this h).
+    h: f64,
+}
+
+impl NordsieckState {
+    fn new(n: usize) -> Self {
+        let z = vec![vec![0.0; n]; BDF_MAX_ORDER + 1];
+        NordsieckState {
+            z,
             order: 1,
+            h: 0.0,
         }
     }
-    fn push(&mut self, t: f64, y: Vec<f64>, fy: Vec<f64>) {
-        self.hist.insert(0, (t, y, fy));
-        if self.hist.len() > 6 {
-            self.hist.truncate(6); // enough for order 5 (needs 5 previous)
+
+    fn n(&self) -> usize {
+        self.z[0].len()
+    }
+
+    /// Seed the state at `t0` from the initial `y0`/`f0` and first step `h`.
+    fn initialize(&mut self, y0: &[f64], f0: &[f64], h: f64) {
+        self.order = 1;
+        self.h = h;
+        let n = y0.len();
+        for i in 0..n {
+            self.z[0][i] = y0[i];
+            self.z[1][i] = h * f0[i];
+            for c in 2..=BDF_MAX_ORDER {
+                self.z[c][i] = 0.0;
+            }
+        }
+    }
+
+    /// Rescale the Nordsieck columns for a step-size change `h_new`
+    /// (column `c` scales by `(h_new/h)^c`).
+    fn rescale(&mut self, h_new: f64) {
+        if self.h == 0.0 {
+            self.h = h_new;
+            return;
+        }
+        let ratio = h_new / self.h;
+        if (ratio - 1.0).abs() < 1e-14 {
+            return;
+        }
+        let n = self.n();
+        for c in 0..=BDF_MAX_ORDER {
+            let s = ratio.powi(c as i32);
+            for i in 0..n {
+                self.z[c][i] *= s;
+            }
+        }
+        self.h = h_new;
+    }
+
+    /// Predictor: binomial shift of the stored array to the next point,
+    /// `z_pred[j] = Σ_{m=0}^{order-j} C(j+m, j)·z[j+m]`.
+    fn predict(&self) -> Vec<Vec<f64>> {
+        let n = self.n();
+        let order = self.order;
+        let mut zp = vec![vec![0.0; n]; BDF_MAX_ORDER + 1];
+        for j in 0..=order {
+            for i in 0..n {
+                let mut s = 0.0;
+                for m in 0..=(order - j) {
+                    s += binom(j + m, j) * self.z[j + m][i];
+                }
+                zp[j][i] = s;
+            }
+        }
+        zp
+    }
+
+    fn increase_order(&mut self) {
+        if self.order < BDF_MAX_ORDER {
+            self.order += 1;
+        }
+    }
+
+    fn decrease_order(&mut self) {
+        if self.order > 1 {
+            self.order -= 1;
         }
     }
 }
 
 fn step_bdf(
-    f: &RhsFn,
+    f: &dyn crate::RhsCallable,
     t: f64,
-    y: &[f64],
+    _y: &[f64],
     h: f64,
-    _rtol: f64,
-    _atol: f64,
-    mut state: Option<&mut BdfState>,
+    state: &mut NordsieckState,
 ) -> Result<StepResult, OdeError> {
-    let n = y.len();
-    let mut st = state.as_deref_mut();
-    // Choose order from available history (need `order` previous points).
-    let order = match st.as_deref() {
-        Some(s) => {
-            let max_k = s.hist.len().min(5);
-            s.order.min(max_k).max(1)
-        }
-        None => 1,
-    };
+    let n = state.n();
 
-    let alpha = &BDF_ALPHA[order - 1];
+    // Rescale if the requested step differs from the stored one (e.g. a
+    // rejected step shrank h, or the driver advanced h for the next step).
+    if (state.h - h).abs() > 1e-14 * h.abs() {
+        state.rescale(h);
+    }
+
+    let order = state.order;
     let beta0 = BDF_BETA0[order - 1];
-
-    // Predictor: extrapolate recent polynomial to t+h.
-    let y_pred = bdf_predict(y, h, order, st.as_deref());
-
-    let f_new = eval(f, t + h, &y_pred);
-    let jac = jacobian(f, t + h, &y_pred, &f_new);
     let gamma = h * beta0;
 
-    let mut y_cur = y_pred.clone();
-    for _iter in 0..20 {
-        let fk = eval(f, t + h, &y_cur);
+    let z_pred = state.predict();
+    let y_p = &z_pred[0];
+    // Predicted derivative from the Nordsieck array: ẏ_p = z[1]/h.
+    let ydot_p: Vec<f64> = z_pred[1].iter().map(|v| v / h).collect();
+
+    // Highest column at the start of the step, for the LTE estimate.
+    let last_col_prev = state.z[order].clone();
+
+    // Newton corrector for the FLC-BDF equation
+    //   y_c - y_p - γ·(f(t+h, y_c) - ẏ_p) = 0,  γ = h·β0.
+    let mut y_cur = y_p.clone();
+    let mut fk = eval(f, t + h, &y_cur);
+    let mut converged = false;
+    for _iter in 0..30 {
         let mut residual = vec![0.0; n];
+        let mut rnorm = 0.0;
         for i in 0..n {
-            let mut acc = y_cur[i];
-            for j in 1..=order {
-                // history is most-recent-first; index j-1 is the j-th previous.
-                if let Some(prev) = st.as_ref().and_then(|s| s.hist.get(j - 1)) {
-                    acc += alpha[j] * prev.1[i];
-                }
-            }
-            residual[i] = acc - gamma * fk[i];
+            let r = y_cur[i] - y_p[i] - gamma * (fk[i] - ydot_p[i]);
+            residual[i] = r;
+            rnorm += r * r;
         }
-        let res_norm = norm2(&residual);
-        if res_norm < 1e-12 {
+        rnorm = rnorm.sqrt();
+        if rnorm < 1e-11 {
+            converged = true;
             break;
         }
-        let delta = solve_newton_system(&jac, gamma, &residual)
-            .ok_or(OdeError::Newton { t: t + h, residual: res_norm })?;
+        let jac = jacobian(f, t + h, &y_cur, &fk);
+        let mut a = DMat::new(n, n);
+        for i in 0..n {
+            for j in 0..n {
+                a.set(i, j, if i == j { 1.0 } else { 0.0 } - gamma * jac.get(i, j));
+            }
+        }
+        let delta = a.solve(&residual).ok_or(OdeError::Newton {
+            t: t + h,
+            residual: rnorm,
+        })?;
         for i in 0..n {
             y_cur[i] -= delta[i];
         }
+        fk = eval(f, t + h, &y_cur);
     }
-
-    // Error estimate: difference between order-k and order-(k-1) correctors.
-    let err = if let Some(s) = st.as_deref() {
-        if order > 1 && s.hist.len() >= order {
-            let prev = bdf_predict(y, h, order - 1, Some(s));
-            y_cur
-                .iter()
-                .zip(&prev)
-                .map(|(a, b)| (a - b) * (order as f64 / (order as f64 + 1.0)))
-                .collect::<Vec<_>>()
-        } else {
-            vec![0.0; n]
+    if !converged {
+        let mut rnorm = 0.0;
+        for i in 0..n {
+            let r = y_cur[i] - y_p[i] - gamma * (fk[i] - ydot_p[i]);
+            rnorm += r * r;
         }
-    } else {
-        vec![0.0; n]
-    };
-
-    // Order control: prefer to raise order when history permits.
-    if let Some(s) = st.as_deref_mut() {
-        if order < 5 && s.hist.len() >= order + 1 {
-            s.order = order + 1;
-        } else if order > 1 {
-            s.order = order.min(s.hist.len());
+        let rnorm = rnorm.sqrt();
+        if rnorm >= 1e-11 {
+            return Err(OdeError::Newton {
+                t: t + h,
+                residual: rnorm,
+            });
         }
     }
+    let f_new = fk;
 
-    let f_new = eval(f, t + h, &y_cur);
+    // Correction relative to the predicted solution.
+    let delta: Vec<f64> = y_cur.iter().zip(y_p).map(|(a, b)| a - b).collect();
+
+    // Nordsieck corrector update:  z_new[j] = z_pred[j] + l_j·δ.
+    let l = &BDF_L[order - 1];
+    for j in 0..=order {
+        for i in 0..n {
+            state.z[j][i] = z_pred[j][i] + l[j] * delta[i];
+        }
+    }
+
+    // Local truncation error from the correction delta. The BDF corrector of
+    // order q satisfies (predictor error) = (corrector error) + delta, with
+    // predictor error = h^(q+1)/(q+1)!*y^(q+1) and corrector (local) error
+    // LTE = C_{q+1}*h^(q+1)*y^(q+1). Hence LTE = r_q*delta, where
+    //   r_q = C_{q+1} / (C_{q+1} + 1/(q+1)!).
+    // This estimate is reliable even when the higher Nordsieck columns are
+    // still being populated after an order change.
+    let r = BDF_R[order - 1];
+    let mut err = vec![0.0; n];
+    for i in 0..n {
+        err[i] = r * delta[i];
+    }
+
+    // Proactively bootstrap the NEXT Nordsieck column from the within-step
+    // finite difference of the current highest column (at a single, consistent
+    // step size), so it is ready when the order is later raised.
+    if order < BDF_MAX_ORDER {
+        let denom = (order as f64) + 1.0;
+        for i in 0..n {
+            state.z[order + 1][i] = (state.z[order][i] - last_col_prev[i]) / denom;
+        }
+    }
+
     Ok(StepResult {
         t: t + h,
         y: y_cur,
         err,
         f_new,
     })
-}
-
-/// Extrapolate the recent-state polynomial (stored most-recent-first in
-/// `state.hist`) to `t + h` using backward differences. For the first step
-/// (no history) it falls back to the current `y`.
-fn bdf_predict(y: &[f64], h: f64, order: usize, state: Option<&BdfState>) -> Vec<f64> {
-    let st = match state {
-        Some(s) if !s.hist.is_empty() => s,
-        _ => return y.to_vec(),
-    };
-    let dt = (st.hist[0].0 - st.hist[1].0).abs();
-    if dt <= 0.0 || order <= 1 || st.hist.len() < order {
-        return y.to_vec();
-    }
-    let mut out = st.hist[0].1.clone();
-    let mut diffs = st.hist[0].1.clone();
-    let mut scale = 1.0;
-    for p in 1..order {
-        if st.hist.len() <= p {
-            break;
-        }
-        let mut next = vec![0.0; diffs.len()];
-        for i in 0..diffs.len() {
-            next[i] = st.hist[p - 1].1[i] - st.hist[p].1[i];
-        }
-        scale *= (h / dt) / (p as f64);
-        for i in 0..out.len() {
-            out[i] += scale * next[i];
-        }
-        diffs = next;
-    }
-    out
 }
 
 impl OdeProblem {

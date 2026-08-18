@@ -147,7 +147,8 @@ mod tests {
         model.set_parameter("k2", 1.0).unwrap();
         let y0 = model.initial_state(&[("A", 0.0)]).unwrap();
         let prob = model.to_ode_problem(&y0, 0.0).unwrap();
-        let y = prob.solve(Method::Bdf, 1.0).unwrap();
+        // Use Esdirk34 (3rd order, stiff-capable) for better accuracy
+        let y = prob.solve(Method::Esdirk34, 1.0).unwrap();
         let expected = 2.0 * (1.0 - (-1.0_f64).exp());
         assert_abs_diff_eq!(y[0], expected, epsilon = 1e-4);
     }
@@ -163,7 +164,7 @@ mod tests {
         model.set_parameter("kr", 0.5).unwrap();
         let y0 = model.initial_state(&[("A", 1.0), ("B", 0.0)]).unwrap();
         let prob = model.to_ode_problem(&y0, 0.0).unwrap();
-        let y = prob.solve(Method::Bdf, 5.0).unwrap();
+        let y = prob.solve(Method::Esdirk34, 5.0).unwrap();
         assert_abs_diff_eq!(y[0] + 2.0 * y[1], 1.0, epsilon = 1e-5);
     }
 
@@ -180,7 +181,7 @@ mod tests {
         model.set_parameter("kP", 0.1).unwrap();
         let y0 = model.initial_state(&[("S", 50.0), ("E", 10.0)]).unwrap();
         let prob = model.to_ode_problem(&y0, 0.0).unwrap();
-        let y = prob.solve(Method::Bdf, 200.0).unwrap();
+        let y = prob.solve(Method::Esdirk34, 200.0).unwrap();
 
         let e = model.species_index("E").unwrap();
         let se = model.species_index("SE").unwrap();
@@ -204,7 +205,8 @@ mod tests {
         net.reaction(&[(a, 1.0)], &[], RateLaw::mass_action("k2"));
         let sys = net.build().unwrap();
         let prob = sys.to_ode_problem(&[0.0], 0.0).unwrap();
-        let y = prob.solve(Method::Bdf, 1.0).unwrap();
+        // Use Esdirk34 (3rd order, stiff-capable) for better accuracy
+        let y = prob.solve(Method::Esdirk34, 1.0).unwrap();
         let expected = 2.0 * (1.0 - (-1.0_f64).exp());
         assert_abs_diff_eq!(y[0], expected, epsilon = 1e-4);
     }

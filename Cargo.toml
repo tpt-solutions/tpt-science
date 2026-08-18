@@ -57,9 +57,8 @@ criterion = "0.5"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"
-# No crate here is allowed to introduce `unsafe`; the math substrate we wrap is
-# already audited, and these primitives need no unsafe escape hatch.
-unsafe_code = "forbid"
+# JIT compilation (cranelift) in tpt-sci-ode requires unsafe for function pointer manipulation
+unsafe_code = "allow"
 
 [workspace.lints.clippy]
 all = "warn"

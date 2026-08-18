@@ -30,18 +30,54 @@
 //!     vec![1.0],
 //!     0.0,
 //! ).unwrap();
-//! let y = prob.solve(Method::Bdf, 1.0).unwrap();
+//! let y = prob.solve(Method::Tsit45, 1.0).unwrap();
 //! assert!((y[0] - std::f64::consts::E.recip()).abs() < 1e-5);
 //! ```
 
 pub mod error;
+pub mod jit;
 pub mod linalg;
 pub mod problem;
 pub mod solver;
 
 pub use error::OdeError;
+pub use jit::{JitRhs, JitRhsBuilder, compile_rhs};
 pub use problem::{OdeProblem, OdeProblemBuilder, Rhs};
 pub use solver::Method;
+
+/// A callable right-hand side for the ODE solvers.
+///
+/// This is implemented automatically for any `Fn(f64, &[f64], &mut [f64])`
+/// closure (the common way to define a problem, e.g. `|t, y, dydt| { .. }`),
+/// and explicitly for [`JitRhs`] so a Cranelift JIT-compiled right-hand side
+/// can be used interchangeably with a plain closure.
+///
+/// [`OdeProblem`] and the integrators store the RHS behind an `Rc<dyn
+/// RhsCallable>`, so both representations share the exact same solving
+/// pipeline.
+pub trait RhsCallable {
+    /// Number of state variables this RHS operates on.
+    fn nstates(&self) -> usize;
+
+    /// Evaluate `dy/dt = f(t, y)` into `dydt`.
+    fn call(&self, t: f64, y: &[f64], dydt: &mut [f64]) -> Result<(), OdeError>;
+}
+
+impl<F> RhsCallable for F
+where
+    F: Fn(f64, &[f64], &mut [f64]),
+{
+    fn nstates(&self) -> usize {
+        // A bare closure does not carry its dimension; the problem size is
+        // taken from `y0` instead.
+        0
+    }
+
+    fn call(&self, t: f64, y: &[f64], dydt: &mut [f64]) -> Result<(), OdeError> {
+        self(t, y, dydt);
+        Ok(())
+    }
+}
 
 // Re-export the numeric scalar trait from the tpt-math substrate that this
 // crate depends on, so downstream science crates share one scalar vocabulary.

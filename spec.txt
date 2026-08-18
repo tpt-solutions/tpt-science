@@ -22,16 +22,17 @@ and tpt-system-zero each need a different piece of this substrate, and none
 of them currently depend on a shared foundation for it.
 
 ECOSYSTEM GAP JUSTIFICATION
-- ODE/DAE solving is well-covered by diffsol (JOSS 2026, actively
-  maintained, Enzyme-based autodiff, LLVM/Cranelift JIT) — wrap it, don't
-  reimplement. LICENSE NOTE: diffsol is MIT, but its `diffsol-la` crate links
-  `nalgebra` (Apache-2.0-ONLY) as a NON-OPTIONAL dependency, so nalgebra is
-  always pulled in transitively even when only the `faer` (MIT) backend is
-  used. Per ADR 0007 this is disqualifying AS-PUBLISHED. Resolution: depend on
-  a TPT-owned FORK of diffsol/diffsol-la/diffsol-nl — same MIT code,
-  re-licensed MIT OR Apache-2.0, with the unconditional `nalgebra` dep
-  removed (tpt-sci-ode needs only the faer backend, so no solver logic is
-  lost). Tracked in todo.md Phase 7.
+- ODE/DAE solving: diffsol (JOSS 2026, actively maintained, Enzyme-based
+  autodiff, LLVM/Cranelift JIT) is the obvious wrap target. However, diffsol's
+  `diffsol-la` crate links `nalgebra` (Apache-2.0-ONLY) as a NON-OPTIONAL
+  dependency, so nalgebra is always pulled in transitively even when only the
+  `faer` (MIT) backend is used. Per ADR 0007 this is disqualifying
+  AS-PUBLISHED. Resolution: tpt-sci-ode implements its own ODE engine **from
+  scratch** — no diffsol, nalgebra, or faer in the shipped dependency graph.
+  The crate is 100% dual-licensed TPT-owned code (MIT OR Apache-2.0). diffsol
+  is retained only as an optional, dev-only verification oracle (feature
+  `verify-diffsol`, excluded from license scanning). Tracked in todo.md Phase 7
+  (complete).
 - Unstructured FEM/mesh generation is a genuine, unfilled Rust gap (the one
   existing crate, finite_element_method, is explicitly educational; the
   only serious 2026 effort, FrankenSim, is 100+ crates/160k LOC) but is
@@ -71,8 +72,12 @@ check per crate rather than assuming).
 CRATE INVENTORY
 
   tpt-sci-ode
-    Wrap diffsol. ODE/DAE solving. Depends on: tpt-math-numeric (from the
-    tpt-math repo).
+    Build from scratch. ODE/DAE solving with four integrators:
+    Tsit45 (explicit RK 5(4)), TrBdf2 (SDIRK), Esdirk34 (ESDIRK 3(4)),
+    Bdf (backward Euler, order-1). Shared adaptive-step driver with
+    Hermite dense output. No diffsol/nalgebra/faer in shipped graph.
+    diffsol retained as optional `verify-diffsol` dev-dependency only.
+    Depends on: tpt-math-numeric (from the tpt-math repo).
 
   tpt-sci-grid
     Build: structured finite-difference grids/stencils. Covers reaction-

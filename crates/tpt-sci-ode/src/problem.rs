@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use crate::error::OdeError;
+use crate::RhsCallable;
 
 /// Right-hand-side closure shape accepted by [`OdeProblemBuilder`].
 ///
@@ -12,7 +13,7 @@ pub type Rhs = dyn Fn(f64, &[f64], &mut [f64]);
 /// Builder for an [`OdeProblem`]. Use [`OdeProblem::new`] for the common case
 /// (default tolerances), or configure tolerances/step size here first.
 pub struct OdeProblemBuilder {
-    rhs: Rc<Rhs>,
+    rhs: Rc<dyn RhsCallable>,
     y0: Vec<f64>,
     t0: f64,
     rtol: f64,
@@ -22,11 +23,26 @@ pub struct OdeProblemBuilder {
 
 impl OdeProblemBuilder {
     /// Start building a problem for `dy/dt = rhs(t, y)` with initial state
-    /// `y0` at time `t0`.
+    /// `y0` at time `t0`. The right-hand side is given as a closure
+    /// `Fn(f64, &[f64], &mut [f64])`, which is the common case.
     pub fn new<F>(rhs: F, y0: Vec<f64>, t0: f64) -> Self
     where
         F: Fn(f64, &[f64], &mut [f64]) + 'static,
     {
+        Self {
+            rhs: Rc::new(rhs),
+            y0,
+            t0,
+            rtol: 1e-6,
+            atol: 1e-6,
+            h0: 1.0,
+        }
+    }
+
+    /// Start building a problem from any [`RhsCallable`] (e.g. a
+    /// [`crate::JitRhs`] compiled by the Cranelift JIT). Use this instead of
+    /// [`OdeProblemBuilder::new`] when the RHS is not a plain closure.
+    pub fn from_rhs<R: RhsCallable + 'static>(rhs: R, y0: Vec<f64>, t0: f64) -> Self {
         Self {
             rhs: Rc::new(rhs),
             y0,
@@ -89,7 +105,7 @@ impl OdeProblemBuilder {
 /// the available solvers (see [`Method`](crate::Method) and
 /// [`OdeProblem::solve`]).
 pub struct OdeProblem {
-    pub(crate) rhs: Rc<Rhs>,
+    pub(crate) rhs: Rc<dyn RhsCallable>,
     pub(crate) y0: Vec<f64>,
     pub(crate) t0: f64,
     pub(crate) rtol: f64,
@@ -110,6 +126,15 @@ impl OdeProblem {
         F: Fn(f64, &[f64], &mut [f64]) + 'static,
     {
         OdeProblemBuilder::new(rhs, y0, t0).build()
+    }
+
+    /// Build a problem from any [`RhsCallable`] (e.g. a [`crate::JitRhs`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OdeError::Invalid`] if `y0` is empty.
+    pub fn from_rhs<R: RhsCallable + 'static>(rhs: R, y0: Vec<f64>, t0: f64) -> Result<Self, OdeError> {
+        OdeProblemBuilder::from_rhs(rhs, y0, t0).build()
     }
 
     /// Number of state variables.
