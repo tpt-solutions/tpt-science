@@ -1,0 +1,54 @@
+# tpt-science Specification
+
+## 1. Purpose
+Simulation and modeling substrate for the TPT Solutions science verticals: differential equations, structured-grid PDE, multi-scale simulation orchestration, probabilistic programming, rigid-body physics, quantum simulation, tomographic imaging, astrodynamics, and advanced scientific computing methods.
+
+## 2. Scope & Boundaries
+- IN SCOPE: First-principles scientific computing, ODE/DAE solvers, molecular dynamics, DFT, CFD core, and domain-specific scientific models.
+- OUT OF SCOPE: Engineering code checks, CAD geometry, or system-level optimization.
+- DEPENDS ON: `tpt-math` (numeric, linalg, signal-fft, prob, optimize).
+
+## 3. Crate Inventory
+
+### Core Simulation & Math
+| Crate | Domain | no_std | Description |
+|---|---|---|---|
+| `tpt-sci-ode` | diff-eq | no | ODE/DAE solvers (wraps `diffsol`). |
+| `tpt-sci-grid` | pde | no | Structured-grid PDE discretization. |
+| `tpt-sci-sim-core` | sim | no | Multi-scale simulation orchestration. |
+| `tpt-sci-ppl` | prob-prog | no | Probabilistic programming (NUTS). |
+| `tpt-sci-image` | imaging | no | 2-D CT imaging / tomography. |
+| `tpt-sci-physics-rigid` | physics | no | Rigid-body physics. |
+| `tpt-sci-quantum` | quantum | no | Quantum state-vector sim (≤20 qubits). |
+| `tpt-sci-astro` | astro | no | Astrodynamics (two-body / Keplerian). |
+| `tpt-sci-reaction-network` | sys-bio | no | Reaction network DSL → mass-action ODE. |
+
+### Advanced Scientific Methods (New)
+| Crate | Domain | no_std | Description |
+|---|---|---|---|
+| `tpt-sci-md` | materials | no | Molecular dynamics (Lennard-Jones, EAM), radial distribution functions. |
+| `tpt-sci-dft` | materials | no | Density Functional Theory (basic LDA/GGA), band structure. |
+| `tpt-sci-cfd-core` | cross-domain | no | Incompressible Navier-Stokes (finite volume), turbulence models (k-ε, k-ω SST). |
+| `tpt-sci-hemodynamics` | medical | no | Blood flow in compliant vessels, Womersley flow, non-Newtonian viscosity. |
+| `tpt-sci-electrophys` | medical | no | Cardiac action potential models (Hodgkin-Huxley), bidomain equations. |
+| `tpt-sci-climate` | earth | no | Energy balance models, radiative transfer, basic atmospheric chemistry. |
+| `tpt-sci-ocean` | earth | no | Primitive equations, shallow water models, ocean circulation. |
+| `tpt-sci-kinetics` | process | no | Advanced reaction kinetics (Arrhenius, Langmuir-Hinshelwood), catalysis. |
+
+## 4. Design Principles
+- **std-only posture**: All crates in this pillar are `std`-only by design due to heavy linear algebra and simulation requirements.
+- **Modularity**: Each crate represents a distinct scientific domain or numerical method.
+- **Interoperability**: Crates must expose standard traits for state exchange (e.g., passing MD coordinates to DFT solvers).
+
+## 5. Build Order
+1. Core Simulation & Math (ode, grid, sim-core, rigid, astro, reaction-network).
+2. PPL, Image, Quantum.
+3. Advanced Scientific Methods (md, dft, cfd-core, kinetics).
+4. Domain-specific science (hemodynamics, electrophys, climate, ocean).
+
+## 6. Downstream Consumption
+- `tpt-materials` uses `md`, `dft`.
+- `tpt-medical` uses `hemodynamics`, `electrophys`.
+- `tpt-earth` uses `climate`, `ocean`, `cfd-core`.
+- `tpt-process` uses `kinetics`, `cfd-core`.
+- `tpt-physics` uses `cfd-core` as a backend for meshless/multiphysics extensions.
