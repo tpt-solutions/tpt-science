@@ -25,13 +25,14 @@
 //! use tpt_sci_kinetics::{ArrheniusRate, langmuir_hinshelwood_coverages};
 //!
 //! // Unimolecular decay with A = 1e13, Ea = 80 kJ/mol.
-//! let r = ArrheniusRate::new(1.0e13, 80_000.0);
+//! let r = ArrheniusRate::new(1.0e13, 80_000.0).unwrap();
 //! let k = r.rate_constant(800.0); // T = 800 K
 //! assert!(k > 0.0 && k.is_finite());
 //!
-//! // Two competing adsorbates on a single site type.
+//! // Two competing adsorbates on a single site type; coverages sum to <= 1.
 //! let theta = langmuir_hinshelwood_coverages(&[1.0, 2.0], &[0.5, 1.0]).unwrap();
-//! assert!((theta.iter().sum::<f64>() - 1.0).abs() < 1e-9);
+//! let sum: f64 = theta.iter().sum();
+//! assert!(sum <= 1.0 + 1e-9 && sum > 0.0);
 //! ```
 #![forbid(unsafe_code)]
 
@@ -120,9 +121,12 @@ pub fn langmuir_hinshelwood_coverages(
         denom += k * p;
     }
     if denom <= 0.0 {
-        return Err(KineticsError::CoverageError("non-positive site denominator".into()));
+        return Err(KineticsError::CoverageError(
+            "non-positive site denominator".into(),
+        ));
     }
-    Ok(ks.iter()
+    Ok(ks
+        .iter()
         .zip(pressures.iter())
         .map(|(&k, &p)| k * p / denom)
         .collect())
@@ -184,7 +188,10 @@ mod tests {
     #[test]
     fn langmuir_hinshelwood_sums_to_one() {
         let theta = langmuir_hinshelwood_coverages(&[2.0, 3.0], &[1.0, 1.0]).unwrap();
-        assert_abs_diff_eq!(theta.iter().sum::<f64>(), 1.0, epsilon = 1e-12);
+        // Adsorbed coverages sum to <= 1; the remainder is bare surface.
+        let sum: f64 = theta.iter().sum();
+        assert!(sum <= 1.0 + 1e-12);
+        assert_abs_diff_eq!(sum, 5.0 / 6.0, epsilon = 1e-12);
         // Stronger adsorber (K=3) takes more coverage.
         assert!(theta[1] > theta[0]);
     }

@@ -14,10 +14,7 @@ fn main() {
     for k in 0..nsteps {
         step.advance();
         if k % 100 == 0 {
-            println!(
-                "step {k:4}: max |div(u)| = {:.3e}",
-                step.max_divergence()
-            );
+            println!("step {k:4}: max |div(u)| = {:.3e}", step.max_divergence());
         }
     }
     println!("Cavity flow converged (divergence-free) after {nsteps} steps.");

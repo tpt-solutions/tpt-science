@@ -106,6 +106,8 @@ pub struct KohnSham {
     nelect: usize,
     /// Current spin-summed density `ρ(x)`.
     rho: Vec<f64>,
+    /// Most recent occupied orbital coefficients (for the result surface).
+    last_orbitals: Vec<Vec<f64>>,
 }
 
 impl KohnSham {
@@ -128,6 +130,7 @@ impl KohnSham {
             v_ext,
             nelect,
             rho,
+            last_orbitals: Vec::new(),
         })
     }
 
@@ -136,7 +139,10 @@ impl KohnSham {
     fn hartree_potential(&self, rho: &[f64]) -> Vec<f64> {
         let n = self.grid.n;
         let dx = self.grid.dx;
-        let b: Vec<f64> = rho.iter().map(|&r| -2.0 * std::f64::consts::PI * r * dx * dx).collect();
+        let b: Vec<f64> = rho
+            .iter()
+            .map(|&r| -2.0 * std::f64::consts::PI * r * dx * dx)
+            .collect();
         let mut c = vec![0.0; n];
         let mut d = vec![0.0; n];
         c[0] = 0.0;
@@ -231,14 +237,18 @@ impl KohnSham {
                     *r *= self.nelect as f64 / s;
                 }
             }
-            total_energy = e_kin + self.external_energy(&rho) + self.hartree_energy(&rho)
+            total_energy = e_kin
+                + self.external_energy(&rho)
+                + self.hartree_energy(&rho)
                 + self.xc_energy(&rho);
             self.rho = rho;
+            // Keep the last set of occupied orbitals for the result.
+            self.last_orbitals = orbitals;
         }
         KohnShamResult {
             total_energy,
             density: self.rho.clone(),
-            orbitals: Vec::new(),
+            orbitals: self.last_orbitals.clone(),
         }
     }
 
@@ -252,13 +262,10 @@ impl KohnSham {
     }
 
     fn hartree_energy(&self, rho: &[f64]) -> f64 {
+        let vh = self.hartree_potential(rho);
         let dx = self.grid.dx;
-        let vh = self.effective_potential();
-        // Recompute only the Hartree part here is overkill; approximate using
-        // 0.5·∫ ρ·(V_H) — reuse effective_potential and subtract XC/ext below.
-        // For a self-consistent report we simply use 0.5·∫ρ·(V_eff − V_ext − V_xc).
-        let _ = vh;
-        0.5 * self.rho.iter().zip(rho.iter()).map(|_| 0.0).sum::<f64>() * dx
+        // E_H = 0.5·∫ ρ·V_H.
+        0.5 * rho.iter().zip(vh.iter()).map(|(&r, &v)| r * v).sum::<f64>() * dx
     }
 
     fn xc_energy(&self, rho: &[f64]) -> f64 {
@@ -279,9 +286,10 @@ pub struct KohnShamResult {
 
 /// Symmetric eigendecomposition of a small real symmetric matrix `a` by
 /// Jacobi rotations. Returns `(eigenvalues, eigenvectors_columns)`.
+#[allow(clippy::needless_range_loop)]
 fn jacobi(a: &[Vec<f64>]) -> (Vec<f64>, Vec<Vec<f64>>) {
     let n = a.len();
-    let mut m: Vec<Vec<f64>> = a.iter().map(|row| row.clone()).collect();
+    let mut m: Vec<Vec<f64>> = a.to_vec();
     let mut v = vec![vec![0.0_f64; n]; n];
     for i in 0..n {
         v[i][i] = 1.0;

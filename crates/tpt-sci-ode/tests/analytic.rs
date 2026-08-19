@@ -14,8 +14,17 @@ const METHODS: [Method; 4] = [
     Method::Bdf,
 ];
 
-fn solve_at(method: Method, rhs: impl Fn(f64, &[f64], &mut [f64]) + 'static, y0: Vec<f64>, t0: f64, tf: f64) -> Vec<f64> {
-    OdeProblem::new(rhs, y0, t0).unwrap().solve(method, tf).unwrap()
+fn solve_at(
+    method: Method,
+    rhs: impl Fn(f64, &[f64], &mut [f64]) + 'static,
+    y0: Vec<f64>,
+    t0: f64,
+    tf: f64,
+) -> Vec<f64> {
+    OdeProblem::new(rhs, y0, t0)
+        .unwrap()
+        .solve(method, tf)
+        .unwrap()
 }
 
 #[test]
@@ -39,7 +48,11 @@ fn exp_decay_all_methods() {
             Method::Esdirk34 => 5e-5, // 3rd order, slightly larger error
             _ => 1e-5,                // Tsit45 (5th order)
         };
-        assert!((y[0] - exact).abs() < tol, "{m:?}: y={} exact={exact} tol={tol}", y[0]);
+        assert!(
+            (y[0] - exact).abs() < tol,
+            "{m:?}: y={} exact={exact} tol={tol}",
+            y[0]
+        );
     }
 }
 
@@ -48,22 +61,14 @@ fn exp_decay_dense_matches_point() {
     // solve_dense must agree with solve at the same final time.
     let k = 1.5;
     for m in METHODS {
-        let dense = OdeProblem::new(
-            move |_t, y, dydt| dydt[0] = -k * y[0],
-            vec![1.0],
-            0.0,
-        )
-        .unwrap()
-        .solve_dense(m, &[1.0])
-        .unwrap();
-        let point = OdeProblem::new(
-            move |_t, y, dydt| dydt[0] = -k * y[0],
-            vec![1.0],
-            0.0,
-        )
-        .unwrap()
-        .solve(m, 1.0)
-        .unwrap();
+        let dense = OdeProblem::new(move |_t, y, dydt| dydt[0] = -k * y[0], vec![1.0], 0.0)
+            .unwrap()
+            .solve_dense(m, &[1.0])
+            .unwrap();
+        let point = OdeProblem::new(move |_t, y, dydt| dydt[0] = -k * y[0], vec![1.0], 0.0)
+            .unwrap()
+            .solve(m, 1.0)
+            .unwrap();
         assert!((dense[0][0] - point[0]).abs() < 1e-9, "{m:?}");
     }
 }
@@ -98,7 +103,7 @@ fn sir_model_consistent() {
     // SIR: S' = -b S I, I' = b S I - g I, R' = g I  (population conserved)
     let (b, g) = (0.6, 0.2);
     let rhs = move |_t: f64, y: &[f64], dydt: &mut [f64]| {
-        let (s, i, r) = (y[0], y[1], y[2]);
+        let (s, i, _r) = (y[0], y[1], y[2]);
         let inf = b * s * i;
         dydt[0] = -inf;
         dydt[1] = inf - g * i;
@@ -136,7 +141,10 @@ fn van_der_pol_runs_and_is_self_consistent() {
     let point = solve_at(Method::Tsit45, rhs, y0.clone(), 0.0, 6.0);
     assert!(point[0].is_finite());
     // solve_dense must reproduce the point solve.
-    let dense = OdeProblem::new(rhs, y0, 0.0).unwrap().solve_dense(Method::Tsit45, &[6.0]).unwrap();
+    let dense = OdeProblem::new(rhs, y0, 0.0)
+        .unwrap()
+        .solve_dense(Method::Tsit45, &[6.0])
+        .unwrap();
     assert!((point[0] - dense[0][0]).abs() < 1e-9);
 }
 
@@ -164,6 +172,10 @@ fn robertson_stiff_solvable() {
         let sum = y[0] + y[1] + y[2];
         assert!((sum - 1.0).abs() < 1e-3, "{m:?}: sum={sum}");
         // all components non-negative
-        assert!(y.iter().all(|v| *v >= -1e-6), "{m:?}: negative component {:?}", y);
+        assert!(
+            y.iter().all(|v| *v >= -1e-6),
+            "{m:?}: negative component {:?}",
+            y
+        );
     }
 }

@@ -19,13 +19,13 @@
 //! # Example
 //!
 //! ```
-//! use tpt_sci_md::{Particle, Integrator, lennard_jones, Forces};
+//! use tpt_sci_md::{Particle, lennard_jones};
 //! use tpt_math_linalg::tpt_math_linalg_dense::DVector;
 //!
 //! // Two particles on a line, slightly closer than the LJ minimum.
-//! let mut parts = vec![
-//!     Particle::new(0, DVector::from_row_slice(&[0.0, 0.0, 0.0]), DVector::zeros(3)),
-//!     Particle::new(1, DVector::from_row_slice(&[1.0, 0.0, 0.0]), DVector::zeros(3)),
+//! let parts = vec![
+//!     Particle::new(0, DVector::from_row_slice(&[0.0, 0.0, 0.0]), DVector::zeros(3), 1.0).unwrap(),
+//!     Particle::new(1, DVector::from_row_slice(&[1.0, 0.0, 0.0]), DVector::zeros(3), 1.0).unwrap(),
 //! ];
 //! let forces = lennard_jones(&parts, 10.0, 1.0);
 //! assert!(forces[0].iter().any(|&f| f.is_finite()));
@@ -102,11 +102,12 @@ impl Particle {
                 }
             }
         }
+        let force = DVector::zeros(velocity.len());
         Ok(Self {
             id,
             position,
             velocity,
-            force: DVector::zeros(position.len()),
+            force,
             mass,
             species,
         })
@@ -120,11 +121,7 @@ impl Particle {
 /// All interactions use the same `epsilon`/`sigma`; `box_len` is the cubic
 /// periodic-box side length (use `f64::INFINITY` for free space / no wrapping).
 #[must_use]
-pub fn lennard_jones(
-    particles: &[Particle],
-    box_len: f64,
-    sigma: f64,
-) -> Vec<DVector<f64>> {
+pub fn lennard_jones(particles: &[Particle], box_len: f64, sigma: f64) -> Vec<DVector<f64>> {
     let n = particles.len();
     let dim = particles.first().map_or(3, |p| p.position.len());
     let mut forces = vec![DVector::zeros(dim); n];
@@ -152,10 +149,8 @@ pub fn lennard_jones(
 
     for i in 0..n {
         for j in (i + 1)..n {
-            let mut dr = particles[j].position.clone() - particles[i].position.clone();
-            for k in 0..dim {
-                dr[k] = wrap(dr[k]);
-            }
+            let raw = particles[j].position.clone() - particles[i].position.clone();
+            let dr = DVector::from_fn(dim, |k| wrap(raw[k]));
             let r2 = dr.dot(&dr);
             if r2 >= rcut2 || r2 <= 0.0 {
                 continue;
@@ -163,12 +158,11 @@ pub fn lennard_jones(
             let inv_r2 = 1.0 / r2;
             let inv_r6 = inv_r2 * inv_r2 * inv_r2;
             let inv_r12 = inv_r6 * inv_r6;
-            // Magnitude of the LJ force:  dU/dr = 24·ε·(2·(σ/r)^12 - (σ/r)^6)/r.
-            let f_mag =
-                24.0 * epsilon * (2.0 * sig12 * inv_r12 - sig6 * inv_r6) * inv_r2;
+            // Radial LJ force magnitude F_r = -dU/dr = -24·ε·(2·(σ/r)^12 - (σ/r)^6)/r.
+            let f_mag = -24.0 * epsilon * (2.0 * sig12 * inv_r12 - sig6 * inv_r6) * inv_r2;
             let fvec = dr * f_mag;
-            forces[i] += &fvec;
-            forces[j] -= &fvec;
+            forces[i] = forces[i].clone() + fvec.clone();
+            forces[j] = forces[j].clone() - fvec;
         }
     }
     forces
@@ -212,10 +206,8 @@ impl Forces {
         let mut energy = 0.0;
         for i in 0..n {
             for j in (i + 1)..n {
-                let mut dr = particles[j].position.clone() - particles[i].position.clone();
-                for k in 0..dim {
-                    dr[k] = wrap(dr[k]);
-                }
+                let raw = particles[j].position.clone() - particles[i].position.clone();
+                let dr = DVector::from_fn(dim, |k| wrap(raw[k]));
                 let r2 = dr.dot(&dr);
                 if r2 >= rcut2 || r2 <= 0.0 {
                     continue;
@@ -225,10 +217,10 @@ impl Forces {
                 let inv_r12 = inv_r6 * inv_r6;
                 let u = 4.0 * epsilon * (sig12 * inv_r12 - sig6 * inv_r6) - u_cut;
                 energy += u;
-                let f_mag = 24.0 * epsilon * (2.0 * sig12 * inv_r12 - sig6 * inv_r6) * inv_r2;
+                let f_mag = -24.0 * epsilon * (2.0 * sig12 * inv_r12 - sig6 * inv_r6) * inv_r2;
                 let fvec = dr * f_mag;
-                particles[i].force += &fvec;
-                particles[j].force -= &fvec;
+                particles[i].force = particles[i].force.clone() + fvec.clone();
+                particles[j].force = particles[j].force.clone() - fvec;
             }
         }
         energy
@@ -255,7 +247,9 @@ impl Integrator {
     /// Returns [`MdError::InvalidIntegrator`] if `dt <= 0` or `sigma <= 0`.
     pub fn new(box_len: f64, sigma: f64, dt: f64) -> Result<Self, MdError> {
         if dt <= 0.0 {
-            return Err(MdError::InvalidIntegrator(format!("dt must be > 0, got {dt}")));
+            return Err(MdError::InvalidIntegrator(format!(
+                "dt must be > 0, got {dt}"
+            )));
         }
         if sigma <= 0.0 {
             return Err(MdError::InvalidIntegrator(format!(
@@ -278,20 +272,24 @@ impl Integrator {
         let half = 0.5 * dt;
         // (1) x(t+dt) = x + v·dt + 0.5·a·dt² ; (2) v += 0.5·a·dt using old force.
         for p in particles.iter_mut() {
-            p.position += &(p.velocity.clone() * dt) + &(p.force.clone() * (0.5 * dt * dt) / p.mass);
+            p.position = p.position.clone()
+                + (p.velocity.clone() * dt)
+                + (p.force.clone() * (0.5 * dt * dt) / p.mass);
             // Keep inside the periodic box.
             if self.box_len.is_finite() {
-                for k in 0..p.position.len() {
-                    let bl = self.box_len;
-                    p.position[k] -= bl * (p.position[k] / bl).floor();
-                }
+                let bl = self.box_len;
+                let pos = p.position.clone();
+                p.position = DVector::from_fn(pos.len(), |k| {
+                    let x = pos[k];
+                    x - bl * (x / bl).floor()
+                });
             }
-            p.velocity += &(p.force.clone() * half / p.mass);
+            p.velocity = p.velocity.clone() + (p.force.clone() * half / p.mass);
         }
         // (3) recompute forces at new positions, (4) finish velocity update.
         let energy = Forces::lennard_jones(particles, self.box_len, self.sigma);
         for p in particles.iter_mut() {
-            p.velocity += &(p.force.clone() * half / p.mass);
+            p.velocity = p.velocity.clone() + (p.force.clone() * half / p.mass);
         }
         energy
     }
@@ -329,7 +327,7 @@ impl Integrator {
         }
         let factor = ((1.0 + (self.dt / tau) * (target_t / t - 1.0)).sqrt()).clamp(0.0, 2.0);
         for p in particles.iter_mut() {
-            p.velocity *= factor;
+            p.velocity = p.velocity.clone() * factor;
         }
     }
 }
@@ -382,10 +380,8 @@ pub fn rdf(
 
     for i in 0..n {
         for j in (i + 1)..n {
-            let mut d = particles[j].position.clone() - particles[i].position.clone();
-            for k in 0..dim {
-                d[k] = wrap(d[k]);
-            }
+            let raw = particles[j].position.clone() - particles[i].position.clone();
+            let d = DVector::from_fn(dim, |k| wrap(raw[k]));
             let r = d.norm();
             if r < r_max {
                 let bin = (r / dr) as usize;
@@ -396,8 +392,17 @@ pub fn rdf(
         }
     }
 
-    let rho = n as f64 / if box_len.is_finite() { box_len.powi(dim as u32) } else { 1.0 };
-    let volume = if box_len.is_finite() { box_len.powi(dim as u32) } else { 1.0 };
+    let rho = n as f64
+        / if box_len.is_finite() {
+            box_len.powi(dim as i32)
+        } else {
+            1.0
+        };
+    let volume = if box_len.is_finite() {
+        box_len.powi(dim as i32)
+    } else {
+        1.0
+    };
     let centers: Vec<f64> = (0..nbins).map(|b| (b as f64 + 0.5) * dr).collect();
     let g: Vec<f64> = (0..nbins)
         .map(|b| {
@@ -494,15 +499,7 @@ mod tests {
         // Widely separated particles in a large periodic box: g(r) is defined
         // but sparse; just check it runs and returns the right length.
         let parts: Vec<Particle> = (0..10)
-            .map(|i| {
-                Particle::new(
-                    i,
-                    v(&[f64::from(i) * 5.0, 0.0, 0.0]),
-                    v(&[0.0; 3]),
-                    1.0,
-                )
-                .unwrap()
-            })
+            .map(|i| Particle::new(i, v(&[(i as f64) * 5.0, 0.0, 0.0]), v(&[0.0; 3]), 1.0).unwrap())
             .collect();
         let (r, g) = rdf(&parts, f64::INFINITY, 10.0, 20).unwrap();
         assert_eq!(r.len(), 20);

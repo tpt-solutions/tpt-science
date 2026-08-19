@@ -65,9 +65,16 @@ impl EnergyBalanceModel {
     ///
     /// Returns [`ClimateError::InvalidModel`] if `t0 <= 0`, `albedo` outside
     /// `[0,1]`, `emissivity <= 0`, or `co2 <= 0`.
-    pub fn new(heat_capacity: f64, albedo: f64, emissivity: f64, co2: f64) -> Result<Self, ClimateError> {
+    pub fn new(
+        heat_capacity: f64,
+        albedo: f64,
+        emissivity: f64,
+        co2: f64,
+    ) -> Result<Self, ClimateError> {
         if heat_capacity <= 0.0 {
-            return Err(ClimateError::InvalidModel("heat capacity must be > 0".into()));
+            return Err(ClimateError::InvalidModel(
+                "heat capacity must be > 0".into(),
+            ));
         }
         if !(0.0..=1.0).contains(&albedo) {
             return Err(ClimateError::InvalidModel("albedo must be in [0,1]".into()));
@@ -97,8 +104,7 @@ impl EnergyBalanceModel {
     /// Net top-of-atmosphere flux (W/m²), `> 0` warms.
     #[must_use]
     pub fn net_flux(&self) -> f64 {
-        (1.0 - self.albedo) * self.solar_constant / 4.0
-            - self.emissivity * SIGMA * self.t.powi(4)
+        (1.0 - self.albedo) * self.solar_constant / 4.0 - self.emissivity * SIGMA * self.t.powi(4)
             + self.forcing()
     }
 
@@ -166,7 +172,9 @@ impl ChemistryBox {
     /// Returns [`ClimateError::InvalidModel`] if `loss < 0` or `concentration < 0`.
     pub fn new(concentration: f64, production: f64, loss: f64) -> Result<Self, ClimateError> {
         if concentration < 0.0 {
-            return Err(ClimateError::InvalidModel("concentration must be >= 0".into()));
+            return Err(ClimateError::InvalidModel(
+                "concentration must be >= 0".into(),
+            ));
         }
         if loss < 0.0 {
             return Err(ClimateError::InvalidModel("loss must be >= 0".into()));
@@ -211,7 +219,7 @@ mod tests {
         // Doubling CO2 raises equilibrium temperature vs pre-industrial.
         let teq = ebm.equilibrium_temperature();
         assert!(teq.is_finite() && teq > 250.0);
-        let mut ebm2 = EnergyBalanceModel::new(1.0e7, 0.3, 0.61, 560.0).unwrap();
+        let ebm2 = EnergyBalanceModel::new(1.0e7, 0.3, 0.61, 560.0).unwrap();
         let teq2 = ebm2.equilibrium_temperature();
         assert!(teq2 > teq, "doubling CO2 should warm the EBM");
     }

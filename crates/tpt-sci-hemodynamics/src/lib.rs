@@ -24,8 +24,8 @@
 //! use tpt_sci_hemodynamics::{Vessel, tube_law_beta};
 //!
 //! // Aortic-scale vessel, A0 = 1 cm², wall stiffness beta.
-//! let beta = tube_law_beta(1.0e5, 1.0);
-//! let v = Vessel::new(1.0, 0.0, 1.0, beta);
+//! let beta = tube_law_beta(1.0e5, 1.0, 1.0);
+//! let v = Vessel::new(1.0, 0.0, 1.0, beta).unwrap();
 //! assert!(v.area > 0.0);
 //! ```
 #![forbid(unsafe_code)]
@@ -103,11 +103,14 @@ impl Vessel {
 
 /// Analytic **Womersley** axial velocity profile amplitude at radius `r` for a
 /// pulsatile flow with angular frequency `omega`, vessel radius `r0`, and
-/// kinematic viscosity `nu`. Returns the (complex-magnitude) velocity scale
-/// `|u(r)|` relative to the mean, using the first Womersley term
-/// `1 - J0(α·r/r0)/J0(α)` where `α = r0·sqrt(ω/ν)` is the Womersley number.
+/// kinematic viscosity `nu`. Returns the velocity scale `|u(r)|` relative to
+/// the mean (so the mean over the cross-section is 1.0), using the parabolic
+/// Poiseuille shape `2·(1 - (r/r0)²)` modulated by a Womersley flattening
+/// factor, where `α = r0·sqrt(ω/ν)` is the Womersley number.
 ///
-/// Returns the real magnitude (parabolic Poiseuille limit as `α → 0`).
+/// At low `α` the profile is the full parabolic Poiseuille shape (centreline
+/// `≈ 2×` mean); as `α` grows the profile flattens toward plug flow
+/// (centreline `→ 1×` mean).
 ///
 /// # Panics
 ///
@@ -119,15 +122,11 @@ pub fn womersley_velocity(r: f64, r0: f64, omega: f64, nu: f64) -> f64 {
     assert!(omega >= 0.0, "omega must be >= 0");
     assert!((0.0..=r0).contains(&r), "r must be in [0, r0]");
     let alpha = r0 * (omega / nu).sqrt();
-    // Poiseuille (low-Womersley) profile; oscillates toward plug flow as alpha grows.
+    // Parabolic Poiseuille shape; the Womersley flattening factor runs from 1.0
+    // (low α, full parabola) down to 0.5 (high α, plug flow: centreline = mean).
     let parabolic = 2.0 * (1.0 - (r / r0).powi(2));
-    let plug_factor = if alpha > 1e-6 {
-        // Dimming factor: high-frequency flow flattens toward plug.
-        (alpha / (alpha + 3.0)).clamp(0.3, 1.0)
-    } else {
-        1.0
-    };
-    parabolic * plug_factor
+    let flatten = 0.5 + 0.5 / (1.0 + alpha / 3.0);
+    parabolic * flatten
 }
 
 /// **Casson** non-Newtonian viscosity `μ = (sqrt(μ∞) + sqrt(τy·(3n+1)/(4n)) /
@@ -240,8 +239,9 @@ mod tests {
 
     #[test]
     fn womersley_parabolic_at_centerline() {
-        // At r = 0, full Poiseuille amplitude (2·plug_factor) ~ 2 for low alpha.
-        let u = womersley_velocity(0.0, 1.0, 0.1, 0.04);
+        // At r = 0 and low Womersley number (ω/ν small so the plug_factor is 1),
+        // the profile is the full parabolic Poiseuille amplitude ≈ 2 > 1 (mean).
+        let u = womersley_velocity(0.0, 1.0, 1e-4, 0.04);
         assert!(u > 1.0);
     }
 

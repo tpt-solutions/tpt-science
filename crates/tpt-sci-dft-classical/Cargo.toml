@@ -16,10 +16,15 @@ publish = false
 
 [dependencies]
 feos = { workspace = true }
+feos-dft = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 approx = { workspace = true }
+# Dev-only: the `adsorption` example wraps a concrete PC-SAFT functional, which
+# needs the `pcsaft` feature and `feos-core` (State / IdentifierOption).
+feos = { workspace = true, features = ["pcsaft"] }
+feos-core = "0.10"
 
 [lints]
 workspace = true

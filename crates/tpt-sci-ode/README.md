@@ -2,13 +2,33 @@
 
 ODE/DAE solving substrate for the `tpt-science` pillar.
 
-This crate is a thin, ergonomic wrapper over
-[`diffsol`](https://crates.io/crates/diffsol) (JOSS 2026, Enzyme-based
-autodiff, LLVM/Cranelift JIT). The ecosystem gap is well-covered by a
-maintained, dual-licensed crate, so we wrap rather than reimplement. Every
-crate in this pillar is dual-licensed `MIT OR Apache-2.0`.
+This crate implements its own ODE integrators **from scratch** — no
+[`diffsol`](https://crates.io/crates/diffsol), `nalgebra`, or `faer` in the
+shipped dependency graph — so the whole crate is TPT-owned code under
+`MIT OR Apache-2.0`. It builds on the dual-licensed `tpt-math` dense linear
+algebra for the implicit-method linear solves.
 
-Depends on `tpt-math-numeric` (published, `tpt-math` repo).
+Four methods are provided (see [`Method`](https://docs.rs/tpt-sci-ode/Method)):
+
+* [`Method::Tsit45`] — explicit Runge–Kutta 4(5), non-stiff.
+* [`Method::TrBdf2`] — 2-stage SDIRK (TR-BDF2), A-stable, stiff.
+* [`Method::Esdirk34`] — 4-stage ESDIRK order 3(4), A-/L-stable, stiff.
+* [`Method::Bdf`] — variable-order (1–5) backward differentiation, stiff.
+
+All use a shared adaptive-step driver with Hermite dense output, so
+[`OdeProblem::solve_dense`] returns exact states at the requested times.
+`diffsol` is retained only as an optional, dev-only verification oracle (feature
+`verify-diffsol`, excluded from license scanning).
+
+Depends on `tpt-math-numeric` and `tpt-math-linalg` (published, `tpt-math` repo).
+
+## Features
+
+* Closure-first problem API: `OdeProblem::new(|t, y, dydt| { .. }, y0, t0)`.
+* Adaptive step-size control with dense (Hermite) output for `solve_dense`.
+* Stiff and non-stiff methods behind one `Method` enum and one `solve` entry point.
+* Optional Cranelift JIT right-hand side (`JitRhs`) behind the `jit` module,
+  pluggable into the same `RhsCallable` trait as a plain closure.
 
 ## Example
 
@@ -21,9 +41,15 @@ let prob = OdeProblem::new(
     vec![1.0],
     0.0,
 ).unwrap();
-let y = prob.solve(Method::Bdf, 1.0).unwrap();
+let y = prob.solve(Method::Tsit45, 1.0).unwrap();
 assert!((y[0] - std::f64::consts::E.recip()).abs() < 1e-5);
 ```
+
+## Scope
+
+v1 covers deterministic initial-value ODEs (non-stiff and stiff) with dense
+output. DAE index reduction, sensitivity/adjoint analysis, and sparse linear
+algebra are out of v1 scope.
 
 ## License
 

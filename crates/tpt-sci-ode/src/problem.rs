@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
-use crate::error::OdeError;
 use crate::RhsCallable;
+use crate::error::OdeError;
 
 /// Right-hand-side closure shape accepted by [`OdeProblemBuilder`].
 ///
@@ -133,7 +133,11 @@ impl OdeProblem {
     /// # Errors
     ///
     /// Returns [`OdeError::Invalid`] if `y0` is empty.
-    pub fn from_rhs<R: RhsCallable + 'static>(rhs: R, y0: Vec<f64>, t0: f64) -> Result<Self, OdeError> {
+    pub fn from_rhs<R: RhsCallable + 'static>(
+        rhs: R,
+        y0: Vec<f64>,
+        t0: f64,
+    ) -> Result<Self, OdeError> {
         OdeProblemBuilder::from_rhs(rhs, y0, t0).build()
     }
 
@@ -179,5 +183,3 @@ impl OdeProblem {
         })
     }
 }
-
-

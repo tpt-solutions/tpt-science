@@ -43,4 +43,4 @@ pub use profile::ClassicalDft;
 /// underlying DFT machinery directly if they need to.
 pub use feos;
 /// Re-export of the wrapped `feos_dft` crate (profiles, solvers, geometries).
-pub use feos::dft as feos_dft;
+pub use feos_dft;

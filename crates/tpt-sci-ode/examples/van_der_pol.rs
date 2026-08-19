@@ -15,11 +15,11 @@ fn main() {
     )
     .unwrap();
 
-    let y = prob.solve(Method::Bdf, 20.0).unwrap();
+    let y = prob.solve(Method::Tsit45, 20.0).unwrap();
     println!("Van der Pol at t=20: y0 = {:.4}, y1 = {:.4}", y[0], y[1]);
 
-    let times = [0.0, 5.0, 10.0, 15.0, 20.0];
-    let dense = prob.solve_dense(Method::Bdf, &times).unwrap();
+    let times = [1.0, 5.0, 10.0, 15.0, 20.0];
+    let dense = prob.solve_dense(Method::Tsit45, &times).unwrap();
     println!("Amplitude along the trajectory:");
     for (t, s) in times.into_iter().zip(&dense) {
         println!("  t = {t:5.1}  y0 = {:7.4}", s[0]);

@@ -18,6 +18,7 @@ members = [
     "crates/tpt-sci-electrophys",
     "crates/tpt-sci-climate",
     "crates/tpt-sci-ocean",
+    "crates/tpt-sci-dft-electronic",
 ]
 exclude = []
 
@@ -45,12 +46,25 @@ num-complex = "0.4"
 # functionals (PC-SAFT, etc.) needed to build a concrete Helmholtz functional.
 # Added by the 2026-08 spec2.txt expansion pass.
 feos = { version = "0.10", default-features = false, features = ["dft"] }
+# `feos-dft` provides the DFT machinery re-exported by `feos` under the `dft`
+# feature; depend on it directly so `tpt-sci-dft-classical` can name the
+# `feos_dft` crate path (MIT OR Apache-2.0).
+feos-dft = { version = "0.10", default-features = false }
 
 # In-repo crate dependencies (referenced by `workspace = true`).
 tpt-sci-ode = { version = "0.1.0", path = "crates/tpt-sci-ode" }
 tpt-sci-grid = { version = "0.1.0", path = "crates/tpt-sci-grid" }
 tpt-sci-sim-core = { version = "0.1.0", path = "crates/tpt-sci-sim-core" }
 tpt-sci-reaction-network = { version = "0.1.0", path = "crates/tpt-sci-reaction-network" }
+tpt-sci-md = { version = "0.1.0", path = "crates/tpt-sci-md" }
+tpt-sci-dft-classical = { version = "0.1.0", path = "crates/tpt-sci-dft-classical" }
+tpt-sci-kinetics = { version = "0.1.0", path = "crates/tpt-sci-kinetics" }
+tpt-sci-cfd-core = { version = "0.1.0", path = "crates/tpt-sci-cfd-core" }
+tpt-sci-hemodynamics = { version = "0.1.0", path = "crates/tpt-sci-hemodynamics" }
+tpt-sci-electrophys = { version = "0.1.0", path = "crates/tpt-sci-electrophys" }
+tpt-sci-climate = { version = "0.1.0", path = "crates/tpt-sci-climate" }
+tpt-sci-ocean = { version = "0.1.0", path = "crates/tpt-sci-ocean" }
+tpt-sci-dft-electronic = { version = "0.1.0", path = "crates/tpt-sci-dft-electronic" }
 
 # NOTE: `diffsol` is intentionally NOT a workspace dependency. `tpt-sci-ode`
 # implements its own ODE solvers from scratch (dual-licensed, no Apache-only

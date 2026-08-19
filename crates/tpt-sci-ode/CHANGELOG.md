@@ -1,0 +1,52 @@
+# Changelog
+
+All notable changes to `tpt-sci-ode` are documented here. This project adheres
+to [Semantic Versioning](https://semver.org).
+
+## [Unreleased]
+
+### Added
+
+- `JitRhs` / `JitRhsBuilder` / `compile_rhs` — an optional Cranelift JIT-compiled
+  right-hand side that plugs into the same `RhsCallable` trait as a plain closure.
+- `verify-diffsol` dev feature — retains `diffsol` only as an optional, dev-only
+  verification oracle (excluded from `cargo deny` license scanning).
+
+### Changed
+
+- **Replaced the `diffsol` wrap with an in-house, dual-licensed ODE engine**
+  (`linalg` module: row-major `DMat`, LU with partial pivoting, finite-difference
+  Jacobian). No `diffsol` / `nalgebra` / `faer` remains in the shipped dependency
+  graph. The public API (`OdeProblem`, `OdeProblemBuilder`, `Method`, `solve`,
+  `solve_dense`) is unchanged so downstream crates need no edits.
+- `solve_dense` now builds the solver once and walks a single trajectory
+  (`solver.solve_dense(t_eval)`), removing the previous O(n) redundant
+  re-integration from `t0` for each evaluation point.
+
+### Added (initial methods)
+
+- `Method::Tsit45` — explicit Runge–Kutta 4(5), non-stiff.
+- `Method::TrBdf2` — 2-stage SDIRK (TR-BDF2), A-stable, stiff.
+- `Method::Esdirk34` — 4-stage ESDIRK order 3(4), A-/L-stable, stiff.
+- `Method::Bdf` — variable-order (1–5) backward differentiation, stiff, with a
+  Nordsieck predictor-corrector and Hermite dense output.
+
+## [0.1.0] — 2026-08-16
+
+Initial implementation of `tpt-sci-ode`.
+
+### Added
+
+- From-scratch ODE/DAE integrators (see methods above) on the dual-licensed
+  `tpt-math` dense linear algebra.
+- Closure-first `OdeProblem` API (`Rhs = Fn(f64, &[f64], &mut [f64])`) and an
+  `Rc<dyn RhsCallable>` pipeline shared by closures and JIT RHS.
+- Adaptive-step driver with Hermite dense output so `solve_dense` lands exactly on
+  requested `t_eval` points.
+
+### Notes
+
+- Crate is `publish = false` and consumed as a path/workspace dependency; no
+  crates.io release has been cut yet.
+
+[0.1.0]: https://github.com/tpt-solutions/tpt-science/releases/tag/v0.1.0

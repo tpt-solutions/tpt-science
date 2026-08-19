@@ -23,13 +23,7 @@ fn main() {
                 (((i * 3) % 10) as f64 - 5.0) * 0.1,
                 (((i * 5) % 10) as f64 - 5.0) * 0.1,
             ]);
-            Particle::new(
-                i,
-                DVector::from_row_slice(&[x, y, z]),
-                vel,
-                1.0,
-            )
-            .unwrap()
+            Particle::new(i, DVector::from_row_slice(&[x, y, z]), vel, 1.0).unwrap()
         })
         .collect();
 

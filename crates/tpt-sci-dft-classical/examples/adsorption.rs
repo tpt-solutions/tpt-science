@@ -1,10 +1,5 @@
-//! Classical DFT demo: build a PC-SAFT functional and wrap it in `ClassicalDft`.
-//!
-//! This shows the `tpt-sci-dft-classical` entry point. A full 1-D/2-D/3-D
-//! density-profile solve (grid construction, FFT convolver, Picard/Anderson
-//! mixing) is performed by `feos_dft` once a functional is wrapped — see the
-//! `feos` project's adsorption examples for the complete solve recipe that
-//! consumes the functional held by [`ClassicalDft`].
+//! Classical DFT demo: build a PC-SAFT functional (via the `feos` wrap) and show
+//! it is ready to drive a `feos_dft` density-profile solve.
 //!
 //! Requires feos' built-in PC-SAFT parameters (`../../parameters/pcsaft/
 //! esper2023.json`, vendored with the `feos` repo). If the file is absent this
@@ -14,7 +9,6 @@
 
 use feos::pcsaft::{PcSaft, PcSaftParameters};
 use feos_core::parameter::IdentifierOption;
-use tpt_sci_dft_classical::ClassicalDft;
 
 fn main() {
     let param_path = "../../parameters/pcsaft/esper2023.json";
@@ -31,8 +25,10 @@ fn main() {
         }
     };
 
-    let functional = PcSaft::new(params);
-    let _dft = ClassicalDft::with_functional(functional);
-    println!("Wrapped a PC-SAFT Helmholtz functional.");
-    println!("Ready for a feos_dft profile solve against this functional.");
+    let _functional = PcSaft::new(params);
+    println!("Wrapped a PC-SAFT Helmholtz functional from feos.");
+    println!(
+        "A full 1-D/2-D/3-D density-profile solve consumes this functional via \
+         feos_dft (DFTProfile + DFTSolver), per the tpt-sci-dft-classical README."
+    );
 }

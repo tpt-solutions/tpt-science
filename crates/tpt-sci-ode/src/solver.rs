@@ -13,7 +13,7 @@
 //! dense output via Hermite interpolation.
 
 use crate::error::OdeError;
-use crate::linalg::{eval, jacobian, sdirk_stage, DMat};
+use crate::linalg::{DMat, eval, jacobian, sdirk_stage};
 use crate::problem::OdeProblem;
 
 /// Integration method selection for [`OdeProblem::solve`].
@@ -36,9 +36,9 @@ impl Method {
     /// estimate is `O(h^{q+1})`, so the controller exponent is `1/(q+1)`.
     fn error_order(self, bdf_order: usize) -> f64 {
         match self {
-            Method::Tsit45 => 4.0,     // 5(4): error ~ h^5
-            Method::TrBdf2 => 2.0,     // TR-BDF2: two order-2 methods, difference ~ h^3
-            Method::Esdirk34 => 3.0,   // 3(4): error ~ h^4
+            Method::Tsit45 => 4.0,                 // 5(4): error ~ h^5
+            Method::TrBdf2 => 2.0,                 // TR-BDF2: two order-2 methods, difference ~ h^3
+            Method::Esdirk34 => 3.0,               // 3(4): error ~ h^4
             Method::Bdf => bdf_order as f64 + 1.0, // BDF-k: LTE ~ h^{k+1}
         }
     }
@@ -72,7 +72,13 @@ fn try_step(
         Method::Tsit45 => step_dp54(f, t, y, h),
         Method::TrBdf2 => step_sdirk2(f, t, y, h),
         Method::Esdirk34 => step_esdirk34(f, t, y, h),
-        Method::Bdf => step_bdf(f, t, y, h, bdf_state.expect("BDF requires a Nordsieck state")),
+        Method::Bdf => step_bdf(
+            f,
+            t,
+            y,
+            h,
+            bdf_state.expect("BDF requires a Nordsieck state"),
+        ),
     }
 }
 
@@ -188,7 +194,14 @@ fn integrate(
                 next = dir * next.abs().min(h_max);
 
                 record_outputs(
-                    t, &y, &f_cur, &res, t_eval, &mut eval_idx, dir, &mut outputs,
+                    t,
+                    &y,
+                    &f_cur,
+                    &res,
+                    t_eval,
+                    &mut eval_idx,
+                    dir,
+                    &mut outputs,
                 );
 
                 if let Some(ns) = bdf_state.as_mut() {
@@ -221,18 +234,14 @@ fn integrate(
                 h = next;
                 steps += 1;
                 if steps > max_steps {
-                    return Err(OdeError::MaxSteps {
-                        t_final,
-                        max_steps,
-                    });
+                    return Err(OdeError::MaxSteps { t_final, max_steps });
                 }
                 if dir * (t_final - t) <= 0.0 {
                     record_final(t, &y, t_eval, &mut eval_idx, t_final, dir, &mut outputs);
                     break;
                 }
             }
-            Err(OdeError::Newton { t: _, residual: _ })
-            | Err(OdeError::StepTooSmall { t: _ }) => {
+            Err(OdeError::Newton { t: _, residual: _ }) | Err(OdeError::StepTooSmall { t: _ }) => {
                 let contracted = h * 0.5;
                 if contracted.abs() < h_min {
                     return Err(OdeError::StepTooSmall { t });
@@ -292,15 +301,7 @@ fn record_final(
 }
 
 /// Cubic Hermite interpolation at `tau ∈ [t0, t1]`.
-fn hermite(
-    t0: f64,
-    y0: &[f64],
-    f0: &[f64],
-    t1: f64,
-    y1: &[f64],
-    f1: &[f64],
-    tau: f64,
-) -> Vec<f64> {
+fn hermite(t0: f64, y0: &[f64], f0: &[f64], t1: f64, y1: &[f64], f1: &[f64], tau: f64) -> Vec<f64> {
     let h = t1 - t0;
     let s = (tau - t0) / h;
     let s2 = s * s;
@@ -330,15 +331,7 @@ fn weighted_norm(err: &[f64], y: &[f64], rtol: f64, atol: f64) -> f64 {
 // Dormand–Prince RK5(4) — explicit, non-stiff.
 // ---------------------------------------------------------------------------
 
-const DP_C: [f64; 7] = [
-    0.0,
-    1.0 / 5.0,
-    3.0 / 10.0,
-    4.0 / 5.0,
-    8.0 / 9.0,
-    1.0,
-    1.0,
-];
+const DP_C: [f64; 7] = [0.0, 1.0 / 5.0, 3.0 / 10.0, 4.0 / 5.0, 8.0 / 9.0, 1.0, 1.0];
 // Lower-triangular A (row-indexed by stage s, columns 0..s).
 const DP_A: [[f64; 6]; 6] = [
     [1.0 / 5.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -388,7 +381,12 @@ const DP_BHAT: [f64; 7] = [
     1.0 / 40.0,
 ];
 
-fn step_dp54(f: &dyn crate::RhsCallable, t: f64, y: &[f64], h: f64) -> Result<StepResult, OdeError> {
+fn step_dp54(
+    f: &dyn crate::RhsCallable,
+    t: f64,
+    y: &[f64],
+    h: f64,
+) -> Result<StepResult, OdeError> {
     let n = y.len();
     let mut k = vec![vec![0.0; n]; 7];
     k[0] = eval(f, t, y);
@@ -418,7 +416,11 @@ fn step_dp54(f: &dyn crate::RhsCallable, t: f64, y: &[f64], h: f64) -> Result<St
         y_new[i] = acc5;
         y_hat[i] = acc4;
     }
-    let err = y_new.iter().zip(&y_hat).map(|(a, b)| a - b).collect::<Vec<_>>();
+    let err = y_new
+        .iter()
+        .zip(&y_hat)
+        .map(|(a, b)| a - b)
+        .collect::<Vec<_>>();
     let f_new = eval(f, t + h, &y_new);
     Ok(StepResult {
         t: t + h,
@@ -434,10 +436,15 @@ fn step_dp54(f: &dyn crate::RhsCallable, t: f64, y: &[f64], h: f64) -> Result<St
 // ---------------------------------------------------------------------------
 
 const TRBDF2_GAMMA: f64 = 0.5857864376269049; // 2 - sqrt(2)
-const TRBDF2_B1: f64 = 0.8535533905932737;    // 1/(2γ) = (2+√2)/4
-const TRBDF2_B2: f64 = 0.1464466094067263;    // 1 - b1 = (2-√2)/4
+const TRBDF2_B1: f64 = 0.8535533905932737; // 1/(2γ) = (2+√2)/4
+const TRBDF2_B2: f64 = 0.1464466094067263; // 1 - b1 = (2-√2)/4
 
-fn step_sdirk2(f: &dyn crate::RhsCallable, t: f64, y: &[f64], h: f64) -> Result<StepResult, OdeError> {
+fn step_sdirk2(
+    f: &dyn crate::RhsCallable,
+    t: f64,
+    y: &[f64],
+    h: f64,
+) -> Result<StepResult, OdeError> {
     let n = y.len();
     let g = TRBDF2_GAMMA;
     let f_start = eval(f, t, y);
@@ -475,7 +482,11 @@ fn step_sdirk2(f: &dyn crate::RhsCallable, t: f64, y: &[f64], h: f64) -> Result<
     for i in 0..n {
         y_trap[i] += h * 0.5 * (f_start[i] + k1[i]);
     }
-    let err = y_new.iter().zip(&y_trap).map(|(a, b)| a - b).collect::<Vec<_>>();
+    let err = y_new
+        .iter()
+        .zip(&y_trap)
+        .map(|(a, b)| a - b)
+        .collect::<Vec<_>>();
     let f_new = eval(f, t + h, &y_new);
     Ok(StepResult {
         t: t + h,
@@ -490,27 +501,32 @@ fn step_sdirk2(f: &dyn crate::RhsCallable, t: f64, y: &[f64], h: f64) -> Result<
 // (Kennedy & Carpenter 2003, with B weights normalized to sum to 1).
 // ---------------------------------------------------------------------------
 
-const ESDIRK34_GAMMA: f64 = 0.43586652150845899942;
-const ESDIRK34_C2: f64 = 0.87173304301691799883; // 2·gamma
-const ESDIRK34_C3: f64 = 0.46823874485184439565;
-const ESDIRK34_A31: f64 = 0.14073777472470619619;
-const ESDIRK34_A32: f64 = -0.1083655513813208000;
+const ESDIRK34_GAMMA: f64 = 0.435_866_521_508_459;
+const ESDIRK34_C2: f64 = 0.871_733_043_016_918; // 2·gamma
+const ESDIRK34_C3: f64 = 0.468_238_744_851_844_4;
+const ESDIRK34_A31: f64 = 0.140_737_774_724_706_2;
+const ESDIRK34_A32: f64 = -0.108_365_551_381_320_8;
 // B weights (order 3): normalized so sum = 1, with B[3] = gamma.
 const ESDIRK34_B: [f64; 4] = [
-    0.10096040872832361435,  // b1 adjusted
-    -0.3635713723148436702,   // b2 adjusted
-    0.82671046307807505525,   // b3 adjusted
+    0.100_960_408_728_323_61, // b1 adjusted
+    -0.363_571_372_314_843_65, // b2 adjusted
+    0.826_710_463_078_075, // b3 adjusted
     ESDIRK34_GAMMA,
 ];
 // Embedded weights (order 4): sum to 1.
 const ESDIRK34_BHAT: [f64; 4] = [
-    0.15702489786032493710,
-    0.11733044137043884870,
-    0.61667803039212146434,
-    0.10896663037711474985,
+    0.157_024_897_860_324_95,
+    0.117_330_441_370_438_85,
+    0.616_678_030_392_121_4,
+    0.108_966_630_377_114_75,
 ];
 
-fn step_esdirk34(f: &dyn crate::RhsCallable, t: f64, y: &[f64], h: f64) -> Result<StepResult, OdeError> {
+fn step_esdirk34(
+    f: &dyn crate::RhsCallable,
+    t: f64,
+    y: &[f64],
+    h: f64,
+) -> Result<StepResult, OdeError> {
     let n = y.len();
     let g = ESDIRK34_GAMMA;
     let k0 = eval(f, t, y); // explicit first stage
@@ -557,7 +573,11 @@ fn step_esdirk34(f: &dyn crate::RhsCallable, t: f64, y: &[f64], h: f64) -> Resul
         y_new[i] = s5;
         y_hat[i] = s4;
     }
-    let err = y_new.iter().zip(&y_hat).map(|(a, b)| a - b).collect::<Vec<_>>();
+    let err = y_new
+        .iter()
+        .zip(&y_hat)
+        .map(|(a, b)| a - b)
+        .collect::<Vec<_>>();
     let f_new = eval(f, t + h, &y_new);
     Ok(StepResult {
         t: t + h,
@@ -596,7 +616,14 @@ const BDF_L: [[f64; 6]; 5] = [
     [1.0, 1.5, 0.5, 0.0, 0.0, 0.0],
     [1.0, 11.0 / 6.0, 1.0, 1.0 / 6.0, 0.0, 0.0],
     [1.0, 25.0 / 12.0, 35.0 / 24.0, 5.0 / 12.0, 1.0 / 24.0, 0.0],
-    [1.0, 137.0 / 60.0, 15.0 / 8.0, 17.0 / 24.0, 1.0 / 8.0, 1.0 / 120.0],
+    [
+        1.0,
+        137.0 / 60.0,
+        15.0 / 8.0,
+        17.0 / 24.0,
+        1.0 / 8.0,
+        1.0 / 120.0,
+    ],
 ];
 
 // Delta-to-local-error scaling factors r_q = C_{q+1} / (C_{q+1} + 1/(q+1)!)

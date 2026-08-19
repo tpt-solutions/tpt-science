@@ -5,7 +5,11 @@ fn debug_exp_decay_bdf() {
     let k = 2.0;
     let p = OdeProblem::new(move |_t, y, dydt| dydt[0] = -k * y[0], vec![1.0], 0.0).unwrap();
     let y = p.solve(Method::Bdf, 1.0).unwrap();
-    eprintln!("BDF exp decay y(1) = {:?}, exact = {:.6}", y, (-k * 1.0_f64).exp());
+    eprintln!(
+        "BDF exp decay y(1) = {:?}, exact = {:.6}",
+        y,
+        (-k * 1.0_f64).exp()
+    );
     let p2 = OdeProblem::new(
         |_t, y, dydt| {
             dydt[0] = y[1];

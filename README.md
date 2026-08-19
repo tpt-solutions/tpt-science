@@ -23,7 +23,7 @@ crate is implemented — Phase 1 (scaffolding) does not require those audits.
 
 | Crate | Domain | Status | Wrap / build | Notes |
 |-------|--------|--------|--------------|-------|
-| `tpt-sci-ode` | differential-equations | **implemented** | wrap `diffsol` | depends on `tpt-math-numeric` |
+| `tpt-sci-ode` | differential-equations | **implemented** | build from scratch | from-scratch ODE engine (diffsol is dev-only oracle); depends on `tpt-math-numeric`, `tpt-math-linalg` |
 | `tpt-sci-grid` | pde | **implemented** | build from scratch | depends on `tpt-math-linalg` |
 | `tpt-sci-sim-core` | simulation | **implemented** | build from scratch | depends on `tpt-sci-ode`, `tpt-sci-grid` |
 | `tpt-sci-ppl` | probabilistic-programming | **implemented** | build from scratch (NUTS) | consolidates `tpt-augur`; `nuts-rs` wrap dropped |
@@ -32,6 +32,15 @@ crate is implemented — Phase 1 (scaffolding) does not require those audits.
 | `tpt-sci-quantum` | quantum | **implemented** | build from scratch | QuantRS2 disqualified (ADR 0007); ≤20 qubits; no tensor-networks |
 | `tpt-sci-astro` | astrodynamics | **implemented** | build from scratch | two-body / Keplerian only |
 | `tpt-sci-reaction-network` | systems-biology | **implemented** | build from scratch | Catalyst.jl-style species/rate/stoichiometry DSL → mass-action ODE; depends on `tpt-sci-ode`; DSL + custom rate laws; SSA/SBML out of v1 |
+| `tpt-sci-md` | molecular-dynamics | **implemented** | build from scratch | depends on `tpt-math-linalg`; LJ / Verlet / RDF |
+| `tpt-sci-dft-classical` | materials | **implemented** | wrap `feos` (`feos-dft`) | classical/soft-matter DFT (PC-SAFT), MIT OR Apache-2.0 |
+| `tpt-sci-kinetics` | chemical-kinetics | **implemented** | build from scratch | depends on `tpt-sci-reaction-network`; Arrhenius + Langmuir–Hinshelwood |
+| `tpt-sci-cfd-core` | fluid-dynamics | **implemented** | build from scratch | depends on `tpt-math-linalg`; 2-D incompressible Navier–Stokes |
+| `tpt-sci-hemodynamics` | biomechanics | **implemented** | build from scratch | depends on `tpt-sci-cfd-core`, `tpt-sci-ode`; 1-D compliant vessels |
+| `tpt-sci-electrophys` | biomechanics | **implemented** | build from scratch | depends on `tpt-sci-ode`, `tpt-sci-grid`; Hodgkin–Huxley + bidomain |
+| `tpt-sci-climate` | earth-science | **implemented** | build from scratch | depends on `tpt-sci-ode`, `tpt-math-linalg`; 0-D EBM |
+| `tpt-sci-ocean` | earth-science | **implemented** | build from scratch | depends on `tpt-sci-cfd-core`; 2-D shallow-water |
+| `tpt-sci-dft-electronic` | materials | **implemented** | build from scratch | 1-D Kohn–Sham LDA; scoped per spec2.txt audit |
 
 ## no_std posture
 
@@ -82,7 +91,16 @@ See the crate READMEs for the full API:
 [`tpt-sci-physics-rigid`](crates/tpt-sci-physics-rigid),
 [`tpt-sci-quantum`](crates/tpt-sci-quantum),
 [`tpt-sci-astro`](crates/tpt-sci-astro),
-[`tpt-sci-reaction-network`](crates/tpt-sci-reaction-network).
+[`tpt-sci-reaction-network`](crates/tpt-sci-reaction-network),
+[`tpt-sci-md`](crates/tpt-sci-md),
+[`tpt-sci-dft-classical`](crates/tpt-sci-dft-classical),
+[`tpt-sci-kinetics`](crates/tpt-sci-kinetics),
+[`tpt-sci-cfd-core`](crates/tpt-sci-cfd-core),
+[`tpt-sci-hemodynamics`](crates/tpt-sci-hemodynamics),
+[`tpt-sci-electrophys`](crates/tpt-sci-electrophys),
+[`tpt-sci-climate`](crates/tpt-sci-climate),
+[`tpt-sci-ocean`](crates/tpt-sci-ocean),
+[`tpt-sci-dft-electronic`](crates/tpt-sci-dft-electronic).
 
 ## Examples
 
@@ -100,6 +118,15 @@ README snippet — a good first place to see the API in action:
 | `tpt-sci-image` | `reconstruction` | Parallel-beam CT of a phantom (FBP) |
 | `tpt-sci-physics-rigid` | `collision` | Spheres under gravity + walls, elastic collisions |
 | `tpt-sci-astro` | `propagation` | LEO propagation + J2 RAAN regression |
+| `tpt-sci-md` | `lennard_jones` | LJ fluid: velocity-Verlet trajectory + RDF |
+| `tpt-sci-dft-classical` | `adsorption` | PC-SAFT density-profile solve (wrapped `feos`) |
+| `tpt-sci-kinetics` | `reactor` | Arrhenius + Langmuir–Hinshelwood, ODE via `tpt-sci-ode` |
+| `tpt-sci-cfd-core` | `cavity` | Lid-driven cavity, divergence-free projection |
+| `tpt-sci-hemodynamics` | `arterial_segment` | Compliant vessel area/flow over a cardiac cycle |
+| `tpt-sci-electrophys` | `ap_wave` | Action-potential propagation across a tissue sheet |
+| `tpt-sci-climate` | `warming` | 0-D EBM CO₂-doubling equilibrium warming |
+| `tpt-sci-ocean` | `shallow_water` | Shallow-water gravity-wave propagation |
+| `tpt-sci-dft-electronic` | `harmonic_atom` | 1-D Kohn–Sham solve of a two-electron well |
 
 `sim-core` also ships `decay_coupled` (ODE↔diffusion coupling + checkpoint).
 Run any of them with, e.g.:
@@ -120,6 +147,13 @@ cargo run --example van_der_pol -p tpt-sci-ode
   by `cargo test`).
 
 See `RELEASE.md` for the (currently dormant) publish/versioning process.
+
+## Changelogs
+
+Each crate keeps its own `CHANGELOG.md` (initial `v0.1.0` entry plus an
+`[Unreleased]` section): see e.g.
+[`crates/tpt-sci-ode/CHANGELOG.md`](crates/tpt-sci-ode/CHANGELOG.md). The
+workspace-level [`CHANGELOG.md`](CHANGELOG.md) tracks cross-cutting changes.
 
 ## License
 

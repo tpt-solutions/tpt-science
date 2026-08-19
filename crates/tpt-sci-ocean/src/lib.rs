@@ -19,11 +19,11 @@
 //! use tpt_sci_ocean::ShallowWater;
 //!
 //! // 64×64 basin, gravity g = 9.81, Coriolis f = 1e-4.
-//! let mut sw = ShallowWater::new(64, 64, 1.0, 1.0, 9.81, 1e-4, 0.01);
+//! let mut sw = ShallowWater::new(64, 64, 1.0, 1.0, 9.81, 1e-4, 0.001);
 //! // Perturb the free surface; it should evolve without blowing up.
 //! sw.perturb_center(1.0);
 //! for _ in 0..10 {
-//!     sw.step(0.01);
+//!     sw.step(0.001);
 //! }
 //! assert!(sw.max_speed().is_finite());
 //! ```
@@ -53,8 +53,6 @@ pub struct ShallowWater {
     pub f: f64,
     /// Linear bottom friction `k` (1/s).
     pub friction: f64,
-    /// Timestep `dt`.
-    dt: f64,
 }
 
 impl ShallowWater {
@@ -64,15 +62,7 @@ impl ShallowWater {
     ///
     /// Returns [`OceanError::InvalidModel`] if `h0 <= 0`, `g <= 0`, or any
     /// grid/cell count is invalid.
-    pub fn new(
-        nx: usize,
-        ny: usize,
-        lx: f64,
-        ly: f64,
-        g: f64,
-        f: f64,
-        dt: f64,
-    ) -> Self {
+    pub fn new(nx: usize, ny: usize, lx: f64, ly: f64, g: f64, f: f64, _dt: f64) -> Self {
         let grid = CollocatedGrid::new(nx, ny, lx, ly).unwrap();
         let n = grid.len();
         Self {
@@ -83,7 +73,6 @@ impl ShallowWater {
             g,
             f,
             friction: 1e-4,
-            dt,
             grid,
         }
     }
@@ -124,21 +113,22 @@ impl ShallowWater {
                 let jp = idx(i, clamp(j as isize + 1, g.ny));
 
                 // Continuity: dh/dt = -∇·(h u).
-                let div = (h[c] * u[c] - h[im] * u[im]) / dx
-                    + (h[c] * v[c] - h[jm] * v[jm]) / dy;
+                let div = (h[c] * u[c] - h[im] * u[im]) / dx + (h[c] * v[c] - h[jm] * v[jm]) / dy;
                 nh[c] = (h[c] - dt * div).max(1e-3);
 
                 // Momentum (x): du/dt = -(u·∇)u - g·∂η/∂x + f·v - k·u.
                 let dudx = (u[ip] - u[im]) / (2.0 * dx);
                 let dudy = (u[jp] - u[jm]) / (2.0 * dy);
                 let deta = (nh[ip] - nh[im]) / (2.0 * dx);
-                nu[c] = u[c] + dt * (-(u[c] * dudx + v[c] * dudy) - grav * deta + f * v[c] - k * u[c]);
+                nu[c] =
+                    u[c] + dt * (-(u[c] * dudx + v[c] * dudy) - grav * deta + f * v[c] - k * u[c]);
 
                 // Momentum (y): dv/dt = -(v·∇)v - g·∂η/∂y - f·u - k·v.
                 let dvdx = (v[ip] - v[im]) / (2.0 * dx);
                 let dvdy = (v[jp] - v[jm]) / (2.0 * dy);
                 let detay = (nh[jp] - nh[jm]) / (2.0 * dy);
-                nv[c] = v[c] + dt * (-(v[c] * dvdx + v[c] * dvdy) - grav * detay - f * u[c] - k * v[c]);
+                nv[c] =
+                    v[c] + dt * (-(v[c] * dvdx + v[c] * dvdy) - grav * detay - f * u[c] - k * v[c]);
             }
         }
         self.h = nh;
@@ -180,10 +170,12 @@ mod tests {
 
     #[test]
     fn bump_propagates_finitely() {
-        let mut sw = ShallowWater::new(48, 48, 1.0, 1.0, 9.81, 1e-4, 0.005);
+        // dt chosen inside the explicit-scheme CFL limit: c·dt/dx < 1 with
+        // c = sqrt(g·h0) = sqrt(9.81·10) ≈ 9.9 and dx = 1/48.
+        let mut sw = ShallowWater::new(48, 48, 1.0, 1.0, 9.81, 1e-4, 0.001);
         sw.perturb_center(1.0);
         for _ in 0..30 {
-            sw.step(0.005);
+            sw.step(0.001);
         }
         assert!(sw.max_speed().is_finite());
         // Height stays positive and bounded.

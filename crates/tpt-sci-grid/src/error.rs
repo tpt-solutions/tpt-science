@@ -10,5 +10,4 @@ pub enum GridError {
     /// The domain endpoints were not strictly ordered.
     #[error("invalid domain: x0 ({0}) >= x1 ({1})")]
     InvalidDomain(f64, f64),
-
 }
