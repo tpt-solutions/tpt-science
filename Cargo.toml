@@ -10,6 +10,14 @@ members = [
     "crates/tpt-sci-physics-rigid",
     "crates/tpt-sci-ppl",
     "crates/tpt-sci-reaction-network",
+    "crates/tpt-sci-md",
+    "crates/tpt-sci-dft-classical",
+    "crates/tpt-sci-kinetics",
+    "crates/tpt-sci-cfd-core",
+    "crates/tpt-sci-hemodynamics",
+    "crates/tpt-sci-electrophys",
+    "crates/tpt-sci-climate",
+    "crates/tpt-sci-ocean",
 ]
 exclude = []
 
@@ -33,9 +41,10 @@ tpt-math-prob-bayes = "0.1.0"
 tpt-math-prob-core = "0.1.0"
 num-complex = "0.4"
 # Wrap target for tpt-sci-dft-classical (classical/soft-matter DFT), MIT OR
-# Apache-2.0, added by the 2026-08 spec2.txt expansion pass. Not yet pulled
-# into any crate's [dependencies] until tpt-sci-dft-classical is scaffolded.
-feos-dft = "0.6"
+# Apache-2.0. `feos` re-exports `feos-dft` plus the equation-of-state
+# functionals (PC-SAFT, etc.) needed to build a concrete Helmholtz functional.
+# Added by the 2026-08 spec2.txt expansion pass.
+feos = { version = "0.10", default-features = false, features = ["dft"] }
 
 # In-repo crate dependencies (referenced by `workspace = true`).
 tpt-sci-ode = { version = "0.1.0", path = "crates/tpt-sci-ode" }

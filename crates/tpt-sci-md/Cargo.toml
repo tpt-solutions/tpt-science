@@ -1,0 +1,28 @@
+[package]
+name = "tpt-sci-md"
+description = "Classical molecular dynamics (Lennard-Jones / EAM, radial distribution function) for the tpt-science pillar"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/tpt-sci-md"
+keywords = ["molecular-dynamics", "md", "lennard-jones", "rdf", "science"]
+categories = ["science", "simulation"]
+publish = false
+
+[dependencies]
+tpt-math-linalg = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true

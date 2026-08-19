@@ -1,0 +1,29 @@
+[package]
+name = "tpt-sci-climate"
+description = "Energy-balance climate models and simple radiative transfer for the tpt-science pillar"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/tpt-sci-climate"
+keywords = ["climate", "energy-balance", "radiative-transfer", "science"]
+categories = ["science", "simulation"]
+publish = false
+
+[dependencies]
+tpt-sci-ode = { workspace = true }
+tpt-math-linalg = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+approx = { workspace = true }
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
