@@ -67,6 +67,7 @@ pub struct JitRhs {
 
 /// Global registry for JIT-compiled RHS closures.
 /// Maps (nstates, unique_id) -> Box<dyn Fn(f64, &[f64], &mut [f64])>
+#[allow(clippy::type_complexity)]
 static RHS_REGISTRY: OnceLock<
     Mutex<HashMap<(usize, usize), Box<dyn Fn(f64, &[f64], &mut [f64]) + Send + Sync>>>,
 > = OnceLock::new();
@@ -74,6 +75,7 @@ static RHS_REGISTRY: OnceLock<
 /// Unique ID counter for registry entries.
 static REGISTRY_COUNTER: OnceLock<Mutex<usize>> = OnceLock::new();
 
+#[allow(clippy::type_complexity)]
 fn get_registry()
 -> &'static Mutex<HashMap<(usize, usize), Box<dyn Fn(f64, &[f64], &mut [f64]) + Send + Sync>>> {
     RHS_REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
@@ -140,6 +142,11 @@ impl JitRhs {
     }
 
     /// Calls the compiled RHS function (safe wrapper).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OdeError::Invalid`] if the length of `y` or `dydt` does not
+    /// match the compiled number of states.
     pub fn call_safe(&self, t: f64, y: &[f64], dydt: &mut [f64]) -> Result<(), OdeError> {
         if y.len() != self.nstates || dydt.len() != self.nstates {
             return Err(OdeError::Invalid(format!(
@@ -164,6 +171,16 @@ pub struct JitRhsBuilder {
 
 impl JitRhsBuilder {
     /// Creates a new JIT builder with the host's native target.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OdeError::Invalid`] if the host target ISA cannot be looked up or
+    /// finalised.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal Cranelift flag configuration is invalid (should not
+    /// occur for the built-in settings).
     pub fn new() -> Result<Self, OdeError> {
         let mut flag_builder = settings::builder();
         flag_builder.enable("enable_verifier").unwrap();
@@ -195,6 +212,16 @@ impl JitRhsBuilder {
     ///
     /// The closure must have the signature `Fn(f64, &[f64], &mut [f64])` and
     /// will be specialized for the given `nstates` dimension.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OdeError::Invalid`] if `nstates == 0` or the closure cannot be
+    /// compiled/encoded into a native function.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal Cranelift flag configuration is invalid (should not
+    /// occur for the built-in settings).
     pub fn compile<F>(&self, nstates: usize, rhs: F) -> Result<JitRhs, OdeError>
     where
         F: Fn(f64, &[f64], &mut [f64]) + Send + Sync + 'static,
@@ -342,6 +369,11 @@ impl JitRhsBuilder {
 ///
 /// This is a convenience function that creates a builder and compiles the closure
 /// in one step. For repeated compilations, use `JitRhsBuilder` directly.
+///
+/// # Errors
+///
+/// Returns [`OdeError::Invalid`] if `nstates == 0` or compilation fails (see
+/// [`JitRhsBuilder::compile`]).
 ///
 /// # Example
 ///

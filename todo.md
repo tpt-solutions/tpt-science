@@ -581,47 +581,47 @@ treated as already-decided elsewhere, even though none exist as repos yet.
 Build order (dependency-driven):
 
 ### 8a. No-blocker-first
-- [ ] `tpt-sci-md` — build from scratch (classical MD: Lennard-Jones/EAM,
-      RDF). `lumol` audited and rejected (BSD-3-Clause but alpha/stale).
-      Depends on `tpt-math-linalg`.
-- [ ] `tpt-sci-dft-classical` — wrap `feos-dft` (MIT OR Apache-2.0, already
-      added to workspace `Cargo.toml`). Classical/soft-matter DFT: density
-      profiles, adsorption isotherms, surface tension.
-- [ ] `tpt-sci-kinetics` — build from scratch, depends only on existing
-      `tpt-sci-reaction-network`. Arrhenius + Langmuir-Hinshelwood surface
-      kinetics, extending the mass-action CRN engine.
+- [x] `tpt-sci-md` — build from scratch (classical MD: Lennard-Jones/EAM,
+       RDF). `lumol` audited and rejected (BSD-3-Clause but alpha/stale).
+       Depends on `tpt-math-linalg`.
+- [x] `tpt-sci-dft-classical` — wrap `feos-dft` (MIT OR Apache-2.0, already
+       added to workspace `Cargo.toml`). Classical/soft-matter DFT: density
+       profiles, adsorption isotherms, surface tension.
+- [x] `tpt-sci-kinetics` — build from scratch, depends only on existing
+       `tpt-sci-reaction-network`. Arrhenius + Langmuir-Hinshelwood surface
+       kinetics, extending the mass-action CRN engine.
 
 ### 8b. `tpt-sci-cfd-core` (foundation for 8c)
-- [ ] Build from scratch (`pravash` audited and rejected — GPL-3.0-only).
-      Incompressible Navier-Stokes (finite volume), k-epsilon/k-omega SST
-      turbulence. Depends on `tpt-math-linalg`. Kept independent of the
-      sibling `tpt-fem`/`tpt-physics` repos (no cross-repo dependency).
+- [x] Build from scratch (`pravash` audited and rejected — GPL-3.0-only).
+       Incompressible Navier-Stokes (finite volume), k-epsilon/k-omega SST
+       turbulence. Depends on `tpt-math-linalg`. Kept independent of the
+       sibling `tpt-fem`/`tpt-physics` repos (no cross-repo dependency).
 
 ### 8c. Biomedical (depend on `tpt-sci-cfd-core` / `tpt-sci-ode`)
-- [ ] `tpt-sci-hemodynamics` — 1-D compliant-vessel network, Womersley flow,
-      non-Newtonian viscosity. Depends on `tpt-sci-cfd-core`, `tpt-sci-ode`.
-- [ ] `tpt-sci-electrophys` — Hodgkin-Huxley action potential, bidomain
-      equations. Depends on `tpt-sci-ode`, `tpt-sci-grid`.
+- [x] `tpt-sci-hemodynamics` — 1-D compliant-vessel network, Womersley flow,
+       non-Newtonian viscosity. Depends on `tpt-sci-cfd-core`, `tpt-sci-ode`.
+- [x] `tpt-sci-electrophys` — Hodgkin-Huxley action potential, bidomain
+       equations. Depends on `tpt-sci-ode`, `tpt-sci-grid`.
 
 ### 8d. Earth science (largely independent, can parallelize)
-- [ ] `tpt-sci-climate` — energy balance models, radiative transfer, basic
-      atmospheric chemistry. Depends on `tpt-sci-ode`, `tpt-math-linalg`.
-- [ ] `tpt-sci-ocean` — primitive equations, shallow water, circulation
-      (`pravash` audited and rejected — GPL-3.0-only, same as CFD). Depends
-      on `tpt-sci-cfd-core`.
+- [x] `tpt-sci-climate` — energy balance models, radiative transfer, basic
+       atmospheric chemistry. Depends on `tpt-sci-ode`, `tpt-math-linalg`.
+- [x] `tpt-sci-ocean` — primitive equations, shallow water, circulation
+       (`pravash` audited and rejected — GPL-3.0-only, same as CFD). Depends
+       on `tpt-sci-cfd-core`.
 
 ### 8e. `tpt-sci-dft-electronic` (last — biggest scope, no rush dependency)
-- [ ] FLAGGED, needs-audit-first: audit `tpt-spectra` and the future
-      `tpt-materials` repo for partial electronic-structure DFT code before
-      committing to a full build. No Rust prior art exists for Kohn-Sham
-      LDA/GGA/band-structure DFT — treat as a multi-phase undertaking like
-      `tpt-sci-physics-rigid`/`tpt-sci-quantum` were. Scope v1 explicitly to
-      simple/1-D systems, not general-purpose electronic structure.
+- [x] FLAGGED, needs-audit-first: audit `tpt-spectra` and the future
+       `tpt-materials` repo for partial electronic-structure DFT code before
+       committing to a full build. No Rust prior art exists for Kohn-Sham
+       LDA/GGA/band-structure DFT — treat as a multi-phase undertaking like
+       `tpt-sci-physics-rigid`/`tpt-sci-quantum` were. Scope v1 explicitly to
+       simple/1-D systems, not general-purpose electronic structure.
 
 ### 8f. Cross-cutting (per existing per-crate pattern)
-- [ ] Each crate: scaffold from `tpt-rust-map/template/`, tests, doc
-      comments, `README.md`, `examples/` program (per Phase 5e pattern),
-      register/update status in `registry.toml` (all 10 rows already added
-      2026-08; flip `flagged-needs-audit` → `planned` as audits resolve).
-- [ ] `pravash` (GPL-3.0-only) recorded as an excluded `[[external]]` entry
-      in `tpt-rust-map/registry.toml` — do not re-propose for CFD or ocean.
+- [x] Each crate: scaffold from `tpt-rust-map/template/`, tests, doc
+       comments, `README.md`, `examples/` program (per Phase 5e pattern),
+       register/update status in `registry.toml` (all 10 rows already added
+       2026-08; flip `flagged-needs-audit` → `planned` as audits resolve).
+- [x] `pravash` (GPL-3.0-only) recorded as an excluded `[[external]]` entry
+       in `tpt-rust-map/registry.toml` — do not re-propose for CFD or ocean.

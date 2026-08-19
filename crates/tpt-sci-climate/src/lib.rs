@@ -19,7 +19,7 @@
 //! ```
 //! use tpt_sci_climate::EnergyBalanceModel;
 //!
-//! let mut ebm = EnergyBalanceModel::new(1.0, 0.3, 0.61, 280.0);
+//! let mut ebm = EnergyBalanceModel::new(1.0, 0.3, 0.61, 280.0).unwrap();
 //! // Integrate temperature for a year; it relaxes to equilibrium.
 //! for _ in 0..100 {
 //!     ebm.step(1.0);

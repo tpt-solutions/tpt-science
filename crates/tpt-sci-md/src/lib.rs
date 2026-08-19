@@ -475,7 +475,7 @@ mod tests {
             Particle::new(1, v(&[5.0, 0.0, 0.0]), v(&[0.0, 1.0, 0.0]), 1.0).unwrap(),
         ];
         let int = Integrator::new(f64::INFINITY, 100.0, 0.01).unwrap();
-        int.velocity_verlet(&mut parts);
+        let _energy = int.velocity_verlet(&mut parts);
         assert_abs_diff_eq!(parts[0].position[0], 0.01, epsilon = 1e-9);
         assert_abs_diff_eq!(parts[1].position[1], 0.01, epsilon = 1e-9);
     }

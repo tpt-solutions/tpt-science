@@ -60,6 +60,11 @@ pub trait RhsCallable {
     fn nstates(&self) -> usize;
 
     /// Evaluate `dy/dt = f(t, y)` into `dydt`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OdeError`] if the evaluation fails (e.g. the RHS reports an
+    /// invalid state). The in-house closure-backed implementation never fails.
     fn call(&self, t: f64, y: &[f64], dydt: &mut [f64]) -> Result<(), OdeError>;
 }
 

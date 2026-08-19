@@ -25,7 +25,7 @@
 //! use tpt_math_linalg::tpt_math_linalg_dense::DVector;
 //!
 //! // 32×32 cavity, lid moving at u = 1.0 on the top wall.
-//! let grid = CollocatedGrid::new(32, 32, 1.0, 1.0);
+//! let grid = CollocatedGrid::new(32, 32, 1.0, 1.0).unwrap();
 //! let mut step = Step::new(grid, 1e-2, 0.01, 1.0);
 //! step.set_boundary(Boundary::Top, 1.0);
 //! // One fractional-step update (advect/diffuse + project).
@@ -85,6 +85,12 @@ impl CollocatedGrid {
     #[must_use]
     pub fn len(&self) -> usize {
         self.nx * self.ny
+    }
+
+    /// Returns `true` if the grid has zero cells.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.nx == 0 || self.ny == 0
     }
 
     /// Linear index of cell `(i, j)`.

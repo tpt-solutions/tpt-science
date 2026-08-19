@@ -94,7 +94,6 @@ impl ArrheniusRate {
 ///
 /// Returns [`KineticsError::CoverageError`] if any `K_i` or `p_i` is negative or
 /// non-finite, or the denominator is non-positive.
-#[must_use]
 pub fn langmuir_hinshelwood_coverages(
     ks: &[f64],
     pressures: &[f64],

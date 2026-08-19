@@ -58,10 +58,10 @@ pub struct ShallowWater {
 impl ShallowWater {
     /// Construct a model with rest height `h0` everywhere.
     ///
-    /// # Errors
+    /// # Panics
     ///
-    /// Returns [`OceanError::InvalidModel`] if `h0 <= 0`, `g <= 0`, or any
-    /// grid/cell count is invalid.
+    /// Panics if the underlying grid construction fails (non-positive extents or
+    /// zero cell counts).
     pub fn new(nx: usize, ny: usize, lx: f64, ly: f64, g: f64, f: f64, _dt: f64) -> Self {
         let grid = CollocatedGrid::new(nx, ny, lx, ly).unwrap();
         let n = grid.len();

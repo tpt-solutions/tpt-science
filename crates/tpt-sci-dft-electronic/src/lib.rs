@@ -26,7 +26,7 @@
 //! ```
 //! use tpt_sci_dft_electronic::{Grid1D, KohnSham, lda_xc};
 //!
-//! let grid = Grid1D::new(101, -5.0, 5.0);
+//! let grid = Grid1D::new(101, -5.0, 5.0).unwrap();
 //! // Harmonic-like external well.
 //! let v_ext: Vec<f64> = grid.x().iter().map(|&x| 0.5 * x * x).collect();
 //! let mut ks = KohnSham::new(grid, v_ext, 2).unwrap(); // 2 electrons

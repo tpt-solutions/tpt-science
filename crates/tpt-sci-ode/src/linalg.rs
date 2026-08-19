@@ -56,7 +56,7 @@ impl DMat {
         self.data[i * self.ncols + j] = v;
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[allow(dead_code)]
     pub fn identity(n: usize) -> Self {
         let mut m = DMat::new(n, n);
         for i in 0..n {
@@ -76,7 +76,7 @@ impl DMat {
     }
 
     /// `y = A x`.
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[allow(dead_code, clippy::needless_range_loop)]
     pub fn mat_vec(&self, x: &[f64]) -> Vec<f64> {
         let mut y = vec![0.0; self.nrows];
         for i in 0..self.nrows {

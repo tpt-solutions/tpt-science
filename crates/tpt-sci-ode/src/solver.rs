@@ -233,6 +233,13 @@ fn integrate(
                 f_cur = res.f_new;
                 h = next;
                 steps += 1;
+                if std::env::var("ODE_DEBUG").is_ok() {
+                    let ord = bdf_state.as_ref().map(|s| s.order).unwrap_or(0);
+                    eprintln!(
+                        "step {steps} order {ord} t={t:.4} h={h:.3e} err={err_est:.3e} y0={:.6}",
+                        y[0]
+                    );
+                }
                 if steps > max_steps {
                     return Err(OdeError::MaxSteps { t_final, max_steps });
                 }
@@ -258,6 +265,7 @@ fn integrate(
     Ok(outputs)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn record_outputs(
     t_old: f64,
     y_old: &[f64],
@@ -707,6 +715,7 @@ impl NordsieckState {
 
     /// Predictor: binomial shift of the stored array to the next point,
     /// `z_pred[j] = Σ_{m=0}^{order-j} C(j+m, j)·z[j+m]`.
+    #[allow(clippy::needless_range_loop)]
     fn predict(&self) -> Vec<Vec<f64>> {
         let n = self.n();
         let order = self.order;
@@ -736,6 +745,7 @@ impl NordsieckState {
     }
 }
 
+#[allow(clippy::needless_range_loop)]
 fn step_bdf(
     f: &dyn crate::RhsCallable,
     t: f64,
@@ -878,6 +888,12 @@ impl OdeProblem {
     /// # Errors
     ///
     /// Returns [`OdeError`] if the integration fails (see [`OdeProblem::solve`]).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `t_eval` is non-empty but its last element cannot be read
+    /// (only reachable if `t_eval` is mutated concurrently); for a normal
+    /// non-empty slice this is unreachable.
     pub fn solve_dense(&self, method: Method, t_eval: &[f64]) -> Result<Vec<Vec<f64>>, OdeError> {
         if t_eval.is_empty() {
             return Ok(Vec::new());
