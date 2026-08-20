@@ -665,6 +665,7 @@ fn binom(n: usize, k: usize) -> f64 {
 }
 
 /// Nordsieck vector state for the variable-order (1–5) BDF.
+#[derive(Clone)]
 struct NordsieckState {
     /// `z[col][comp]`: column-major Nordsieck array, `col = 0..=BDF_MAX_ORDER`.
     z: Vec<Vec<f64>>,

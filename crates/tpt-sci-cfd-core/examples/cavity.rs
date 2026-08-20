@@ -187,9 +187,7 @@ fn main() {
         1e-2,
         1.0,
     );
-    for x in &mut uniform.u {
-        *x = 1.0;
-    }
+    uniform.u.fill(1.0);
     assert!(
         uniform.max_divergence().abs() < 1e-9,
         "uniform field must be exactly divergence-free"

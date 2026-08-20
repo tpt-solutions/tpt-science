@@ -4,14 +4,18 @@
 [advisories]
 version = 2
 yanked = "warn"
-# NOTE: the only advisory currently tripped is `RUSTSEC-2024-0436` — `paste`
-# is unmaintained. `paste` is pulled in *transitively* (and only as a build-time
-# proc-macro) via our `diffsol` wrap target (diffsol -> faer/gemm -> paste). It
-# is stable, extremely widely used, and has no known vulnerability, so we accept
-# it rather than forking the linear-algebra stack. Revisit if `diffsol` drops or
-# replaces it.
+# NOTE: the advisories currently tripped are build/dev-time transitive deps with
+# no known vulnerability:
+#   * `RUSTSEC-2024-0436` — `paste` (unmaintained), pulled in only as a build-time
+#     proc-macro via `diffsol` -> faer/gemm -> paste. Stable and ubiquitous.
+#   * `RUSTSEC-2020-0168` — `mach` (unmaintained), pulled in via
+#     `diffsol` -> cranelift-jit -> region -> mach. It is a macOS-only crate
+#     (no impact on our Linux/Windows targets) with no known vuln, so we accept
+#     it rather than forking the `diffsol` JIT stack. Revisit if `diffsol` drops
+#     or replaces it.
 ignore = [
     "RUSTSEC-2024-0436",
+    "RUSTSEC-2020-0168",
 ]
 
 [licenses]
