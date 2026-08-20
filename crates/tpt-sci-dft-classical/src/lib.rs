@@ -8,7 +8,8 @@
 //!
 //! * Re-exports the `feos` DFT pieces ([`feos_dft`]) — profiles, solvers,
 //!   convolutions, geometries.
-//! * Wraps the PC-SAFT Helmholtz functional ([`feos::pcsaft::PcSaft`]) behind a
+//! * Wraps the PC-SAFT Helmholtz functional (`feos::pcsaft::PcSaft`, available
+//!   with the `feos` crate's `pcsaft` feature) behind a
 //!   small [`ClassicalDft`] builder that solves a **1-D density profile** for a
 //!   pure component given temperature and bulk density.
 //!

@@ -21,8 +21,8 @@
 //!   with [`tpt_sci_ode`] (cross-checked, e-folding time reported);
 //! * parameter sensitivity (albedo, solar constant) and a faint-Young-Sun
 //!   inversion that requires an extreme CO₂ to stay warm;
-//! * a water-vapour-like feedback (emissivity rising with `T`) that lifts
-//!   equilibrium climate sensitivity into the observed range;
+//! * a water-vapour-like feedback (effective emissivity falling with `T`) that
+//!   lifts equilibrium climate sensitivity into the observed range;
 //! * [`grey_radiative_transfer`] — the single-layer grey atmosphere;
 //! * [`ChemistryBox`] — a production–loss tracer, its steady state, and a
 //!   coupling of CH₄ forcing back into the energy balance;
@@ -101,7 +101,7 @@ fn baseline() {
     // A single grey atmospheric layer of emissivity eps gives an *effective*
     // planetary emissivity eps_eff = 1 - eps/2. The grey-atmosphere surface
     // temperature must equal the EBM equilibrium for that eps_eff.
-    let eps_layer = 1.0 - 2.0 * (1.0 - EMIS);
+    let eps_layer = 2.0 * (1.0 - EMIS);
     println!("  grey layer eps = {eps_layer:.4}  ->  eps_eff = 1 - eps/2 = {EMIS}");
     let t_grey = grey_radiative_transfer(ebm.solar_constant, ALBEDO, eps_layer);
     println!("  grey Ts = {t_grey:.3} K  vs EBM Teq = {t_eq:.3} K");
@@ -154,12 +154,14 @@ fn co2_sweep() {
     }
 
     // Fit dT[m] = a + b ln(m) with tpt-math-linalg (normal equations A^T A x = A^T y).
+    // A has columns [1, ln m], so A^T A = [[sa, sb], [sb, sbb]] and
+    // A^T y = [sum(y), sum(ln(m)*y)].
     let n = multipliers.len();
     let mut sa = 0.0;
     let mut sb = 0.0;
     let mut sy = 0.0;
     let mut sbb = 0.0;
-    let mut sab = 0.0;
+    let mut sby = 0.0;
     for (i, &m) in multipliers.iter().enumerate() {
         let a = 1.0;
         let b = m.ln();
@@ -168,10 +170,10 @@ fn co2_sweep() {
         sb += b;
         sy += y;
         sbb += b * b;
-        sab += a * b;
+        sby += b * y;
     }
     let gram = DMatrix::from_vec(2, 2, vec![sa, sb, sb, sbb]);
-    let rhs = DVector::from_vec(vec![sy, sab]);
+    let rhs = DVector::from_vec(vec![sy, sby]);
     let sol = gram
         .solve(&rhs)
         .expect("2x2 normal equations are well conditioned");
@@ -219,18 +221,21 @@ fn transient() {
     println!(
         "  new equilibrium = {:.3} K (warming {:.3} K), analytic e-folding tau = {:.1} d",
         t_target,
-        total,
+        t_target - t_eq,
         tau_analytic / DAY
     );
 
     // Euler march with the model's own `step`, recording the fraction relaxed.
+    // `samples` is recorded every step: the 1/e and 95% crossings below are
+    // found by linear interpolation, so a coarse (multi-year) stride would
+    // measurably bias the timings on an exponential curve.
     let n_steps = (20.0 * YR / DAY).round() as usize;
     let mut samples: Vec<(f64, f64)> = Vec::new();
     let mut flux_samples: Vec<(f64, f64)> = Vec::new();
     for i in 0..=n_steps {
+        let frac = (ebm.temperature() - t_eq) / (t_target - t_eq);
+        samples.push((i as f64 * DAY, frac));
         if i % (n_steps / 10).max(1) == 0 {
-            let frac = (ebm.temperature() - t_eq) / (t_target - t_eq);
-            samples.push((i as f64 * DAY, frac));
             flux_samples.push((i as f64 * DAY, ebm.net_flux()));
         }
         ebm.step(DAY);
@@ -267,7 +272,11 @@ fn transient() {
         dydt[0] = f / c;
     };
     let prob = OdeProblem::new(rhs, vec![t_eq], 0.0).unwrap();
-    let times: Vec<f64> = (0..=10).map(|i| i as f64 * 2.0 * YR / 10.0).collect();
+    // `solve_dense` requires every t_eval strictly after t0, so the grid starts
+    // at one stride in (not 0.0). It spans the same 20 yr window as the Euler
+    // march above so the two final temperatures are directly comparable.
+    let span = 20.0 * YR;
+    let times: Vec<f64> = (1..=10).map(|i| i as f64 * span / 10.0).collect();
     let traj = prob
         .solve_dense(Method::Tsit45, &times)
         .expect("ODE integration of the EBM must succeed");
@@ -317,13 +326,17 @@ fn sensitivity() {
     });
 
     // Faint-Young-Sun: S = 0.75 S0. Inverting the forcing keeps T at T0.
+    // Balance is (1-a)*S/4 + F = eps*sigma*T0^4, so the extra forcing needed is
+    // F = eps*sigma*T0^4 - (1-a)*S/4.
     const S0: f64 = 1361.0;
     let s_young = 0.75 * S0;
-    let f_needed = 4.0 * EMIS * SIGMA * T0.powi(4) - (1.0 - ALBEDO) * s_young / 4.0;
+    let f_needed = EMIS * SIGMA * T0.powi(4) - (1.0 - ALBEDO) * s_young / 4.0;
     let co2_young = C0 * (f_needed / 5.35).exp();
-    let t_young = EnergyBalanceModel::new(OCEAN_C, ALBEDO, EMIS, co2_young)
-        .unwrap()
-        .equilibrium_temperature();
+    // The reduced solar constant must be applied too, or the equilibrium below
+    // would be solved against the modern Sun.
+    let mut ebm_young = EnergyBalanceModel::new(OCEAN_C, ALBEDO, EMIS, co2_young).unwrap();
+    ebm_young.solar_constant = s_young;
+    let t_young = ebm_young.equilibrium_temperature();
     println!("  faint-Young-Sun S = {s_young:.0} W/m^2 needs CO2 = {co2_young:.2e} ppm");
     println!(
         "  (equilibrium T = {t_young:.2} K)  -> ~{:.0}x pre-industrial!",
@@ -342,10 +355,13 @@ fn print_curve(label: &str, lo: f64, hi: f64, step: f64, f: impl Fn(f64) -> f64)
     }
 }
 
-/// Water-vapour-like feedback: emissivity rising with `T` lifts ECS.
+/// Water-vapour-like feedback: emissivity falling with `T` lifts ECS.
 fn with_feedback() {
-    println!("\n[5] Water-vapour-like feedback (emissivity ~ 1 + c(T - T0))");
+    println!("\n[5] Water-vapour-like feedback (emissivity ~ 1 - c(T - T0))");
 
+    // `emissivity` scales the *outgoing* flux here, so a warming-induced
+    // increase in greenhouse trapping is a *decrease* in effective emissivity.
+    // Using +c would model a negative (damping) feedback instead.
     let c = 0.005;
     let bare = EnergyBalanceModel::new(OCEAN_C, ALBEDO, EMIS, C0).unwrap();
     let t_bare = bare.equilibrium_temperature();
@@ -356,9 +372,11 @@ fn with_feedback() {
 
     let mut t = t_bare;
     for _ in 0..100 {
-        let eps = (EMIS * (1.0 + c * (t - T0))).clamp(1e-3, 0.999);
+        let eps = (EMIS * (1.0 - c * (t - T0))).clamp(1e-3, 0.999);
         let f =
             (1.0 - ALBEDO) * 1361.0 / 4.0 - eps * SIGMA * t.powi(4) + 5.35 * (2.0 * C0 / C0).ln();
+        // d/dT[-eps(T)*sigma*T^4] = -4*eps*sigma*T^3 - (deps/dT)*sigma*T^4,
+        // with deps/dT = -c*EMIS.
         let df = -4.0 * eps * SIGMA * t.powi(3) + c * EMIS * SIGMA * t.powi(4);
         let t_new = (t - f / df).max(1.0);
         if (t_new - t).abs() < 1e-10 {
@@ -385,9 +403,12 @@ fn chemistry() {
 
     let lifetime_yr = 9.1;
     let k = 1.0 / (lifetime_yr * YR);
-    let mut ch4 = ChemistryBox::new(700.0, 1.0, k).unwrap();
+    // Choose the target steady state (present-day CH4 ~1800 ppb) and derive the
+    // production that sustains it: C* = P/k  =>  P = C*·k. Start the box at the
+    // pre-industrial ~700 ppb so the relaxation below is a real transient.
+    let target = 1800.0;
+    let mut ch4 = ChemistryBox::new(700.0, target * k, k).unwrap();
     let steady = ch4.steady_state();
-    ch4.production = steady * k;
     println!(
         "  steady-state C* = P/k = {:.1} ppb (loss lifetime {lifetime_yr} yr)",
         steady
@@ -427,7 +448,10 @@ fn chemistry() {
     );
 
     // Couple CH4 forcing into the EBM via a CO2-equivalent concentration.
-    let f_ch4 = 0.036 * ((1750.0_f64 / 700.0).ln() - 1.18 * (C0 / C0).ln());
+    // IPCC-style simplified CH4 forcing, F = alpha * (sqrt(M) - sqrt(M0)) with
+    // M in ppb. The CH4-N2O band-overlap correction is omitted: it needs an
+    // N2O concentration, which this CO2/CH4-only example does not track.
+    let f_ch4 = 0.036 * (1750.0_f64.sqrt() - 700.0_f64.sqrt());
     let co2_eq = C0 * (f_ch4 / 5.35_f64).exp();
     let t_ch4 = EnergyBalanceModel::new(OCEAN_C, ALBEDO, EMIS, co2_eq)
         .unwrap()

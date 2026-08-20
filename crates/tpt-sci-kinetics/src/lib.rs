@@ -2,7 +2,7 @@
 //!
 //! Heterogeneous and surface **chemical kinetics** for the `tpt-science` pillar,
 //! built from scratch on top of [`tpt_sci_reaction_network`]'s mass-action
-//! engine ([`tpt-sci-ode`] backend).
+//! engine ([`tpt_sci_ode`] backend).
 //!
 //! The crate adds the two kinetic building blocks most often needed for
 //! catalysis / reactor modelling that plain mass-action CRNs lack:
@@ -16,7 +16,8 @@
 //!   first order in coverage rather than in gas concentration
 //!   ([`langmuir_hinshelwood_coverages`]).
 //!
-//! An [`KineticsProblem`] ties an Arrhenius-rate [`ReactionSystem`] to a
+//! An [`KineticsProblem`] ties an Arrhenius-rate
+//! [`ReactionSystem`](tpt_sci_reaction_network::ReactionSystem) to a
 //! temperature profile and integrates it with `tpt-sci-ode`.
 //!
 //! # Example

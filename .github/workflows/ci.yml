@@ -78,7 +78,7 @@ jobs:
         with:
           components: llvm-tools-preview
       - name: Install cargo-llvm-cov
-        uses: taiki1972/install-action@v2
+        uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov
       - name: Generate coverage (lcov)
@@ -103,6 +103,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v1
+      # NOTE: v2 pins a cargo-deny built against a `rustsec` that understands
+      # CVSS 4.0 severity strings. v1 fails to parse newer RUSTSEC advisories
+      # with "unsupported CVSS version: 4.0" and aborts the whole check.
+      - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check

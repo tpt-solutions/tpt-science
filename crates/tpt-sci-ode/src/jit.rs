@@ -400,7 +400,7 @@ impl Default for JitRhsBuilder {
 }
 
 /// `JitRhs` is a [`RhsCallable`](crate::RhsCallable) so it can be fed directly
-/// into [`OdeProblem`] / the integrators, sharing the exact same solving
+/// into [`crate::OdeProblem`] / the integrators, sharing the exact same solving
 /// pipeline as a plain closure.
 impl crate::RhsCallable for JitRhs {
     fn nstates(&self) -> usize {

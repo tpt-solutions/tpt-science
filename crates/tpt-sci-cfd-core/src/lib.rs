@@ -135,9 +135,11 @@ pub struct Step {
 impl Step {
     /// Construct a solver with zero velocity and the given `ν`/`dt`.
     ///
-    /// # Errors
+    /// # Panics
     ///
-    /// Returns [`CfdError::InvalidStep`] if `dt <= 0` or `nu <= 0`.
+    /// Never panics. Note that `nu` and `dt` are not validated here; a
+    /// non-positive or non-finite value will surface later as a non-finite
+    /// field, which [`Step::advance`] reports by returning `false`.
     pub fn new(grid: CollocatedGrid, nu: f64, dt: f64, _rho: f64) -> Self {
         let n = grid.len();
         Self {
@@ -270,10 +272,8 @@ impl Step {
 
     /// Perform one full fractional step (momentum + projection).
     ///
-    /// # Errors
-    ///
-    /// Returns [`CfdError::DivergenceBlown`] if the maximum velocity becomes
-    /// non-finite (the explicit scheme went unstable).
+    /// Returns `false` if any velocity component became non-finite (the
+    /// explicit scheme went unstable); `true` if the field is still sane.
     pub fn advance(&mut self) -> bool {
         self.momentum();
         self.project();

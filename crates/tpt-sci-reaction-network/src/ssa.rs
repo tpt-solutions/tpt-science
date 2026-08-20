@@ -2,13 +2,13 @@
 //!
 //! This fills the v1 gap noted in the crate overview: the deterministic
 //! mass-action ODE (`dy/dt = S·r(y)`) is now complemented by a stochastic
-//! trajectory sampler. Given integer-ish species counts, [`ReactionSystem::simulate_ssa`]
+//! trajectory sampler. Given integer-ish species counts, [`crate::ReactionSystem::simulate_ssa`]
 //! draws an exact trajectory of the continuous-time Markov chain by firing
 //! reactions at their (combinatorial) propensities. This is the in-house
 //! equivalent of a Gillespie / SSA backend (the `rebop` wrap target remains the
 //! recommended option for very large networks).
 
-/// A stochastic trajectory produced by [`ReactionSystem::simulate_ssa`].
+/// A stochastic trajectory produced by [`crate::ReactionSystem::simulate_ssa`].
 ///
 /// `times[i]` is the time at which the state `states[i]` holds. `times[0] == 0`
 /// with the initial state, every subsequent entry is the state immediately

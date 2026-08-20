@@ -155,12 +155,22 @@ fn integrate(
         }
 
         let q = method.error_order(bdf_state.as_ref().map(|s| s.order).unwrap_or(1));
+        // Snapshot the BDF history so a *rejected* step (which still mutates the
+        // Nordsieck vector inside `step_bdf`) cannot corrupt the integration.
+        // On rejection we restore this snapshot before retrying.
+        let bdf_snapshot = bdf_state.as_ref().map(|s| s.clone());
         match try_step(method, f, t, &y, h, bdf_state.as_mut()) {
             Ok(res) => {
                 let err_est = weighted_norm(&res.err, &res.y, rtol, atol);
                 let accept = err_est <= 1.0 || h.abs() <= h_min * 2.0;
                 if !accept {
-                    // Reject: shrink and retry without advancing.
+                    // Reject: restore the snapshot, shrink h, and retry without
+                    // advancing. This keeps the BDF history consistent across
+                    // retries (the previous behaviour let rejected steps scramble
+                    // the Nordsieck columns, which eventually produced garbage).
+                    if let (Some(ns), Some(snap)) = (bdf_state.as_mut(), &bdf_snapshot) {
+                        *ns = snap.clone();
+                    }
                     let mut next = h * safety * 0.2_f64.max(err_est.powf(-1.0 / q));
                     if dir < 0.0 {
                         next = -next.abs();
