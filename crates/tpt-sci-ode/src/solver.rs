@@ -516,9 +516,9 @@ const ESDIRK34_A31: f64 = 0.140_737_774_724_706_2;
 const ESDIRK34_A32: f64 = -0.108_365_551_381_320_8;
 // B weights (order 3): normalized so sum = 1, with B[3] = gamma.
 const ESDIRK34_B: [f64; 4] = [
-    0.100_960_408_728_323_61, // b1 adjusted
+    0.100_960_408_728_323_61,  // b1 adjusted
     -0.363_571_372_314_843_65, // b2 adjusted
-    0.826_710_463_078_075, // b3 adjusted
+    0.826_710_463_078_075,     // b3 adjusted
     ESDIRK34_GAMMA,
 ];
 // Embedded weights (order 4): sum to 1.

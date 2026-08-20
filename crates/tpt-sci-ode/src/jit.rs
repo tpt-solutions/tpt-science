@@ -285,8 +285,7 @@ impl JitRhsBuilder {
                     OdeError::Invalid(format!("Failed to declare extern trampoline: {}", e))
                 })?;
 
-            let extern_ref =
-                module.declare_func_in_func(extern_trampoline_func_id, builder.func);
+            let extern_ref = module.declare_func_in_func(extern_trampoline_func_id, builder.func);
             builder
                 .ins()
                 .call(extern_ref, &[nstates_val, id_val, t_val, y_ptr, dydt_ptr]);

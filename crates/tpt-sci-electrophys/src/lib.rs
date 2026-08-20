@@ -261,7 +261,6 @@ impl Tissue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
 
     #[test]
     fn hh_resting_is_finite() {
