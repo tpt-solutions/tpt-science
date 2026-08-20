@@ -3,3 +3,9 @@ patch_bdf.py
 
 /target
 build_examples.log
+
+# Debug / build trace logs
+bdf2.txt
+bdf_trace.txt
+ode_err.txt
+ode_out.txt
