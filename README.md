@@ -143,7 +143,7 @@ cargo run --example van_der_pol -p tpt-sci-ode
   `cargo bench -p <crate>`, or the whole workspace with `cargo bench
   --workspace`. The CI `benches` job runs a shortened measurement so the suite
   stays fast:
-  `cargo bench --workspace --benches -- --warm-up-time 0.5 --measurement-time 1 --sample-size 10`.
+  `cargo bench -p tpt-sci-grid -p tpt-sci-image -p tpt-sci-ode -p tpt-sci-quantum --benches -- --warm-up-time 0.5 --measurement-time 1 --sample-size 10`.
 - **Coverage.** The CI `coverage` job produces an lcov report via
   `cargo-llvm-cov` and uploads it as a build artifact.
 - **Docs.** The CI `doc` job builds docs with `RUSTDOCFLAGS=-D warnings`,
