@@ -12,11 +12,19 @@
 //! * An explicit advection–diffusion update [`Step::momentum`] plus a pressure
 //!   Poisson projection [`Step::project`] that enforces `∇·u = 0` (the
 //!   fractional-step scheme).
-//! * Optional `k`-`ε` style eddy-viscosity turbulence modelling via
-//!   [`turbulence::eddy_viscosity`] (algebraic, not a full two-equation solve).
+//! * Optional algebraic [`turbulence::eddy_viscosity`] (Smagorinsky) and a full
+//!   two-equation [`komega_sst::KOmegaSst`] Menter SST closure.
+//! * An implicit [`simple::SimpleSolver`] pressure-correction (SIMPLE/PISO
+//!   style) that solves the pressure Poisson equation with the sparse
+//!   conjugate-gradient solver from `tpt-sci-grid` and corrects the velocity.
+//! * An additive [`unstructured::UnstructuredMesh`] finite-volume path
+//!   (triangular cells in 2-D) with a gradient/reconstruction helper and a
+//!   diffusion + upwind-advection residual assembly that can solve a steady
+//!   Laplace/Poisson problem converging to the analytic solution.
 //!
-//! The solver is intentionally 2-D and explicit; it is a teaching / coupling
-//! primitive, not a production CFD code.
+//! The structured explicit `Step` and algebraic turbulence model remain the
+//! teaching / coupling primitive; the three additions above close the v1
+//! "out of scope" items.
 //!
 //! # Example
 //!
@@ -35,9 +43,15 @@
 #![forbid(unsafe_code)]
 
 mod error;
+pub mod komega_sst;
+pub mod simple;
 pub mod turbulence;
+pub mod unstructured;
 
 pub use error::CfdError;
+pub use komega_sst::KOmegaSst;
+pub use simple::SimpleSolver;
+pub use unstructured::{Face, UnstructuredMesh};
 
 /// A uniform 2-D collocated grid of `nx × ny` cells, physical size
 /// `lx × ly`. Velocities `u`, `v` are stored cell-centred.

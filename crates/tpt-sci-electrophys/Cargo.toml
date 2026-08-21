@@ -16,7 +16,7 @@ publish = false
 
 [dependencies]
 tpt-sci-ode = { workspace = true }
-tpt-sci-grid = { workspace = true }
+tpt-sci-grid = { workspace = true, features = ["sparse"] }
 tpt-math-linalg = { workspace = true }
 thiserror = { workspace = true }
 

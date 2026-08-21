@@ -16,6 +16,20 @@ scoped as a multi-phase undertaking like `tpt-sci-physics-rigid` /
 * `KohnSham` / `KohnShamResult` — self-consistent 1-D Kohn–Sham solver:
   finite-difference kinetic-energy Laplacian, Hartree (1-D Poisson), XC, Jacobi
   diagonalization, returning occupied orbitals and the total energy.
+* `KohnSham3D` / `KohnSham3DResult` — self-consistent **3-D** real-space-grid
+  Kohn–Sham solver built on the `tpt-sci-grid` 3-D sparse Laplacian. Diagonalizes
+  `H = −½∇² + V_eff` with a Lanczos eigensolver and converges the density
+  self-consistently (Hartree + XC). A non-interacting `solve_bare` mode is also
+  provided for analytic checks.
+* `XcFunctional` trait with two implementations: `Lda` (wraps `lda_xc`) and `Pbe`
+  (the Perdew–Burke–Ernzerhof GGA, depending on `ρ` and `|∇ρ|`, with analytic
+  partial derivatives `∂ε/∂ρ` and `∂ε/∂|∇ρ|`).
+* `Pseudopotential` — a softened, local, norm-conserving-style analytic
+  `V_ps(r) = −Z·erf(r/σ)/r` (finite at the origin, `−Z/r` asymptote), making
+  multi-electron 3-D atoms tractable as a local-potential problem.
+* `PeriodicPotential1D` — periodic-boundary-condition band structure via Bloch /
+  phase-twisted plane-wave expansion, with Monkhorst–Pack k-point sampling and a
+  basic `E(k)` band structure.
 
 ## Example
 
@@ -37,8 +51,21 @@ runs a two-electron solve in a harmonic confining well.
 
 ## Scope (v1)
 
-1-D model systems only. Multi-electron 3-D atoms, GGA/meta-GGA, pseudopotentials,
-and band structures are out of scope for v1.
+This crate now covers, from scratch:
+
+* **1-D Kohn–Sham LDA** (the original v1 scope).
+* **3-D real-space-grid Kohn–Sham** (self-consistent, sparse Laplacian, Lanczos
+  diagonalization) — closes the "3-D solver" out-of-scope item.
+* **GGA / PBE** exchange-correlation functional alongside LDA — closes the
+  "GGA/meta-GGA" item.
+* **Local (norm-conserving-style) pseudopotentials** — closes the
+  "pseudopotentials" item.
+* **Periodic boundary conditions + k-point sampling + band structure** — closes
+  the "band structures" item.
+
+Still out of scope (per the research-grade, no-prior-art constraints): PAW / non-local
+pseudopotentials, hybrid and meta-GGA functionals, spin-polarized (collinear/
+non-collinear) magnetization, and relativistic / scalar-relativistic treatments.
 
 ## License
 

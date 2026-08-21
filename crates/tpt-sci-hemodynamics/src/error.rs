@@ -11,4 +11,7 @@ pub enum HemodynamicsError {
     /// A network was invalid.
     #[error("invalid network: {0}")]
     InvalidNetwork(String),
+    /// A Windkessel lumped model was invalid.
+    #[error("invalid windkessel: {0}")]
+    InvalidWindkessel(String),
 }

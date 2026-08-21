@@ -18,8 +18,10 @@
 //!   a charge self-consistency (Hartree + XC) loop, returning occupied orbitals
 //!   and the total energy.
 //!
-//! Multi-electron 3-D atoms, GGA/meta-GGAs, pseudopotentials, and band
-//! structures are explicitly out of v1 scope.
+//! Multi-electron 3-D atoms, GGA/PBE, local pseudopotentials, and periodic
+//! band structures are now implemented alongside the original 1-D LDA solver
+//! (see [`KohnSham3D`], [`XcFunctional`], [`Pseudopotential`],
+//! [`PeriodicPotential1D`]).
 //!
 //! # Example
 //!
@@ -37,9 +39,18 @@
 //! ```
 #![forbid(unsafe_code)]
 
+mod eigen;
 mod error;
+mod ks3d;
+mod periodic;
+mod pseudopotential;
+mod xc;
 
 pub use error::DftError;
+pub use ks3d::{KohnSham3D, KohnSham3DResult};
+pub use periodic::PeriodicPotential1D;
+pub use pseudopotential::Pseudopotential;
+pub use xc::{Lda, Pbe, XcFunctional, pw_lda_xc};
 
 /// A uniform 1-D real-space grid.
 #[derive(Debug, Clone)]
@@ -208,7 +219,7 @@ impl KohnSham {
                 }
             }
             // Diagonalize by Jacobi rotation (small n).
-            let (eigvals, eigvecs) = jacobi(&h);
+            let (eigvals, eigvecs) = crate::eigen::jacobi(&h);
             // Fill occupied orbitals (2 per level, spin-polarized pair).
             let mut new_rho = vec![0.0; n];
             let mut orbitals: Vec<Vec<f64>> = Vec::new();
@@ -284,68 +295,6 @@ pub struct KohnShamResult {
     pub orbitals: Vec<Vec<f64>>,
 }
 
-/// Symmetric eigendecomposition of a small real symmetric matrix `a` by
-/// Jacobi rotations. Returns `(eigenvalues, eigenvectors_columns)`.
-#[allow(clippy::needless_range_loop)]
-fn jacobi(a: &[Vec<f64>]) -> (Vec<f64>, Vec<Vec<f64>>) {
-    let n = a.len();
-    let mut m: Vec<Vec<f64>> = a.to_vec();
-    let mut v = vec![vec![0.0_f64; n]; n];
-    for i in 0..n {
-        v[i][i] = 1.0;
-    }
-    for _ in 0..100 {
-        // Find largest off-diagonal element.
-        let mut p = 0;
-        let mut q = 1;
-        let mut max = 0.0_f64;
-        for i in 0..n {
-            for j in (i + 1)..n {
-                if m[i][j].abs() > max {
-                    max = m[i][j].abs();
-                    p = i;
-                    q = j;
-                }
-            }
-        }
-        if max < 1e-12 {
-            break;
-        }
-        let app = m[p][p];
-        let aqq = m[q][q];
-        let apq = m[p][q];
-        let phi = 0.5 * (aqq - app).atan2(apq);
-        let c = phi.cos();
-        let s = phi.sin();
-        // Rotate rows/cols p,q.
-        for i in 0..n {
-            let mip = m[i][p];
-            let miq = m[i][q];
-            m[i][p] = c * mip - s * miq;
-            m[i][q] = s * mip + c * miq;
-        }
-        for i in 0..n {
-            let mpi = m[p][i];
-            let mqi = m[q][i];
-            m[p][i] = c * mpi - s * mqi;
-            m[q][i] = s * mpi + c * mqi;
-        }
-        for i in 0..n {
-            let vip = v[i][p];
-            let viq = v[i][q];
-            v[i][p] = c * vip - s * viq;
-            v[i][q] = s * vip + c * viq;
-        }
-    }
-    let mut eig = vec![0.0; n];
-    for i in 0..n {
-        eig[i] = m[i][i];
-    }
-    // Columns of v are eigenvectors.
-    let vecs: Vec<Vec<f64>> = (0..n).map(|j| (0..n).map(|i| v[i][j]).collect()).collect();
-    (eig, vecs)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -379,7 +328,7 @@ mod tests {
     #[test]
     fn jacobi_diagonalizes_diagonal() {
         let a = vec![vec![2.0, 0.0], vec![0.0, 5.0]];
-        let (e, _v) = jacobi(&a);
+        let (e, _v) = crate::eigen::jacobi(&a);
         assert!((e[0] - 2.0).abs() < 1e-9 || (e[0] - 5.0).abs() < 1e-9);
     }
 }

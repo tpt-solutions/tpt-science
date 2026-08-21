@@ -40,8 +40,8 @@ mod error;
 
 pub use error::ElectrophysError;
 
-use tpt_math_linalg::tpt_math_linalg_dense::DVector;
-use tpt_sci_grid::{laplacian_2d, Boundary, UniformGrid2D};
+use tpt_sci_grid::sparse::{conjugate_gradient, laplacian_2d_sparse};
+use tpt_sci_grid::{Boundary, UniformGrid2D};
 
 /// A membrane ionic model (the reaction term of the tissue PDE).
 ///
@@ -322,21 +322,21 @@ impl TenTusscher {
     /// (the model holds intracellular K constant in this reduced form).
     #[must_use]
     fn e_k(&self) -> f64 {
-        let rt_f = 8314.0 * 310.0 / 96485.0;
+        let rt_f = 8.314 * 310.0 / 96485.0;
         1000.0 * rt_f * (self.ko / 140.0).ln()
     }
 
     /// Reversal potential `E_Na = (R·T/F)·ln(Nao/Nai)` (mV), `Nai = 15` mM.
     #[must_use]
     fn e_na(&self) -> f64 {
-        let rt_f = 8314.0 * 310.0 / 96485.0;
+        let rt_f = 8.314 * 310.0 / 96485.0;
         1000.0 * rt_f * (self.nao / 15.0).ln()
     }
 
     /// Nernst potential for Ca²⁺ (mV), `gamma = 0.34` (TP04).
     #[must_use]
     fn e_ca(&self) -> f64 {
-        let rt_f = 8314.0 * 310.0 / 96485.0;
+        let rt_f = 8.314 * 310.0 / 96485.0;
         1000.0 * 0.5 * rt_f * (self.cao / self.cai.max(1e-6)).ln()
     }
 
@@ -362,8 +362,7 @@ impl TenTusscher {
     }
     fn alpha_j(v: f64) -> f64 {
         if v < -40.0 {
-            (-127_140.0 * (0.2444 * v).exp() - 3.474e-5 * (-0.04391 * v).exp())
-                * (v + 37.78)
+            (-127_140.0 * (0.2444 * v).exp() - 3.474e-5 * (-0.04391 * v).exp()) * (v + 37.78)
                 / (1.0 + (0.311 * (v + 79.23)).exp())
         } else {
             0.0
@@ -440,12 +439,14 @@ impl TenTusscher {
         let iks = gks * self.xs.powi(2) * (v - ek);
         // IK1 (inward rectifier).
         let gk1 = 5.405;
-        let ik1 = gk1 * (self.ko / 5.4_f64).sqrt()
-            * (0.07 * (-0.3 * (v + 90.0)).exp() + (1.0 + (0.6 * (-(v + 90.0) / 7.3).exp())).powi(-1))
+        let ik1 = gk1
+            * (self.ko / 5.4_f64).sqrt()
+            * (0.07 * (-0.3 * (v + 90.0)).exp()
+                + (1.0 + (0.6 * (-(v + 90.0) / 7.3).exp())).powi(-1))
             * (v - ek);
-        // ICaL (L-type Ca).
+        // ICaL (L-type Ca), driven by the Ca²⁺ Nernst potential.
         let gcal = 0.000_175;
-        let ical = gcal * self.d * self.f * self.fca * (v - 65.0);
+        let ical = gcal * self.d * self.f * self.fca * (v - self.e_ca());
         // Ito (transient outward).
         let gto = 0.294;
         let ito = gto * self.r * self.s * (v - ek);
@@ -454,7 +455,8 @@ impl TenTusscher {
         let inaca = knaca
             / (1.0
                 + (0.000_035 / self.cai.max(1e-9)).powi(3)
-                + (self.nao / 1.0).powi(3) * (1.0 + (self.cai.max(1e-9) / 0.000_35).powi(3)).recip());
+                + (self.nao / 1.0).powi(3)
+                    * (1.0 + (self.cai.max(1e-9) / 0.000_35).powi(3)).recip());
         // IpCa (plasma-membrane Ca pump) and IpK (K pump).
         let ipca = 0.2 * self.cai / (0.000_5 + self.cai);
         let ipk = 0.0353 * (self.ko / (self.ko + 1.0));
@@ -522,15 +524,124 @@ impl IonicModel for TenTusscher {
     }
 }
 
+/// A 2×2 symmetric positive-definite diffusion (or conductivity) tensor
+/// `[Dxx, Dxy; Dxy, Dyy]` (row-major `[dxx, dxy, dyy]`).
+///
+/// A diagonal tensor `[d, 0, d]` is isotropic (scalar diffusion `d`); a
+/// diagonal `[dxx, 0, dyy]` with `dxx ≠ dyy` gives anisotropic (fibre-oriented)
+/// conduction, faster along the stronger axis. Full symmetric tensors encode an
+/// arbitrary (rotated) preferred direction.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DiffusionTensor {
+    /// `xx` component.
+    pub xx: f64,
+    /// Off-diagonal (symmetric) component `xy = yx`.
+    pub xy: f64,
+    /// `yy` component.
+    pub yy: f64,
+}
+
+impl DiffusionTensor {
+    /// Build a tensor from its three independent entries.
+    #[must_use]
+    pub fn new(xx: f64, xy: f64, yy: f64) -> Self {
+        Self { xx, xy, yy }
+    }
+
+    /// Isotropic tensor `diag(d, d)`.
+    #[must_use]
+    pub fn isotropic(d: f64) -> Self {
+        Self::new(d, 0.0, d)
+    }
+
+    /// Diagonal (axis-aligned) tensor `diag(dxx, dyy)`.
+    #[must_use]
+    pub fn diagonal(dxx: f64, dyy: f64) -> Self {
+        Self::new(dxx, 0.0, dyy)
+    }
+
+    /// Build from a row-major `[dxx, dxy, dyy]` triple.
+    #[must_use]
+    pub fn from_array(a: [f64; 3]) -> Self {
+        Self::new(a[0], a[1], a[2])
+    }
+
+    /// Row-major `[dxx, dxy, dyy]` representation.
+    #[must_use]
+    pub fn as_array(&self) -> [f64; 3] {
+        [self.xx, self.xy, self.yy]
+    }
+
+    /// Whether the tensor is isotropic (equal diagonal, zero off-diagonal).
+    #[must_use]
+    pub fn is_isotropic(&self) -> bool {
+        (self.xy.abs() < 1e-12) && (self.xx - self.yy).abs() < 1e-12
+    }
+}
+
+impl Default for DiffusionTensor {
+    fn default() -> Self {
+        Self::isotropic(1.0)
+    }
+}
+
+/// Conductivity tensor used for the intracellular/extracellular conductivities
+/// `σ_i` / `σ_e` in the bidomain equations. It is exactly [`DiffusionTensor`]
+/// — the same 2×2 SPD object — just named for its physical role.
+pub type ConductivityTensor = DiffusionTensor;
+
+/// Tensor-weighted discrete Laplacian (anisotropic diffusion operator)
+/// `∇·(D·∇φ)` on an `nx × ny` grid with Neumann (clamped) boundaries.
+///
+/// `tensors` must have length `nx·ny`; each entry is a 2×2 symmetric SPD
+/// [`DiffusionTensor`]. For a node `c`, using unit grid spacing:
+///
+/// ```text
+/// vxx = φ[i+1] − 2φ[c] + φ[i−1]
+/// vyy = φ[j+1] − 2φ[c] + φ[j−1]
+/// vxy = φ[i+1,j+1] − φ[i−1,j+1] − φ[i+1,j−1] + φ[i−1,j−1]
+/// (∇·(D∇φ))_c = Dxx·vxx + 2·Dxy·vxy + Dyy·vyy
+/// ```
+///
+/// For an isotropic tensor this reduces to the scalar 5-point Laplacian.
+#[must_use]
+pub fn tensor_diffusion_2d(
+    phi: &[f64],
+    nx: usize,
+    ny: usize,
+    tensors: &[DiffusionTensor],
+) -> Vec<f64> {
+    let clamp = |i: isize, m: usize| -> usize { i.clamp(0, m as isize - 1) as usize };
+    let c_at = |i: usize, j: usize| phi[clamp(i as isize, nx) + clamp(j as isize, ny) * nx];
+    let mut out = vec![0.0; nx * ny];
+    for j in 0..ny {
+        for i in 0..nx {
+            let c = j * nx + i;
+            let d = tensors[c];
+            let im = c_at(i.wrapping_sub(1), j);
+            let ip = c_at(i + 1, j);
+            let jm = c_at(i, j.wrapping_sub(1));
+            let jp = c_at(i, j + 1);
+            let vxx = ip - 2.0 * phi[c] + im;
+            let vyy = jp - 2.0 * phi[c] + jm;
+            let vxy = c_at(i + 1, j + 1)
+                - c_at(i.wrapping_sub(1), j + 1)
+                - c_at(i + 1, j.wrapping_sub(1))
+                + c_at(i.wrapping_sub(1), j.wrapping_sub(1));
+            out[c] = d.xx * vxx + 2.0 * d.xy * vxy + d.yy * vyy;
+        }
+    }
+    out
+}
+
 /// Diffusivity of a [`Tissue`] node: isotropic scalar `D` or a per-node 2×2
-/// tensor `[[Dxx, Dxy], [Dxy, Dyy]]` (row-major `[dxx, dxy, dyy]`), enabling
-/// anisotropic (fibre-oriented) conduction.
+/// [`DiffusionTensor`] (enabling anisotropic, fibre-oriented conduction).
 #[derive(Debug, Clone)]
 pub enum Diffusivity {
     /// Isotropic scalar `D` (cm²/s, scaled).
     Scalar(f64),
-    /// Per-node tensor; length must equal `nx·ny`, each entry `[dxx, dxy, dyy]`.
-    Tensor(Vec<[f64; 3]>),
+    /// Per-node tensor; length must equal `nx·ny`.
+    Tensor(Vec<DiffusionTensor>),
 }
 
 /// A 2-D tissue sheet coupling an [`IonicModel`] to a diffusion operator
@@ -622,10 +733,7 @@ impl Tissue {
     /// # Errors
     ///
     /// Returns [`ElectrophysError::InvalidTissue`] if `tensor.len() != nx·ny`.
-    pub fn set_diffusivity(
-        &mut self,
-        diffusivity: Diffusivity,
-    ) -> Result<(), ElectrophysError> {
+    pub fn set_diffusivity(&mut self, diffusivity: Diffusivity) -> Result<(), ElectrophysError> {
         let n = self.nx * self.ny;
         if let Diffusivity::Tensor(t) = &diffusivity {
             if t.len() != n {
@@ -653,72 +761,68 @@ impl Tissue {
         self.vm[c] = v;
     }
 
-    /// Solve the extracellular elliptic equation `(D_i + D_e)·L·Ve = −D_i·L·Vm`
-    /// for the current transmembrane field, returning `Ve`. In monodomain mode
-    /// this returns a zero vector.
+    /// Solve the extracellular elliptic equation `(σ_i + σ_e)·L·Ve = −σ_i·L·Vm`
+    /// for the current transmembrane field, returning `Ve`. The conductivity-
+    /// weighted Laplacian `L` is assembled as a [`tpt_sci_grid::sparse::CsrMatrix`]
+    /// and the SPD system is solved each call with
+    /// [`tpt_sci_grid::sparse::conjugate_gradient`] (Neumann boundaries give a
+    /// singular-but-consistent system whose unique zero-mean solution CG
+    /// recovers). In monodomain mode this returns a zero vector.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the internal grid cannot be constructed, which cannot
+    /// happen for a [`Tissue`] built through [`Tissue::new`] or
+    /// [`Tissue::with_model`] (those guarantee `nx, ny > 0`).
     #[must_use]
     pub fn extracellular_potential(&self) -> Vec<f64> {
         if !self.bidomain {
             return vec![0.0; self.nx * self.ny];
         }
         let grid = UniformGrid2D::new(self.nx, 0.0, 1.0, self.ny, 0.0, 1.0).expect("grid");
-        let l = laplacian_2d(&grid, Boundary::Neumann);
-        let vm_vec = DVector::from_vec(self.vm.clone());
-        let lvm = l.clone() * vm_vec;
-        let b = lvm * (-self.diff);
+        let lap = laplacian_2d_sparse(&grid, Boundary::Neumann);
         let di = self.diff;
         let de = self.sigma_e;
-        let matvec = |x: &DVector| -> DVector {
-            let y = l.clone() * x.clone();
-            y * (di + de)
-        };
-        let ve = cg_solve(&matvec, &b, 5000, 1e-9);
-        ve.iter().copied().collect()
+        // b = −σ_i · L · Vm  (use the unscaled Laplacian first).
+        let lvm = lap.mul_vec(&self.vm);
+        let b: Vec<f64> = lvm.iter().map(|x| -di * x).collect();
+        // A = (σ_i + σ_e) · L  (scale the Laplacian values in place for the solve).
+        let mut a = lap;
+        for v in &mut a.values {
+            *v *= di + de;
+        }
+        conjugate_gradient(&a, &b, None, 1e-12, 5000)
     }
 
     /// Diffusion term `∇·(D∇φ)` (per node) for the field `phi`, using unit grid
     /// spacing and clamped (Neumann) boundaries. For a scalar `D` this is the
-    /// 5-point Laplacian `D·(φ[i±1]+φ[j±1]−4φ)`, and for a tensor `D` it is the
-    /// anisotropic `Dxx·φ_xx + 2·Dxy·φ_xy + Dyy·φ_yy`.
+    /// 5-point Laplacian `D·(φ[i±1]+φ[j±1]−4φ)`; for a tensor diffusivity it
+    /// delegates to [`tensor_diffusion_2d`] (the anisotropic
+    /// `Dxx·φ_xx + 2·Dxy·φ_xy + Dyy·φ_yy` operator).
     fn diffusion_term(&self, phi: &[f64]) -> Vec<f64> {
-        let nx = self.nx;
-        let ny = self.ny;
-        let clamp = |i: isize, m: usize| -> usize { i.clamp(0, m as isize - 1) as usize };
-        let c_at = |i: usize, j: usize| phi[clamp(i as isize, nx) + clamp(j as isize, ny) * nx];
-        let mut out = vec![0.0; nx * ny];
         match &self.diffusivity {
             Diffusivity::Scalar(d) => {
+                let nx = self.nx;
+                let ny = self.ny;
+                let clamp = |i: isize, m: usize| -> usize { i.clamp(0, m as isize - 1) as usize };
+                let c_at =
+                    |i: usize, j: usize| phi[clamp(i as isize, nx) + clamp(j as isize, ny) * nx];
+                let mut out = vec![0.0; nx * ny];
                 for j in 0..ny {
                     for i in 0..nx {
                         let c = self.idx(i, j);
-                        let lap =
-                            c_at(i.wrapping_sub(1), j) + c_at(i + 1, j) + c_at(i, j.wrapping_sub(1))
-                                + c_at(i, j + 1)
-                                - 4.0 * phi[c];
+                        let lap = c_at(i.wrapping_sub(1), j)
+                            + c_at(i + 1, j)
+                            + c_at(i, j.wrapping_sub(1))
+                            + c_at(i, j + 1)
+                            - 4.0 * phi[c];
                         out[c] = d * lap;
                     }
                 }
+                out
             }
-            Diffusivity::Tensor(t) => {
-                for j in 0..ny {
-                    for i in 0..nx {
-                        let c = self.idx(i, j);
-                        let [dxx, dxy, dyy] = t[c];
-                        let im = c_at(i.wrapping_sub(1), j);
-                        let ip = c_at(i + 1, j);
-                        let jm = c_at(i, j.wrapping_sub(1));
-                        let jp = c_at(i, j + 1);
-                        let vxx = ip - 2.0 * phi[c] + im;
-                        let vyy = jp - 2.0 * phi[c] + jm;
-                        let vxy = c_at(i + 1, j + 1) - c_at(i.wrapping_sub(1), j + 1)
-                            - c_at(i + 1, j.wrapping_sub(1))
-                            + c_at(i.wrapping_sub(1), j.wrapping_sub(1));
-                        out[c] = dxx * vxx + 2.0 * dxy * vxy + dyy * vyy;
-                    }
-                }
-            }
+            Diffusivity::Tensor(t) => tensor_diffusion_2d(phi, self.nx, self.ny, t),
         }
-        out
     }
 
     /// Advance the tissue PDE by `dt` with explicit operator splitting: the
@@ -736,17 +840,39 @@ impl Tissue {
 
         let diff_term = self.diffusion_term(&phi);
         let n = self.nx * self.ny;
-        let mut next = vec![0.0; n];
-        for c in 0..n {
-            let i_ion = self.cells[c].ionic_current();
-            let cm = self.cells[c].capacitance();
-            next[c] = vm0[c] + dt * (-i_ion / cm + diff_term[c]);
-        }
+        let next: Vec<f64> = (0..n)
+            .map(|c| {
+                let i_ion = self.cells[c].ionic_current();
+                let cm = self.cells[c].capacitance();
+                vm0[c] + dt * (-i_ion / cm + diff_term[c])
+            })
+            .collect();
         // Evolve the internal membrane state at the new transmembrane voltage.
-        for c in 0..n {
-            self.cells[c].advance_reaction(next[c], dt);
+        for (cell, &v) in self.cells.iter_mut().zip(next.iter()).take(n) {
+            cell.advance_reaction(v, dt);
         }
         self.vm = next;
+    }
+
+    /// Advance one bidomain time step, solving the extracellular elliptic
+    /// equation each step before coupling it into the intracellular update.
+    ///
+    /// This is a thin, explicitly-named wrapper around [`Tissue::step`] that
+    /// errors (instead of silently degrading to monodomain) if bidomain mode has
+    /// not been enabled via [`Tissue::enable_bidomain`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ElectrophysError::InvalidTissue`] if [`Tissue::enable_bidomain`]
+    /// has not been called.
+    pub fn bidomain_step(&mut self, dt: f64) -> Result<(), ElectrophysError> {
+        if !self.bidomain {
+            return Err(ElectrophysError::InvalidTissue(
+                "bidomain mode not enabled; call enable_bidomain first".into(),
+            ));
+        }
+        self.step(dt);
+        Ok(())
     }
 
     /// Maximum transmembrane potential in the sheet (post-stimulus spread
@@ -757,45 +883,12 @@ impl Tissue {
     }
 }
 
-/// Conjugate-gradient solve of `A x = b` for a symmetric (possibly
-/// positive-semidefinite) matrix given as a matvec closure. For the bidomain
-/// Neumann Laplacian the system is singular (constant nullspace); with a
-/// consistent RHS (zero mean) CG converges to the unique zero-mean solution.
-fn cg_solve(matvec: &dyn Fn(&DVector) -> DVector, b: &DVector, iters: usize, tol: f64) -> DVector {
-    let n = b.len();
-    let zero = DVector::from_vec(vec![0.0; n]);
-    let mut r = b.clone() - matvec(&zero);
-    let mut p = r.clone();
-    let mut x = DVector::from_vec(vec![0.0; n]);
-    let mut rsold = r.dot(&r);
-    if rsold.sqrt() < tol {
-        return x;
-    }
-    for _ in 0..iters {
-        let ap = matvec(&p);
-        let pap = p.dot(&ap);
-        if pap <= 1e-12 {
-            break;
-        }
-        let alpha = rsold / pap;
-        x = x + p.clone() * alpha;
-        let r_new = r.clone() - ap.clone() * alpha;
-        let rsnew = r_new.dot(&r_new);
-        if rsnew.sqrt() < tol {
-            break;
-        }
-        let beta = rsnew / rsold;
-        p = r_new.clone() + p * beta;
-        r = r_new;
-        rsold = rsnew;
-    }
-    x
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
+    use tpt_sci_grid::sparse::laplacian_2d_sparse;
+    use tpt_sci_grid::{Boundary, UniformGrid2D};
 
     #[test]
     fn hh_resting_is_finite() {
@@ -829,7 +922,10 @@ mod tests {
         // A stimulus should depolarize the tissue well above the resting (0 mV)
         // field — the depolarization propagates and recruits the sheet.
         assert!(t.max_voltage().is_finite());
-        assert!(t.max_voltage() > 10.0, "stimulation should depolarize the tissue");
+        assert!(
+            t.max_voltage() > 10.0,
+            "stimulation should depolarize the tissue"
+        );
     }
 
     #[test]
@@ -849,13 +945,20 @@ mod tests {
             cell.advance_reaction(cell.v, 0.01);
             cell.v += 0.01 * (-cell.ionic_current() / cell.cm);
             if !cell.v.is_finite() {
-                eprintln!("TT NaN at step {k}: v={} i_ion={}", cell.v, cell.ionic_current());
+                eprintln!(
+                    "TT NaN at step {k}: v={} i_ion={}",
+                    cell.v,
+                    cell.ionic_current()
+                );
                 break;
             }
             peak = peak.max(cell.v);
         }
         // A genuine AP must swing well above the resting potential.
-        assert!(peak > v_rest + 10.0, "TenTusscher should fire a depolarization");
+        assert!(
+            peak > v_rest + 10.0,
+            "TenTusscher should fire a depolarization"
+        );
         assert!(cell.v.is_finite());
         assert!(cell.cai.is_finite() && cell.cai > 0.0);
     }
@@ -867,7 +970,7 @@ mod tests {
         let t = Tissue::with_model(
             n,
             n,
-            Diffusivity::Tensor(vec![[1.0, 0.0, 1.0]; n * n]),
+            Diffusivity::Tensor(vec![DiffusionTensor::from_array([1.0, 0.0, 1.0]); n * n]),
             HodgkinHuxley::resting(),
         )
         .unwrap();
@@ -892,7 +995,7 @@ mod tests {
         let t = Tissue::with_model(
             n,
             n,
-            Diffusivity::Tensor(vec![[10.0, 0.0, 1.0]; n * n]),
+            Diffusivity::Tensor(vec![DiffusionTensor::from_array([10.0, 0.0, 1.0]); n * n]),
             HodgkinHuxley::resting(),
         )
         .unwrap();
@@ -923,12 +1026,12 @@ mod tests {
         }
         let ve = t.extracellular_potential();
         // The solve must be finite and the residual of the elliptic equation
-        // small: (D_i+D_e)·L·Ve + D_i·L·Vm ≈ 0.
+        // small: (σ_i+σ_e)·L·Ve + σ_i·L·Vm ≈ 0, checked with the sparse Laplacian.
         assert!(ve.iter().all(|x| x.is_finite()));
         let grid = UniformGrid2D::new(12, 0.0, 1.0, 12, 0.0, 1.0).unwrap();
-        let l = laplacian_2d(&grid, Boundary::Neumann);
-        let lve = l.clone() * DVector::from_vec(ve.clone());
-        let lvm = l.clone() * DVector::from_vec(t.vm.clone());
+        let l = laplacian_2d_sparse(&grid, Boundary::Neumann);
+        let lve = l.mul_vec(&ve);
+        let lvm = l.mul_vec(&t.vm);
         let di = t.diff;
         let de = t.sigma_e;
         let residual: f64 = lve
@@ -969,5 +1072,147 @@ mod tests {
         for c in 0..n * n {
             assert_abs_diff_eq!(diff_bi[c], diff_mono[c], epsilon = 1e-3);
         }
+    }
+
+    #[test]
+    fn bidomain_equal_conductivity_matches_monodomain() {
+        // When σ_i = σ_e = σ the bidomain reduces exactly to the monodomain with
+        // the effective diffusion coefficient D_eff = σ_i·σ_e/(σ_i+σ_e) = σ/2.
+        let n = 9usize;
+        let sigma = 2.0;
+        let d_eff = sigma * sigma / (sigma + sigma);
+        // Monodomain reference with D = D_eff.
+        let mut mono = Tissue::new(n, n, d_eff).unwrap();
+        for j in 0..n {
+            for i in 0..n {
+                let c = mono.idx(i, j);
+                mono.vm[c] = (i + j) as f64 * 0.3;
+            }
+        }
+        let diff_mono = mono.diffusion_term(&mono.vm.clone());
+
+        // Bidomain with σ_i = σ_e = σ.
+        let mut bi = Tissue::new(n, n, sigma).unwrap();
+        bi.enable_bidomain(sigma);
+        for j in 0..n {
+            for i in 0..n {
+                let c = bi.idx(i, j);
+                bi.vm[c] = (i + j) as f64 * 0.3;
+            }
+        }
+        let ve = bi.extracellular_potential();
+        let phi: Vec<f64> = bi.vm.iter().zip(&ve).map(|(a, b)| a + b).collect();
+        let diff_bi = bi.diffusion_term(&phi);
+        for c in 0..n * n {
+            assert_abs_diff_eq!(diff_bi[c], diff_mono[c], epsilon = 1e-6);
+        }
+    }
+
+    #[test]
+    fn bidomain_extracellular_potential_bounded() {
+        // Over many bidomain steps the extracellular potential must stay finite
+        // and bounded (the elliptic solve must not blow up).
+        let mut t = Tissue::new(10, 10, 1.0).unwrap();
+        t.enable_bidomain(0.7);
+        t.stimulate(0, 5, 40.0);
+        for _ in 0..60 {
+            t.bidomain_step(0.005).unwrap();
+            assert!(t.ve.iter().all(|x| x.is_finite()));
+        }
+        let max_ve = t.ve.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        let min_ve = t.ve.iter().copied().fold(f64::INFINITY, f64::min);
+        assert!(max_ve.is_finite() && min_ve.is_finite());
+        assert!(
+            max_ve.abs().max(min_ve.abs()) < 1e3,
+            "extracellular potential should remain bounded, got [{min_ve}, {max_ve}]"
+        );
+    }
+
+    #[test]
+    fn anisotropic_harmonic_field_rhs() {
+        // For u(x,y) = a·x² + b·y², ∇·(D∇u) = 2a·Dxx + 2b·Dyy (a constant).
+        // With a=3, b=2 and D = diag(5, 7): RHS = 2·3·5 + 2·2·7 = 58.
+        let n = 11usize;
+        let d = DiffusionTensor::diagonal(5.0, 7.0);
+        let t = Tissue::with_model(
+            n,
+            n,
+            Diffusivity::Tensor(vec![d; n * n]),
+            HodgkinHuxley::resting(),
+        )
+        .unwrap();
+        let mut phi = vec![0.0; n * n];
+        for j in 0..n {
+            for i in 0..n {
+                let x = i as f64 - 5.0;
+                let y = j as f64 - 5.0;
+                phi[t.idx(i, j)] = 3.0 * x * x + 2.0 * y * y;
+            }
+        }
+        let term = t.diffusion_term(&phi);
+        assert_abs_diff_eq!(term[t.idx(5, 5)], 58.0, epsilon = 1e-9);
+    }
+
+    #[test]
+    fn tensor_reproduces_isotropic_laplacian() {
+        // A constant isotropic tensor D = diag(s, s) must reproduce the scalar
+        // Laplacian with the same scalar s.
+        let n = 13usize;
+        let s = 2.5;
+        let scalar = Tissue::new(n, n, s).unwrap();
+        let tensor = Tissue::with_model(
+            n,
+            n,
+            Diffusivity::Tensor(vec![DiffusionTensor::isotropic(s); n * n]),
+            HodgkinHuxley::resting(),
+        )
+        .unwrap();
+        let mut phi = vec![0.0; n * n];
+        for j in 0..n {
+            for i in 0..n {
+                let x = i as f64;
+                let y = j as f64;
+                phi[tensor.idx(i, j)] = 0.5 * (x * x + y * y) + x * y;
+            }
+        }
+        let ds = scalar.diffusion_term(&phi);
+        let dt = tensor.diffusion_term(&phi);
+        for c in 0..n * n {
+            assert_abs_diff_eq!(dt[c], ds[c], epsilon = 1e-9);
+        }
+    }
+
+    #[test]
+    fn tt_single_cell_limit_cycle() {
+        // A single TenTusscher cell, stimulated, must produce a stable AP: a large
+        // depolarization, then repolarization back near the resting potential, and
+        // no blow-up over several seconds.
+        let mut cell = TenTusscher::resting();
+        let v_rest = cell.v;
+        assert!(v_rest < -70.0, "resting potential should be near -85 mV");
+        cell.v = 20.0; // depolarizing stimulus
+        let mut peak = cell.v;
+        for _ in 0..800 {
+            cell.advance_reaction(cell.v, 0.01);
+            cell.v += 0.01 * (-cell.ionic_current() / cell.cm);
+            if !cell.v.is_finite() {
+                break;
+            }
+            peak = peak.max(cell.v);
+        }
+        assert!(
+            cell.v.is_finite(),
+            "TenTusscher single-cell integration blew up"
+        );
+        let amplitude = peak - v_rest;
+        assert!(amplitude > 40.0, "AP amplitude too small: {amplitude}");
+        assert!(peak < 60.0, "AP peak unphysiologically high: {peak}");
+        // Repolarized close to rest after several seconds.
+        assert!(
+            (cell.v - v_rest).abs() < 30.0,
+            "cell failed to recover to rest: v = {}",
+            cell.v
+        );
+        assert!(cell.cai.is_finite() && cell.cai > 0.0);
     }
 }

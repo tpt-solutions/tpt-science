@@ -1,17 +1,24 @@
 //! # tpt-sci-ocean
 //!
 //! **Ocean circulation** modelling for the `tpt-science` pillar, built on
-//! [`tpt_sci_cfd_core`]. It provides a 2-D **shallow-water** model
-//! ([`ShallowWater`]) — the primitive prototype for large-scale circulation:
+//! [`tpt_sci_cfd_core`]. It provides:
 //!
-//! * Height `h` and depth-averaged velocities `u`, `v` on a uniform grid.
-//! * The shallow-water equations `∂h/∂t + ∇·(h·u) = 0`,
-//!   `∂u/∂t + (u·∇)u = −g·∇h + f·v` (with Coriolis `f` for geostrophic balance).
-//! * A finite-volume update reusing [`tpt_sci_cfd_core::CollocatedGrid`] for the
-//!   discretization, so the same grid/convergence machinery carries over.
+//! * A 2-D **shallow-water** model ([`ShallowWater`]) — the primitive prototype
+//!   for large-scale circulation: free-surface height `h` plus depth-averaged
+//!   velocities `u`, `v`, with gravity and Coriolis `f`. See the `examples/`
+//!   tour (`cargo run --example shallow_water -p tpt-sci-ocean`).
+//! * A 3-D **z-level** ocean core ([`Ocean3D`]) — a stack of `nz` layers with
+//!   hydrostatic pressure from a linear equation of state, prognostic
+//!   temperature/salinity tracers, constant-coefficient vertical mixing, and an
+//!   optional **non-hydrostatic pressure-correction** (3-D Poisson projection
+//!   solved with conjugate gradients on a structured grid). See
+//!   `cargo run --example ocean3d -p tpt-sci-ocean`.
+//! * A **data assimilation** module ([`nudge`], [`EnsembleKalmanFilter`],
+//!   [`Var3D`]) — nudging plus a stochastic EnKF and a 3D-Var-lite analysis.
 //!
-//! This is a reduced-order circulation primitive — not a full 3-D primitive
-//! equation ocean GCM.
+//! This crate is reduced-order relative to a full 3-D primitive-equation ocean
+//! GCM, but closes out the hydrostatic, non-hydrostatic, and assimilation scope
+//! items.
 //!
 //! # Example
 //!
@@ -29,9 +36,13 @@
 //! ```
 #![forbid(unsafe_code)]
 
+mod data_assim;
 mod error;
+mod ocean3d;
 
+pub use data_assim::{EnkfResult, EnsembleKalmanFilter, Observation, Var3D, nudge};
 pub use error::OceanError;
+pub use ocean3d::Ocean3D;
 
 use tpt_sci_cfd_core::CollocatedGrid;
 

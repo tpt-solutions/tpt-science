@@ -14,6 +14,11 @@
 //!   via the Casson model.
 //! * A [`Network`] that steps a `Vessel` forward in time with the method of
 //!   lines (area/flow ODE integrated by `tpt-sci-ode`).
+//! * The **exact** Womersley pulsatile solution [`womersley_velocity_profile`]
+//!   (complex-Bessel `J0`/`J1`), including the analytic flow-rate formula.
+//! * 0-D/1-D/3-D coupling: a lumped [`Windkessel`] (RCR) terminal load and a
+//!   [`couple`] step, plus the [`CfdCoupling`] trait a `tpt-sci-cfd-core` 3-D
+//!   domain can implement.
 //!
 //! The model is a 1-D reduced-order vascular primitive — not a patient-specific
 //! 3-D solver.
@@ -30,9 +35,17 @@
 //! ```
 #![forbid(unsafe_code)]
 
+mod coupling;
 mod error;
+mod womersley;
 
+pub use coupling::{CfdCoupling, Windkessel, couple};
 pub use error::HemodynamicsError;
+pub use womersley::{
+    bessel_j0, bessel_j1, womersley_complex_velocity, womersley_factor,
+    womersley_flow_rate_analytic, womersley_flow_rate_numeric, womersley_number,
+    womersley_velocity_profile,
+};
 
 /// Stiffness parameter `β = sqrt(π·E·h) / (2·sqrt(A0))` for the linear tube law
 /// `p = p0 + β·(sqrt(A) - sqrt(A0))`, given Young's modulus `e`,
@@ -101,6 +114,10 @@ impl Vessel {
     }
 }
 
+/// Approximate analytic **Womersley** axial velocity profile amplitude at
+/// radius `r` (parabolic Poiseuille shape modulated by a flattening factor).
+/// For the exact complex-Bessel solution, see [`womersley_velocity_profile`].
+///
 /// Analytic **Womersley** axial velocity profile amplitude at radius `r` for a
 /// pulsatile flow with angular frequency `omega`, vessel radius `r0`, and
 /// kinematic viscosity `nu`. Returns the velocity scale `|u(r)|` relative to

@@ -212,6 +212,64 @@ pub fn diffuse_step(u: &[f64], laplacian: &CsrMatrix, dt: f64, diffusion: f64) -
         .collect()
 }
 
+/// Solve `A·x = b` for a symmetric positive-definite [`CsrMatrix`] `A` with the
+/// conjugate gradient (CG) method.
+///
+/// `x0` is an optional initial guess (zeros are used when `None`). Iteration
+/// stops once the Euclidean residual norm drops below `tol · ‖b‖` (or below
+/// `tol` when `b` is zero) or after `max_iter` iterations. The discrete
+/// Laplacian assemblers ([`laplacian_1d_sparse`] etc.) produce SPD systems
+/// under Dirichlet/Neumann boundaries, so this is the natural solver for the
+/// Poisson/elliptic problems that arise in pressure-correction and
+/// extracellular-potential solves.
+#[must_use]
+pub fn conjugate_gradient(
+    a: &CsrMatrix,
+    b: &[f64],
+    x0: Option<&[f64]>,
+    tol: f64,
+    max_iter: usize,
+) -> Vec<f64> {
+    let n = a.nrows();
+    let mut x = match x0 {
+        Some(v) => v.to_vec(),
+        None => vec![0.0; n],
+    };
+    let mut r = {
+        let ax = a.mul_vec(&x);
+        b.iter().zip(&ax).map(|(bi, axi)| bi - axi).collect::<Vec<f64>>()
+    };
+    let mut p = r.clone();
+    let mut rsold = r.iter().zip(&r).map(|(a, b)| a * b).sum::<f64>();
+    let bnrm = b.iter().map(|v| v * v).sum::<f64>().sqrt();
+    let threshold = if bnrm > 0.0 { tol * bnrm } else { tol };
+    let rnorm = rsold.sqrt();
+    if rnorm < threshold {
+        return x;
+    }
+    for _ in 0..max_iter {
+        let ap = a.mul_vec(&p);
+        let p_ap = p.iter().zip(&ap).map(|(a, b)| a * b).sum::<f64>();
+        let alpha = rsold / p_ap;
+        for i in 0..n {
+            x[i] += alpha * p[i];
+        }
+        for (ri, api) in r.iter_mut().zip(&ap) {
+            *ri -= alpha * api;
+        }
+        let rsnew = r.iter().zip(&r).map(|(a, b)| a * b).sum::<f64>();
+        if rsnew.sqrt() < threshold {
+            return x;
+        }
+        let beta = rsnew / rsold;
+        for (pi, ri) in p.iter_mut().zip(&r) {
+            *pi = *ri + beta * *pi;
+        }
+        rsold = rsnew;
+    }
+    x
+}
+
 /// Pack per-row `(col, value)` lists into CSR storage.
 ///
 /// Duplicate column entries within a row (e.g. the separate per-axis diagonal
@@ -358,5 +416,20 @@ mod tests {
         let lu = l.mul_vec(&u);
         let mid = g.len() / 2;
         assert_abs_diff_eq!(lu[mid], -1.0, epsilon = 5e-2);
+    }
+
+    #[test]
+    fn conjugate_gradient_solves_poisson() {
+        // u = sin(pi x) on [0,1] (Dirichlet) -> ∇²u = -π²·u, so A·u = f with
+        // f = -π²·u. CG must recover u to high accuracy.
+        let g = UniformGrid1D::new(81, 0.0, 1.0).unwrap();
+        let a = laplacian_1d_sparse(&g, Boundary::Dirichlet);
+        let xs = g.coordinates();
+        let u: Vec<f64> = xs.iter().map(|&x| (std::f64::consts::PI * x).sin()).collect();
+        let f: Vec<f64> = a.mul_vec(&u);
+        let x = conjugate_gradient(&a, &f, None, 1e-12, 1000);
+        for i in 1..g.n() - 1 {
+            assert_abs_diff_eq!(x[i], u[i], epsilon = 1e-6);
+        }
     }
 }

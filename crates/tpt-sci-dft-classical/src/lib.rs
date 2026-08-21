@@ -36,9 +36,14 @@
 
 mod error;
 mod profile;
+mod square_gradient;
 
 pub use error::DftError;
 pub use profile::ClassicalDft;
+pub use square_gradient::{
+    DftSolution1D, DftSolution3D, PlanarSolve, SolveStats, SquareGradientDft, VdWParams,
+    VolumetricSolve,
+};
 
 /// Re-export of the wrapped `feos` framework so consumers can use the full
 /// underlying DFT machinery directly if they need to.

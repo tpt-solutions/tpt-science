@@ -14,6 +14,12 @@
 * `casson_viscosity` — shear-thinning (non-Newtonian) Casson correction.
 * `Network` — method-of-lines 1-D area/flow advance (`rhs`, `step`), integrating
   the augmented Navier–Stokes reduction by `tpt-sci-ode`.
+* Exact Womersley solution — `womersley_velocity_profile` / `womersley_complex_velocity`
+  evaluated via self-contained complex `J0`/`J1` (`bessel_j0`, `bessel_j1`), with
+  the analytic flow-rate formula `womersley_flow_rate_analytic`.
+* 0-D/1-D/3-D coupling — `Windkessel` (3-element RCR) terminal load, the `couple`
+  step that drives a `Network` outlet from a `Windkessel`, and the `CfdCoupling`
+  trait a `tpt-sci-cfd-core` 3-D domain can implement.
 
 The model uses the 1-D augmented Navier–Stokes equations reduced to a vessel
 centerline.
@@ -34,8 +40,12 @@ steps a compliant vessel network forward in time.
 
 ## Scope (v1)
 
-1-D reduced-order vascular flow. 3-D patient-specific, full 0-D/1-D/3-D coupling,
-and a real Womersley complex-Bessel solve are out of scope for v1.
+1-D reduced-order vascular flow, the **exact** Womersley complex-Bessel velocity
+profile (`womersley_velocity_profile` + self-contained `J0`/`J1`), and a
+0-D/1-D/3-D coupling mechanism: a `Windkessel` (RCR) lumped outlet model driven
+by / driving a `Network`, exposed through the `CfdCoupling` trait for a
+`tpt-sci-cfd-core` 3-D domain. Patient-specific 3-D meshing and a full
+multi-scale 3-D solver stay out of scope (repo-wide unstructured-FEM exclusion).
 
 ## License
 

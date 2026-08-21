@@ -16,6 +16,7 @@ publish = false
 
 [dependencies]
 tpt-math-linalg = { workspace = true }
+tpt-sci-grid = { workspace = true, features = ["sparse"] }
 thiserror = { workspace = true }
 
 [dev-dependencies]

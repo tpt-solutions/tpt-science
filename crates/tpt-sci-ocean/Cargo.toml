@@ -16,6 +16,7 @@ publish = false
 
 [dependencies]
 tpt-sci-cfd-core = { workspace = true }
+tpt-sci-grid = { workspace = true, features = ["sparse"] }
 tpt-math-linalg = { workspace = true }
 thiserror = { workspace = true }
 

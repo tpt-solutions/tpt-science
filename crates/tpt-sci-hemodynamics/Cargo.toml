@@ -18,6 +18,7 @@ publish = false
 tpt-sci-cfd-core = { workspace = true }
 tpt-sci-ode = { workspace = true }
 tpt-math-linalg = { workspace = true }
+num-complex = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
