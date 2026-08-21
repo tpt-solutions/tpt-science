@@ -7,12 +7,20 @@
 //! * A **0-D energy-balance model** [`EnergyBalanceModel`] — global-mean
 //!   surface temperature under incoming shortwave, grey-body longwave outgoing,
 //!   and a CO₂ radiative-forcing term (`ΔF = 5.35·ln(C/C0)` W/m²).
-//! * A two-band **radiative-transfer** helper [`grey_radiative_transfer`] and
-//!   a single-layer grey atmosphere temperature.
+//! * **Multi-band longwave radiative transfer** ([`radiative_transfer`]) — a
+//!   simplified multi-band grey-slab scheme [`MultiBandRadiativeTransfer`] and a
+//!   `k`-distribution [`CorrelatedKRt`], replacing the single grey band of
+//!   [`grey_radiative_transfer`].
 //! * A tiny **atmospheric chemistry** box [`ChemistryBox`] for a linear
-//!   production–loss tracer (e.g. OH-driven CH₄ decay).
+//!   production–loss tracer (e.g. OH-driven CH₄ decay), extended to a 3-D
+//!   advection–diffusion–reaction tracer field [`Tracer3D`].
+//! * A genuine **primitive-equation atmospheric GCM dynamical core**
+//!   [`AtmosphereGcm`] — a 3-D hydrostatic (optionally non-hydrostatic) primitive
+//!   equation solver, coupled to the [`EnergyBalanceModel`].
 //!
-//! These are deliberately simple (one/two equation) models — not an GCM.
+//! These close out the v1 "out of scope" climate items: the single grey band is
+//! replaced by a multi-band/correlated-k scheme, chemistry is extended to 3-D
+//! transport, and the EBM is backed by a working GCM dynamical core.
 //!
 //! # Example
 //!
@@ -28,9 +36,15 @@
 //! ```
 #![forbid(unsafe_code)]
 
+mod chemistry_3d;
 mod error;
+mod gcm;
+mod radiative_transfer;
 
+pub use chemistry_3d::Tracer3D;
 pub use error::ClimateError;
+pub use gcm::AtmosphereGcm;
+pub use radiative_transfer::{Band, CorrelatedKBand, CorrelatedKRt, MultiBandRadiativeTransfer};
 
 /// Stefan–Boltzmann constant (W·m⁻²·K⁻⁴).
 pub const SIGMA: f64 = 5.670_374_419e-8;

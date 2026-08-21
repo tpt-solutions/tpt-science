@@ -125,7 +125,7 @@ impl KohnSham3D {
         }
 
         let dv = grid.dx() * grid.dy() * grid.dz();
-        let n_bands = (nelect + 1) / 2;
+        let n_bands = (nelect + 1).div_ceil(2);
         let rho = vec![0.0; grid.len()];
         Ok(Self {
             grid,
@@ -343,6 +343,7 @@ impl KohnSham3D {
     }
 
     /// Gradient magnitude `|∇ρ|` at every node.
+    #[allow(clippy::needless_range_loop)]
     fn gradient_magnitude(&self, rho: &[f64]) -> Vec<f64> {
         let n = rho.len();
         let mut gr = vec![0.0; n];
@@ -470,8 +471,8 @@ impl KohnSham3D {
             };
             let (ev, orbs) = lanczos_lowest(self.n_int, self.n_bands, self.n_int.min(200), matvec);
             let (new_rho, new_occ) = self.density_from_orbitals(&orbs);
-            for i in 0..self.grid.len() {
-                self.rho[i] = (1.0 - mixing) * self.rho[i] + mixing * new_rho[i];
+            for (r, &nr) in self.rho.iter_mut().zip(&new_rho) {
+                *r = (1.0 - mixing) * *r + mixing * nr;
             }
             eigvals = ev;
             eigvecs = orbs;
@@ -507,5 +508,58 @@ impl KohnSham3D {
             density: self.rho.clone(),
             orbitals,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tpt_sci_grid::UniformGrid3D;
+
+    use crate::xc::Lda;
+
+    #[test]
+    fn bare_box_ground_state_is_kinetic_only_and_normalized() {
+        // Cubic box [0,1]³, zero external potential: the bare solve diagonalizes
+        // H = −½∇² with Dirichlet walls, so every eigenvalue is a positive
+        // kinetic energy and the density integrates to the electron count.
+        let grid = UniformGrid3D::new(13, 0.0, 1.0, 13, 0.0, 1.0, 13, 0.0, 1.0).unwrap();
+        let v_ext = vec![0.0; grid.len()];
+        let mut ks = KohnSham3D::new(grid, v_ext, 2, Box::new(Lda)).unwrap();
+        let res = ks.solve_bare();
+        assert!(res.total_energy.is_finite());
+        assert!(res.orbital_energies[0] > 0.0, "kinetic energy must be positive");
+        let dv = ks.volume_element();
+        let integral: f64 = res.density.iter().sum::<f64>() * dv;
+        assert!(
+            (integral - 2.0).abs() < 0.15,
+            "density should integrate to 2 electrons, got {integral}"
+        );
+    }
+
+    #[test]
+    fn full_solve_is_finite_and_conserves_electron_count() {
+        let grid = UniformGrid3D::new(11, 0.0, 1.0, 11, 0.0, 1.0, 11, 0.0, 1.0).unwrap();
+        let (cx, cy, cz) = (0.5, 0.5, 0.5);
+        let v_ext: Vec<f64> = (0..grid.len())
+            .map(|k| {
+                let ix = k % grid.nx();
+                let iy = (k / grid.nx()) % grid.ny();
+                let iz = k / (grid.nx() * grid.ny());
+                let x = grid.x0() + ix as f64 * grid.dx();
+                let y = grid.y0() + iy as f64 * grid.dy();
+                let z = grid.z0() + iz as f64 * grid.dz();
+                0.5 * ((x - cx).powi(2) + (y - cy).powi(2) + (z - cz).powi(2))
+            })
+            .collect();
+        let mut ks = KohnSham3D::new(grid, v_ext, 2, Box::new(Lda)).unwrap();
+        let res = ks.solve(40);
+        assert!(res.total_energy.is_finite());
+        let dv = ks.volume_element();
+        let integral: f64 = res.density.iter().sum::<f64>() * dv;
+        assert!(
+            (integral - 2.0).abs() < 0.25,
+            "self-consistent density should integrate to 2 electrons, got {integral}"
+        );
     }
 }

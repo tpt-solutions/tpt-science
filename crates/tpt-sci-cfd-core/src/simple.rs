@@ -9,7 +9,6 @@
 //! method, run *alongside* (not replacing) the explicit fractional-step solver.
 
 use tpt_sci_grid::sparse::{CsrMatrix, conjugate_gradient};
-use tpt_sci_grid::{Boundary, UniformGrid2D};
 
 use crate::{CfdError, CollocatedGrid};
 
@@ -84,7 +83,11 @@ impl SimpleSolver {
     }
 
     /// Discrete divergence `∇·u` of a velocity field (central difference, with
-    /// one-sided clamping at the domain boundary).
+    /// one-sided clamping at the domain boundary). The same central stencil is
+    /// used by the gradient correction in [`SimpleSolver::correct`]; together
+    /// with the 5-point Laplacian assembled in
+    /// [`SimpleSolver::build_poisson_matrix`] they form a consistent
+    /// pressure-projection operator.
     #[must_use]
     pub fn divergence(&self, u: &[f64], v: &[f64]) -> Vec<f64> {
         let g = &self.grid;
@@ -103,60 +106,111 @@ impl SimpleSolver {
         div
     }
 
-    /// Build the pressure Poisson matrix `A = ∇²` on the structured collocated
-    /// grid (5-point stencil, Neumann clamp at the boundary) and pin a single
-    /// reference cell to remove the constant-pressure nullspace so the system
-    /// is symmetric positive-definite and invertible.
+    /// Build the pressure Poisson matrix `A = -∇²` on the structured collocated
+    /// grid (5-point stencil, Neumann clamp at the boundary). The discrete
+    /// Laplacian is negative-definite (`∇²`), so `A = -∇²` is positive-definite
+    /// after the reference-pressure pin below, which makes it suitable for the
+    /// conjugate-gradient solver. Only `∇p` (the gradient of `p`) feeds the
+    /// velocity correction, so the additive constant is immaterial.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the grid has fewer than `2` cells in either direction (which
+    /// [`CollocatedGrid::new`] rejects).
     #[must_use]
     pub fn build_poisson_matrix(&self) -> CsrMatrix {
         let g = &self.grid;
-        // Match the collocated cell spacing exactly so the discrete Laplacian
-        // has the right scaling; the absolute domain extent is irrelevant.
-        let x1 = (g.nx as f64 - 1.0) * g.dx;
-        let y1 = (g.ny as f64 - 1.0) * g.dy;
-        let g2d =
-            UniformGrid2D::new(g.nx, 0.0, x1, g.ny, 0.0, y1).expect("grid has at least 2 cells");
-        let mut a = tpt_sci_grid::sparse::laplacian_2d_sparse(&g2d, Boundary::Neumann);
-        // `laplacian_2d_sparse` assembles the discrete Laplacian, which is
-        // negative-definite; negate it so the Poisson operator is
-        // symmetric-positive-definite (valid for conjugate-gradient) and solves
-        // `(-∇²)·p = -(ρ/dt)·∇·u*`, i.e. `∇²p = (ρ/dt)·∇·u*`.
-        for v in &mut a.values {
-            *v = -*v;
+        let (nx, ny) = (g.nx, g.ny);
+        let (dx, dy) = (g.dx, g.dy);
+        let n = g.len();
+        let mut rows: Vec<Vec<(usize, f64)>> = vec![Vec::new(); n];
+        let c_at = |i: isize, j: isize| -> usize {
+            let ii = Self::clamp(i, nx);
+            let jj = Self::clamp(j, ny);
+            g.idx(ii, jj)
+        };
+        let add = |rows: &mut Vec<Vec<(usize, f64)>>, c: usize, k: usize, v: f64| {
+            rows[c].push((k, v));
+        };
+        for j in 0..ny {
+            for i in 0..nx {
+                let c = g.idx(i, j);
+                // 5-point Laplacian x-part: (φ[x+1] − 2φ[x] + φ[x−1]) / dx².
+                let invx = 1.0 / (dx * dx);
+                let xm = c_at(i as isize - 1, j as isize);
+                let xp = c_at(i as isize + 1, j as isize);
+                add(&mut rows, c, xp, invx);
+                add(&mut rows, c, xm, invx);
+                add(&mut rows, c, c, -2.0 * invx);
+                // 5-point Laplacian y-part.
+                let invy = 1.0 / (dy * dy);
+                let ym = c_at(i as isize, j as isize - 1);
+                let yp = c_at(i as isize, j as isize + 1);
+                add(&mut rows, c, yp, invy);
+                add(&mut rows, c, ym, invy);
+                add(&mut rows, c, c, -2.0 * invy);
+            }
         }
-        // Pin the reference cell (index 0) to p = 0. To keep the matrix
-        // symmetric (so the conjugate-gradient solver is valid) we zero out
-        // column 0 everywhere and turn row 0 into the identity row. Because the
-        // pinned value is 0, the removed couplings contribute nothing to the
-        // right-hand side.
-        for r in 0..a.nrows() {
-            let start = a.row_ptr[r];
-            let end = a.row_ptr[r + 1];
-            for k in start..end {
-                if a.col_ind[k] == 0 {
-                    a.values[k] = 0.0;
+        // Coalesce duplicate entries (clamping makes some indices coincide).
+        for r in &mut rows {
+            r.sort_by_key(|&(k, _)| k);
+            let mut i = 1;
+            while i < r.len() {
+                if r[i].0 == r[i - 1].0 {
+                    r[i - 1].1 += r[i].1;
+                    r.remove(i);
+                } else {
+                    i += 1;
                 }
             }
         }
-        let start = a.row_ptr[0];
-        let end = a.row_ptr[1];
-        for k in start..end {
-            a.values[k] = if a.col_ind[k] == 0 { 1.0 } else { 0.0 };
+        // `rows` assemble `∇²` (negative-definite); negate to `A = -∇²` (positive
+        // definite) for conjugate-gradient. The constant-pressure Neumann
+        // nullspace is removed by pinning node 0 to zero. The pin is applied
+        // symmetrically: every coupling to column 0 is dropped (the pinned value
+        // is 0, so this does not change the solution) and only the (0,0) entry is
+        // set to 1. A bare `rows[0] = [(0, 1.0)]` would leave column-0 couplings
+        // from other rows, breaking matrix symmetry and making conjugate-gradient
+        // converge to the wrong field.
+        for r in &mut rows {
+            for e in r.iter_mut() {
+                e.1 = -e.1;
+            }
+            r.retain(|&(c, _)| c != 0);
         }
-        a
+        rows[0] = vec![(0, 1.0)];
+        CsrMatrix::from_rows(n, n, &rows)
     }
 
     /// Solve the pressure Poisson equation `∇²p = (ρ/dt)·∇·u*` with the sparse
-    /// conjugate-gradient solver, returning the pressure field (with the
-    /// reference cell pinned to `p = 0`).
+    /// conjugate-gradient solver, returning the pressure field (defined up to an
+    /// additive constant, which is irrelevant to the gradient correction).
+    ///
+    /// The Neumann Laplacian is singular (constant nullspace); the assembled
+    /// matrix pins node 0 to zero (see [`SimpleSolver::build_poisson_matrix`])
+    /// so the system is strictly positive-definite and conjugate-gradient
+    /// converges. The additive constant is immaterial because only `∇p` feeds
+    /// the velocity correction.
     #[must_use]
     pub fn solve_pressure(&self) -> Vec<f64> {
         let div = self.divergence(&self.u_star, &self.v_star);
-        // Matrix is `-∇²` (positive-definite), so the RHS is `-(ρ/dt)·∇·u*`.
+        // With `A = -∇²`, the Poisson equation `∇²p = (ρ/dt)·∇·u*` becomes
+        // `A·p = -(ρ/dt)·∇·u*`.
         let mut b: Vec<f64> = div.iter().map(|d| -(self.rho / self.dt) * d).collect();
+        // Node 0 is pinned in the matrix; keep its right-hand side consistent.
         b[0] = 0.0;
         let a = self.build_poisson_matrix();
-        conjugate_gradient(&a, &b, None, 1e-10, 5000)
+        let x = conjugate_gradient(&a, &b, None, 1e-10, 10000);
+        let ax = a.mul_vec(&x);
+        let rnorm: f64 = b.iter().zip(&ax).map(|(bi, xi)| (bi - xi).powi(2)).sum::<f64>().sqrt();
+        let bnrm: f64 = b.iter().map(|v| v * v).sum::<f64>().sqrt();
+        eprintln!(
+            "DBG simple.solve_pressure: rnorm={rnorm} bnrm={bnrm} pmin={} pmax={} p0={}",
+            x.iter().cloned().fold(f64::INFINITY, f64::min),
+            x.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
+            x[0]
+        );
+        x
     }
 
     /// Explicit advection–diffusion momentum update of the provisional field
@@ -196,6 +250,7 @@ impl SimpleSolver {
     /// free.
     pub fn correct(&mut self) {
         let p = self.solve_pressure();
+        self.p = p.clone();
         let g = &self.grid;
         let (dx, dy, dt, rho) = (g.dx, g.dy, self.dt, self.rho);
         let mut u = vec![0.0; g.len()];
@@ -213,7 +268,6 @@ impl SimpleSolver {
         }
         self.u = u;
         self.v = v;
-        self.p = p;
     }
 
     /// Perform one full SIMPLE step (predict + correct).
@@ -266,7 +320,7 @@ mod tests {
 
     // `sin(πx)sin(πy)` is a smooth manufactured pressure. The velocity field
     // `u* = -(dt/ρ)∇p` has divergence `(dt/ρ)∇²p`, so the Poisson solve must
-    // recover `p` up to an additive constant.
+    // recover `p` (up to the additive constant pinned at node 0).
     #[test]
     fn manufactured_poisson_recovers_pressure() {
         let g = CollocatedGrid::new(40, 40, 1.0, 1.0).unwrap();
@@ -305,13 +359,6 @@ mod tests {
             }
         }
         shift /= count as f64;
-        eprintln!(
-            "DEBUG p: p[0]={}, max|p|={}, min p={}, max p={}, shift={shift}",
-            p[0],
-            p.iter().map(|x| x.abs()).fold(0.0_f64, f64::max),
-            p.iter().cloned().fold(0.0_f64, f64::min),
-            p.iter().cloned().fold(0.0_f64, f64::max),
-        );
         let mut max_dev = 0.0_f64;
         for c in 0..g.len() {
             let i = c % nx;

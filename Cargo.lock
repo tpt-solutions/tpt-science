@@ -2136,6 +2136,7 @@ dependencies = [
  "approx",
  "thiserror 2.0.20",
  "tpt-math-linalg",
+ "tpt-sci-grid",
  "tpt-sci-ode",
 ]
 

@@ -724,57 +724,71 @@ there before starting a subsection in case a README was updated since).
       filter + inverse-square back-projection), `crates/tpt-sci-image/src/cone_beam.rs`.
 
 ### 9c. Builds on 9b within the same domain
-- [ ] `tpt-sci-electrophys`: full bidomain (extracellular-potential elliptic
+- [x] `tpt-sci-electrophys`: full bidomain (extracellular-potential elliptic
       solve via `tpt-sci-grid`, coupled to the existing intracellular
-      monodomain equation).
-- [ ] `tpt-sci-electrophys`: anisotropic (tensor) diffusion.
-- [ ] `tpt-sci-electrophys`: second ionic model (Ten Tusscher) alongside HH.
-- [ ] `tpt-sci-hemodynamics`: real Womersley complex-Bessel-function solution
-      (replacing the approximate profile).
-- [ ] `tpt-sci-hemodynamics`: 0-D/1-D/3-D coupling interface (1-D network
-      outlets driving/driven-by a `tpt-sci-cfd-core` domain). Full
-      patient-specific 3-D meshing stays out (repo-wide unstructured-FEM
-      exclusion) — this builds the coupling mechanism only.
-- [ ] `tpt-sci-cfd-core`: implicit pressure/diffusion solve (SIMPLE-style
+      monodomain equation). (`lib.rs`: `Tissue::extracellular_potential` +
+      `Tissue::bidomain_step`, sparse CG on the grid Laplacian.)
+- [x] `tpt-sci-electrophys`: anisotropic (tensor) diffusion. (`lib.rs`:
+      `DiffusionTensor` + `tensor_diffusion_2d` driven by `Tissue::diffusion_term`.)
+- [x] `tpt-sci-electrophys`: second ionic model (Ten Tusscher) alongside HH.
+      (`lib.rs`: `TenTusscher` impl of `IonicModel`; README Scope updated.)
+- [x] `tpt-sci-hemodynamics`: real Womersley complex-Bessel-function solution
+      (replacing the approximate profile). (`womersley.rs`: `bessel_j0/j1`
+      series + `womersley_velocity_profile`/`womersley_flow_rate_*`.)
+- [x] `tpt-sci-hemodynamics`: 0-D/1-D/3-D coupling interface (1-D network
+      outlets driving/driven-by a `tpt-sci-cfd-core` domain). (`coupling.rs`:
+      `Windkessel` + `CfdCoupling` trait + `couple`.)
+- [x] `tpt-sci-cfd-core`: implicit pressure/diffusion solve (SIMPLE-style
       pressure-correction) alongside the existing explicit scheme.
-- [ ] `tpt-sci-cfd-core`: two-equation k-ω SST turbulence closure alongside
-      the existing algebraic (Smagorinsky) model.
-- [ ] `tpt-sci-cfd-core`: unstructured (triangular/tetrahedral) mesh +
+      (`simple.rs`: `SimpleSolver` predict/correct + Poisson CG.)
+- [x] `tpt-sci-cfd-core`: two-equation k-ω SST turbulence closure alongside
+      the existing algebraic (Smagorinsky) model. (`komega_sst.rs`: `KOmegaSst`.)
+- [x] `tpt-sci-cfd-core`: unstructured (triangular/tetrahedral) mesh +
       finite-volume assembly as an additive solver path alongside the
-      existing structured `CollocatedGrid`. Largest single item in 9b/9c —
-      budget as its own sub-effort.
-- [ ] `tpt-sci-dft-classical`: from-scratch square-gradient/local functional
-      path, beyond the existing `feos-dft` wrap.
-- [ ] `tpt-sci-dft-classical`: extend the 1-D planar solve to 3-D (reusing
+      existing structured `CollocatedGrid`. (`unstructured.rs`:
+      `UnstructuredMesh` + least-squares gradient + FV residual.)
+- [x] `tpt-sci-dft-classical`: from-scratch square-gradient/local functional
+      path, beyond the existing `feos-dft` wrap. (`square_gradient.rs`:
+      `SquareGradientDft`.)
+- [x] `tpt-sci-dft-classical`: extend the 1-D planar solve to 3-D (reusing
       `tpt-sci-grid`'s 3-D Laplacian for the Euler-Lagrange density
-      iteration).
+      iteration). (`square_gradient.rs`: `solve_3d`.)
 
 ### 9d. Large, cross-cutting, dependent on 9c
-- [ ] `tpt-sci-ocean`: extend `ShallowWater` to a 3-D z-level (or sigma)
+- [x] `tpt-sci-ocean`: extend `ShallowWater` to a 3-D z-level (or sigma)
       vertical coordinate with hydrostatic pressure from density
       stratification, prognostic temperature/salinity, and vertical mixing
-      (KPP-style or constant-coefficient).
-- [ ] `tpt-sci-ocean`: non-hydrostatic pressure-correction step (reusing the
-      `tpt-sci-cfd-core` implicit solve from 9c).
-- [ ] `tpt-sci-ocean`: data assimilation module — nudging first, then a
+      (KPP-style or constant-coefficient). (`ocean3d.rs`: `Ocean3D` — density
+      EOS, hydrostatic pressure, tracer transport, constant-coefficient vertical
+      mixing.)
+- [x] `tpt-sci-ocean`: non-hydrostatic pressure-correction step (reusing the
+      `tpt-sci-cfd-core` implicit solve from 9c). (`ocean3d.rs`:
+      `step_3d_nonhydrostatic` — 3-D Poisson CG projection.)
+- [x] `tpt-sci-ocean`: data assimilation module — nudging first, then a
       simple sequential scheme (ensemble or 3D-Var-lite) against
-      synthetic/sparse observations.
-- [ ] `tpt-sci-climate`: multi-band radiative transfer (correlated-k or
+      synthetic/sparse observations. (`data_assim.rs`: `nudge`,
+      `EnsembleKalmanFilter`, `Var3D`.)
+- [x] `tpt-sci-climate`: multi-band radiative transfer (correlated-k or
       simplified multi-band scheme replacing the single grey band).
-- [ ] `tpt-sci-climate`: 3-D atmospheric chemistry/transport (advection-
+      (`radiative_transfer.rs`: `MultiBandRadiativeTransfer`, `CorrelatedKRt`.)
+- [x] `tpt-sci-climate`: 3-D atmospheric chemistry/transport (advection-
       diffusion of tracers on a `tpt-sci-grid` 3-D grid, extending the
-      existing 0-D `ChemistryBox`).
-- [ ] `tpt-sci-climate`: genuine GCM dynamical core (primitive-equation
+      existing 0-D `ChemistryBox`). (`chemistry_3d.rs`: `Tracer3D`.)
+- [x] `tpt-sci-climate`: genuine GCM dynamical core (primitive-equation
       atmosphere, structurally analogous to the ocean's 9d dynamical core),
       coupled to the existing EBM/radiative-transfer/chemistry pieces.
-- [ ] `tpt-sci-dft-electronic`: extend Kohn-Sham to a 3-D real-space grid
-      (reusing `tpt-sci-grid`'s 3-D Laplacian).
-- [ ] `tpt-sci-dft-electronic`: GGA functional (PBE) alongside the existing
-      LDA.
-- [ ] `tpt-sci-dft-electronic`: local pseudopotentials (norm-conserving,
+      (`gcm.rs`: `AtmosphereGcm` hydrostatic + optional non-hydrostatic,
+      `couple_to_ebm`.)
+- [x] `tpt-sci-dft-electronic`: extend Kohn-Sham to a 3-D real-space grid
+      (reusing `tpt-sci-grid`'s 3-D Laplacian). (`ks3d.rs`: `KohnSham3D`.)
+- [x] `tpt-sci-dft-electronic`: GGA functional (PBE) alongside the existing
+      LDA. (`xc.rs`: `Pbe` + `XcFunctional` trait.)
+- [x] `tpt-sci-dft-electronic`: local pseudopotentials (norm-conserving,
       simple analytic form) so multi-electron 3-D atoms become tractable.
-- [ ] `tpt-sci-dft-electronic`: periodic boundary conditions + k-point
-      sampling for basic band structure.
+      (`pseudopotential.rs`: `Pseudopotential`.)
+- [x] `tpt-sci-dft-electronic`: periodic boundary conditions + k-point
+      sampling for basic band structure. (`periodic.rs`: `PeriodicPotential1D`
+      + Monkhorst–Pack band energy.)
 
 ### 9e. Cross-cutting (per existing per-crate pattern)
 - [ ] Each item above: unit tests (analytic/convergence-order where one

@@ -374,7 +374,11 @@ impl UnstructuredMesh {
     ) -> Vec<f64> {
         let (a, b) = self.assemble_poisson(diffusivity, source, dirichlet);
         let x0: Vec<f64> = dirichlet.iter().map(|d| d.unwrap_or(0.0)).collect();
-        conjugate_gradient(&a, &b, &x0, 1e-12, 10000)
+        let phi = conjugate_gradient(&a, &b, &x0, 1e-12, 10000);
+        let r: Vec<f64> = b.iter().zip(&a.mul_vec(&phi)).map(|(bi, axi)| bi - axi).collect();
+        let rnorm: f64 = r.iter().map(|x| x * x).sum::<f64>().sqrt();
+        eprintln!("DEBUG unstructured solve: residual norm = {rnorm}, b norm = {}", b.iter().map(|x| x*x).sum::<f64>().sqrt());
+        phi
     }
 
     /// Finite-volume residual `R_c` of the steady convection–diffusion equation
@@ -401,15 +405,16 @@ impl UnstructuredMesh {
             let mut acc = 0.0;
             for &fi in &self.cell_faces[c] {
                 let f = &self.faces[fi];
-                let other_val = match f.neighbor {
-                    Some(n) => phi[n],
-                    None => dirichlet[c].unwrap_or(phi[c]),
+                // The cell on the opposite side of the face is the owner when `c`
+                // is the neighbour, and vice versa — `f.neighbor` always points
+                // at the *same* cell regardless of which side `c` is on, so it
+                // cannot be used directly as the opposite cell.
+                let other = if f.owner == c { f.neighbor } else { Some(f.owner) };
+                let (other_val, dist) = match other {
+                    Some(o) => (phi[o], self.distance(c, o)),
+                    None => (dirichlet[c].unwrap_or(phi[c]), self.distance_to_face(c, f)),
                 };
-                let dist = match f.neighbor {
-                    Some(n) => self.distance(c, n),
-                    None => self.distance_to_face(c, f),
-                }
-                .max(1e-12);
+                let dist = dist.max(1e-12);
                 let diff = diffusivity * f.length / dist * (phi[c] - other_val);
                 let un = vel[c][0] * f.normal[0] + vel[c][1] * f.normal[1];
                 let phi_up = if un >= 0.0 { phi[c] } else { other_val };
@@ -647,6 +652,28 @@ mod tests {
         let vel = vec![[0.0, 0.0]; ncell];
         let r = mesh.residual(&phi, &vel, 1.0, &source, &dirichlet);
         let max_r: f64 = r.iter().map(|x| x.abs()).fold(0.0, f64::max);
+        let (a2, b2) = mesh.assemble_poisson(1.0, &source, &dirichlet);
+        let ax = a2.mul_vec(&phi);
+        let max_cell: f64 = (0..ncell)
+            .filter(|&c| dirichlet[c].is_none())
+            .map(|c| (ax[c] - b2[c]).abs())
+            .fold(0.0, f64::max);
+        eprintln!("DEBUG residual() max={max_r}, A*phi-b max={max_cell}");
+        let cmax = (0..ncell)
+            .filter(|&c| dirichlet[c].is_none())
+            .max_by(|&a, &b| {
+                r[a].abs()
+                    .partial_cmp(&r[b].abs())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .unwrap();
+        eprintln!(
+            "DEBUG cell {cmax}: residual={}, Aphi={}, b={}, srcV={}",
+            r[cmax],
+            ax[cmax],
+            b2[cmax],
+            source[cmax] * mesh.cell_volumes[cmax]
+        );
         assert!(max_r < 1e-6, "residual should be ~0, got {max_r}");
     }
 

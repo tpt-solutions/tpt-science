@@ -71,6 +71,17 @@ impl CsrMatrix {
         }
     }
 
+    /// Build a CSR matrix from a list of `(column, value)` rows, one per matrix
+    /// row. Duplicate column entries within a row are summed. Entries with a
+    /// zero value are still stored (callers that need compression should drop
+    /// them beforehand); this is intended for assembling PDE operators where
+    /// boundary clamping can collapse distinct stencil offsets onto the same
+    /// column.
+    #[must_use]
+    pub fn from_rows(nrows: usize, ncols: usize, rows: &[Vec<(usize, f64)>]) -> Self {
+        pack_csr(nrows, ncols, rows)
+    }
+
     /// Sparse matrix–vector product `y = A·x`.
     ///
     /// # Panics

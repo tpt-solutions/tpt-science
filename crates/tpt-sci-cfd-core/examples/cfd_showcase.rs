@@ -32,22 +32,33 @@ fn main() {
     let ncell = mesh.n_cells();
     let mut dirichlet = vec![None; ncell];
     let mut source = vec![0.0; ncell];
-    for c in 0..ncell {
+    for (c, ((src, &is_b), d)) in source
+        .iter_mut()
+        .zip(mesh.is_boundary_cell.iter())
+        .zip(dirichlet.iter_mut())
+        .enumerate()
+    {
         let [x, y] = mesh.cell_center(c);
         let analytic = (std::f64::consts::PI * x).sin() * (std::f64::consts::PI * y).sin();
-        source[c] = 2.0 * std::f64::consts::PI * std::f64::consts::PI * analytic;
-        if mesh.is_boundary_cell[c] {
-            dirichlet[c] = Some(analytic);
+        *src = 2.0 * std::f64::consts::PI * std::f64::consts::PI * analytic;
+        if is_b {
+            *d = Some(analytic);
         }
     }
     let phi = mesh.solve_poisson(1.0, &source, &dirichlet);
     let mut max_err = 0.0_f64;
-    for c in 0..ncell {
-        if !mesh.is_boundary_cell[c] {
-            let [x, y] = mesh.cell_center(c);
-            let analytic = (std::f64::consts::PI * x).sin() * (std::f64::consts::PI * y).sin();
-            max_err = max_err.max((phi[c] - analytic).abs());
+    for (c, (&is_b, &phi_val)) in mesh
+        .is_boundary_cell
+        .iter()
+        .zip(phi.iter())
+        .enumerate()
+    {
+        if is_b {
+            continue;
         }
+        let [x, y] = mesh.cell_center(c);
+        let analytic = (std::f64::consts::PI * x).sin() * (std::f64::consts::PI * y).sin();
+        max_err = max_err.max((phi_val - analytic).abs());
     }
     println!("Unstructured Poisson: max error vs analytic = {max_err:.3e}");
 }

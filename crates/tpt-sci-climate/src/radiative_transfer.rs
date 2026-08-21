@@ -285,13 +285,13 @@ mod tests {
         // A single band with weight 1 is exactly the single grey-band formula
         // F = ε·σ·(T_s⁴ − T_a⁴) + σ·T_a⁴ = σ·(ε·T_s⁴ + (1−ε)·T_a⁴)?  Verified by
         // comparing against the explicit two-stream expression.
-        let eps = 0.6;
-        let kappa = -((1.0 - eps).ln()); // so 1 - exp(-kappa*m) = eps at m = 1
+        let eps = 0.6f64;
+        let kappa = -((1.0f64 - eps).ln()); // so 1 - exp(-kappa*m) = eps at m = 1
         let b = Band::new(1.0, kappa, 1.0).unwrap();
         let rt = MultiBandRadiativeTransfer::new(vec![b], 250.0).unwrap();
         let ts = 288.0;
         let f = rt.olr(ts);
-        let expected = eps * SIGMA * ts.powi(4) + (1.0 - eps) * SIGMA * 250.0_f64.powi(4);
+        let expected = (1.0 - eps) * SIGMA * ts.powi(4) + eps * SIGMA * 250.0_f64.powi(4);
         assert_abs_diff_eq!(f, expected, epsilon = 1e-6);
     }
 
@@ -328,7 +328,7 @@ mod tests {
             vec![0.5, 0.3, 0.2],
         )
         .unwrap();
-        let thin = CorrelatedKRt::new(vec![ck], 250.0, 1.0).unwrap();
+        let thin = CorrelatedKRt::new(vec![ck.clone()], 250.0, 1.0).unwrap();
         let thick = CorrelatedKRt::new(vec![ck], 250.0, 50.0).unwrap();
         // A thicker path traps more longwave: OLR decreases.
         assert!(thick.olr(288.0) < thin.olr(288.0));

@@ -13,6 +13,15 @@ adheres to [Semantic Versioning](https://semver.org).
   explicit advection–diffusion (`momentum`) plus pressure-Poisson projection
   (`project`) enforcing `∇·u = 0`; `advance`, `max_divergence` quality metric.
 - `turbulence::eddy_viscosity` — algebraic Smagorinsky eddy-viscosity estimate.
+- `SimpleSolver` — SIMPLE/PISO-style implicit pressure-correction
+  (`predict`/`correct`/`advance`): provisional explicit momentum, pressure-Poisson
+  solve via the sparse conjugate-gradient solver, divergence-free correction
+  (`simple.rs`).
+- `KOmegaSst` — two-equation `k`-`ω` SST (Menter) turbulence closure, running
+  alongside the algebraic eddy-viscosity model (`komega_sst.rs`).
+- `UnstructuredMesh` — additive unstructured (triangular) finite-volume path:
+  least-squares cell-gradient reconstruction and a diffusion + upwind-advection
+  residual assembly, alongside the structured `CollocatedGrid` (`unstructured.rs`).
 
 ## [0.1.0] — 2026-08-16
 
@@ -27,8 +36,10 @@ Initial implementation of `tpt-sci-cfd-core` (spec2.txt expanded vision).
 
 ### Scope (v1)
 
-- 2-D, uniform, explicit. Unstructured meshes, implicit / SIMPLE solvers, and a
-  full coupled `k`-`ω` SST two-equation turbulence model are out of scope for v1.
+- 2-D, uniform collocated grid. Implemented (v1): SIMPLE/PISO implicit
+  pressure-correction, `k`-`ω` SST turbulence, and unstructured triangular
+  finite-volume assembly. Still out of scope: 3-D tetrahedral assembly,
+  production-grade parallel solvers.
 
 ### Notes
 

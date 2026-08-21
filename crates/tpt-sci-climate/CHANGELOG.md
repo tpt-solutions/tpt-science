@@ -13,6 +13,14 @@ adheres to [Semantic Versioning](https://semver.org).
 - `grey_radiative_transfer` — single-layer grey-atmosphere surface temperature.
 - `ChemistryBox` — constant-production / first-order-loss tracer
   (`dC/dt = P − k·C`), with `steady_state`.
+- `MultiBandRadiativeTransfer` and `CorrelatedKRt` — multi-band / correlated-k
+  longwave radiative transfer replacing the single grey band
+  (`radiative_transfer.rs`).
+- `Tracer3D` — 3-D advection–diffusion–reaction tracer on a `tpt-sci-grid` 3-D
+  grid (`chemistry_3d.rs`).
+- `AtmosphereGcm` — primitive-equation atmospheric GCM dynamical core
+  (hydrostatic, optionally non-hydrostatic) coupled to the EBM
+  (`gcm.rs`).
 
 ## [0.1.0] — 2026-08-16
 
@@ -25,8 +33,10 @@ Initial implementation of `tpt-sci-climate` (spec2.txt expanded vision).
 
 ### Scope (v1)
 
-- 0-D EBM, simple grey radiative transfer, single-tracer chemistry. GCMs, full
-  radiative-transfer bands, and 3-D atmospheric chemistry are out of v1 scope.
+- 0-D EBM, multi-band/correlated-k longwave radiative transfer, single- and 3-D
+  tracer atmospheric chemistry, and a hydrostatic (optionally non-hydrostatic)
+  primitive-equation GCM dynamical core coupled to the EBM. Clouds, moist
+  convection, and spectral-dynamics GCM cores remain out of scope.
 
 ### Notes
 
