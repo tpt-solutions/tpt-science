@@ -60,23 +60,14 @@ fn main() {
     let i_pivot = i_cm + m * l * l; // parallel-axis theorem
     let theta0 = 0.5_f64; // initial release angle from downward (rad)
 
-    println!(
-        "# parameters: m={m}, r={r}, L={l}, g={g}, I_cm={i_cm:.4}, I_pivot={i_pivot:.4}"
-    );
+    println!("# parameters: m={m}, r={r}, L={l}, g={g}, I_cm={i_cm:.4}, I_pivot={i_pivot:.4}");
     println!("  initial release angle θ0 = {theta0:.3} rad\n");
 
     // Build the body at the initial COM position and orientation.
     let mut theta = theta0;
     let pos0 = com_position(&pivot, l, theta);
     let half = theta0 / 2.0;
-    let mut body = Body::new(
-        0,
-        pos0,
-        DVector::from_row_slice(&[0.0, 0.0]),
-        m,
-        r,
-    )
-    .unwrap();
+    let mut body = Body::new(0, pos0, DVector::from_row_slice(&[0.0, 0.0]), m, r).unwrap();
     body.set_inertia(i_pivot); // rotate about the pivot, not the COM
     body.set_angular_velocity([0.0, 0.0, 0.0]);
     body.set_orientation([half.cos(), 0.0, 0.0, half.sin()]); // θ about +z
@@ -98,7 +89,8 @@ fn main() {
     let steps = 6000_usize; // ~6 s of simulated time
 
     // Energy bookkeeping at t = 0.
-    let energy = |theta: f64, omega: f64| m * g * l * (1.0 - theta.cos()) + 0.5 * i_pivot * omega * omega;
+    let energy =
+        |theta: f64, omega: f64| m * g * l * (1.0 - theta.cos()) + 0.5 * i_pivot * omega * omega;
     let e0 = energy(theta0, 0.0);
 
     let mut prev_theta = theta;
@@ -138,9 +130,7 @@ fn main() {
         prev_theta = theta;
 
         if step % 1000 == 0 || step == steps - 1 {
-            println!(
-                "  t={t:6.3}s  θ={theta:+7.4} rad  ω={omega:+7.4} rad/s  E={e:9.6} J"
-            );
+            println!("  t={t:6.3}s  θ={theta:+7.4} rad  ω={omega:+7.4} rad/s  E={e:9.6} J");
         }
     }
 
@@ -175,8 +165,11 @@ fn main() {
         let observed = 2.0 * (crossing_times[1] - crossing_times[0]); // half-period -> full
         let t_small = 2.0 * std::f64::consts::PI * (i_pivot / (m * g * l)).sqrt();
         println!("\n# period");
-        println!("  observed full period T ≈ {observed:.4} s ({}/2 crossings)", crossing_times.len());
-        println!("  small-angle prediction T0 = {t_small:.4} s", );
+        println!(
+            "  observed full period T ≈ {observed:.4} s ({}/2 crossings)",
+            crossing_times.len()
+        );
+        println!("  small-angle prediction T0 = {t_small:.4} s",);
         // For θ0 = 0.5 rad the true period exceeds the small-angle value by
         // ~1.6%; allow a generous tolerance.
         assert!(

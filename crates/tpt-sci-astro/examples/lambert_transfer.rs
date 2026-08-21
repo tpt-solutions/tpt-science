@@ -64,7 +64,8 @@ fn main() {
 
     // Elements -> state -> elements must round-trip.
     let (r0, v0) = transfer.state_vector();
-    let recovered = OrbitalElements::from_state(&r0, &v0, EARTH_MU).expect("recover transfer from state");
+    let recovered =
+        OrbitalElements::from_state(&r0, &v0, EARTH_MU).expect("recover transfer from state");
     assert!((recovered.a - a_t).abs() / a_t < TOL, "a round-trips");
     assert!((recovered.e - e_t).abs() < TOL, "e round-trips");
 
@@ -100,12 +101,21 @@ fn main() {
 
     println!("\nImpulse budget (vis-viva, cross-checked vs state speeds):");
     println!("  v_circ(LEO)     = {:>10.3} km/s", v_circ1);
-    println!("  v_transfer(peri)= {:>10.3} km/s   -> Δv1 = {:>8.3} km/s", v_peri, dv1);
+    println!(
+        "  v_transfer(peri)= {:>10.3} km/s   -> Δv1 = {:>8.3} km/s",
+        v_peri, dv1
+    );
     println!("  v_circ(GEO)     = {:>10.3} km/s", v_circ2);
-    println!("  v_transfer(apo) = {:>10.3} km/s   -> Δv2 = {:>8.3} km/s", v_apo, dv2);
+    println!(
+        "  v_transfer(apo) = {:>10.3} km/s   -> Δv2 = {:>8.3} km/s",
+        v_apo, dv2
+    );
     println!("  total Δv        = {:>10.3} km/s", dv_total);
     // Sanity: the canonical LEO->GEO Hohmann total is ~3.9 km/s.
-    assert!(dv_total > 3.5 && dv_total < 4.5, "total Δv in expected band");
+    assert!(
+        dv_total > 3.5 && dv_total < 4.5,
+        "total Δv in expected band"
+    );
 
     // ---------------------------------------------------------------------
     // 3. J2 secular nodal drift of the two endpoint circular orbits.
@@ -122,9 +132,7 @@ fn main() {
     );
 
     let deg_day = |rate: f64| rate * 86_400.0 * 180.0 / PI;
-    println!(
-        "\nJ2 nodal drift of endpoints (i = 50 deg, via j2_secular_rates):"
-    );
+    println!("\nJ2 nodal drift of endpoints (i = 50 deg, via j2_secular_rates):");
     println!(
         "  LEO (r={r1}) RAAN drift  = {:>9.4} deg/day",
         deg_day(raan_dot_low)

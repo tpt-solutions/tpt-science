@@ -49,7 +49,10 @@ fn main() {
     // to 1 (the site budget) as p → ∞.
     let k_ads = 2.0; // adsorption equilibrium constant (K)
     println!("1) Langmuir isotherm  θ_A(p) = K·p/(1+K·p)   (K = {k_ads})");
-    println!("   {:>10} {:>10} {:>10} {:>10}", "p", "θ_A", "closed", "1-θ_A");
+    println!(
+        "   {:>10} {:>10} {:>10} {:>10}",
+        "p", "θ_A", "closed", "1-θ_A"
+    );
 
     let mut prev = -1.0_f64;
     for &p in &[0.01, 0.05, 0.2, 1.0, 5.0, 50.0, 1000.0] {
@@ -97,13 +100,15 @@ fn main() {
     let kin = KineticsProblem::new(vec![rate_b, rate_c]).unwrap();
     assert_eq!(kin.rate_constants(800.0).len(), 2);
 
-    let mut net: ReactionSystem =
-        ReactionNetwork::from_dsl("k1, A --> B\nk2, A --> C").unwrap();
+    let mut net: ReactionSystem = ReactionNetwork::from_dsl("k1, A --> B\nk2, A --> C").unwrap();
     let b_idx = net.species_index("B").unwrap();
     let c_idx = net.species_index("C").unwrap();
 
     println!("\n2) Parallel network A*→B* / A*→C* : selectivity B/C vs T");
-    println!("   {:>8} {:>10} {:>10} {:>10}", "T (K)", "k_B", "k_C", "B/C");
+    println!(
+        "   {:>8} {:>10} {:>10} {:>10}",
+        "T (K)", "k_B", "k_C", "B/C"
+    );
 
     let mut sel_low = 0.0_f64;
     let mut sel_high = 0.0_f64;
@@ -111,7 +116,9 @@ fn main() {
         let ks = kin.rate_constants(t);
         net.set_parameter("k1", ks[0]).unwrap();
         net.set_parameter("k2", ks[1]).unwrap();
-        let y0 = net.initial_state(&[("A", 1.0), ("B", 0.0), ("C", 0.0)]).unwrap();
+        let y0 = net
+            .initial_state(&[("A", 1.0), ("B", 0.0), ("C", 0.0)])
+            .unwrap();
         let prob = net.to_ode_problem(&y0, 0.0).unwrap();
         let y = prob.solve(Method::Bdf, 1.0).unwrap();
         // Selectivity B/C (both channels deplete A, so the ratio is time-invariant).
@@ -123,11 +130,17 @@ fn main() {
         if t == 1000.0 {
             sel_high = sel;
         }
-        println!("   {:>8.0} {:>10.3e} {:>10.3e} {:>10.3e}", t, ks[0], ks[1], sel);
+        println!(
+            "   {:>8.0} {:>10.3e} {:>10.3e} {:>10.3e}",
+            t, ks[0], ks[1], sel
+        );
     }
     // Low-Ea path wins at low T, high-A/high-Ea path wins at high T.
     assert!(sel_low > 1.0, "low-Ea channel B should dominate at low T");
-    assert!(sel_high < 1.0, "high-Ea channel C should dominate at high T");
+    assert!(
+        sel_high < 1.0,
+        "high-Ea channel C should dominate at high T"
+    );
 
     // -------------------------------------------------------------------
     // 3. Observed LH rate r(T) = k_surf(T)·θ_A(T): a temperature optimum.
@@ -144,7 +157,10 @@ fn main() {
     let surf = ArrheniusRate::new(1.0e6, 40_000.0).unwrap();
 
     println!("\n3) Observed LH rate r(T) = k_surf(T)·θ_A(T)  (p_A = {p_a})");
-    println!("   {:>8} {:>10} {:>10} {:>10}", "T (K)", "k_surf", "θ_A", "r(T)");
+    println!(
+        "   {:>8} {:>10} {:>10} {:>10}",
+        "T (K)", "k_surf", "θ_A", "r(T)"
+    );
 
     let mut best_t = 0.0_f64;
     let mut best_r = 0.0_f64;
@@ -156,7 +172,10 @@ fn main() {
         let k_a = adsorption_k(dh_a, ds_a, tk);
         let theta = langmuir_hinshelwood_coverages(&[k_a], &[p_a]).unwrap()[0];
         let r = surf.rate_constant(tk) * theta;
-        assert!(theta <= prev_theta + 1e-12, "exothermic θ_A must fall with T");
+        assert!(
+            theta <= prev_theta + 1e-12,
+            "exothermic θ_A must fall with T"
+        );
         prev_theta = theta;
         if r > best_r {
             best_r = r;
@@ -168,11 +187,23 @@ fn main() {
         if tk == 1200.0 {
             r_at_1200 = r;
         }
-        println!("   {:>8} {:>10.3e} {:>10.4} {:>10.3e}", tk, surf.rate_constant(tk), theta, r);
+        println!(
+            "   {:>8} {:>10.3e} {:>10.4} {:>10.3e}",
+            tk,
+            surf.rate_constant(tk),
+            theta,
+            r
+        );
     }
     // There is a genuine interior optimum, bounded away from both endpoints.
-    assert!(best_t > 300.0 && best_t < 1200.0, "rate optimum must be interior");
-    assert!(best_r > r_at_300 && best_r > r_at_1200, "optimum exceeds the endpoints");
+    assert!(
+        best_t > 300.0 && best_t < 1200.0,
+        "rate optimum must be interior"
+    );
+    assert!(
+        best_r > r_at_300 && best_r > r_at_1200,
+        "optimum exceeds the endpoints"
+    );
     println!(
         "   -> rate optimum near T = {:.0} K (rate-limited at low T, coverage-limited at high T)",
         best_t

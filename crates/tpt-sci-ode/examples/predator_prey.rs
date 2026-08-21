@@ -199,17 +199,13 @@ fn assert_within(label: &str, value: f64, lo: f64, hi: f64) {
 fn main() {
     println!("=== tpt-sci-ode: Lotka–Volterra predator–prey ===");
     println!("  x' = α x - β x y,   y' = δ x y - γ y");
-    println!(
-        "  α = {ALPHA}, β = {BETA}, δ = {DELTA}, γ = {GAMMA},  (x0, y0) = ({X0}, {Y0})"
-    );
+    println!("  α = {ALPHA}, β = {BETA}, δ = {DELTA}, γ = {GAMMA},  (x0, y0) = ({X0}, {Y0})");
     println!("  equilibrium: x* = {X_STAR}, y* = {Y_STAR}");
 
     let times = grid(DT, T_FINAL);
 
     // --- Both methods on the same orbit, compared by first-integral drift -----
-    println!(
-        "\n[1] Orbit traced with dense output (dt = {DT}); Q = γ·ln x + α·ln y - δ·x - β·y"
-    );
+    println!("\n[1] Orbit traced with dense output (dt = {DT}); Q = γ·ln x + α·ln y - δ·x - β·y");
     println!(
         "  {:<10} {:>10} {:>10} {:>14} {:>12}",
         "method", "x(T)", "y(T)", "max |ΔQ|", "period"
@@ -222,10 +218,7 @@ fn main() {
         let period = o.period.expect("several oscillation periods were sampled");
         println!(
             "  {name:<10} {:>10.5} {:>10.5} {:>14.3e} {:>12.5}",
-            o.final_state[0],
-            o.final_state[1],
-            o.q_drift,
-            period
+            o.final_state[0], o.final_state[1], o.q_drift, period
         );
 
         // The defining property: Q must be conserved to high accuracy.
@@ -271,9 +264,7 @@ fn main() {
     // frequency ω = sqrt(α·γ), so the period tends to 2π/sqrt(α·γ) as the
     // amplitude shrinks. We check the orbit here is in that neighbourhood.
     let linear_period = 2.0 * std::f64::consts::PI / (ALPHA * GAMMA).sqrt();
-    println!(
-        "\n[3] Linearised small-amplitude period 2π/√(α·γ) = {linear_period:.4}"
-    );
+    println!("\n[3] Linearised small-amplitude period 2π/√(α·γ) = {linear_period:.4}");
     let measured = mean_period(&upward_crossings_of(&times, &traj, X_STAR))
         .expect("period sampled on the main orbit");
     // The finite-amplitude orbit runs a little longer than the linear limit;
@@ -284,7 +275,10 @@ fn main() {
         1.0,
         1.2,
     );
-    println!("  measured orbit period           = {measured:.4}  (ratio {:.3})", measured / linear_period);
+    println!(
+        "  measured orbit period           = {measured:.4}  (ratio {:.3})",
+        measured / linear_period
+    );
 
     println!("\nAll diagnostics and assertions passed.");
 }

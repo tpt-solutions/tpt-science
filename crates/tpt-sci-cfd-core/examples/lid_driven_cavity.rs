@@ -79,8 +79,14 @@ fn main() {
         "  after {nsteps} steps: max|div(u)| = {:.3e}   KE = {:.4e}   max|u| = {:.4}",
         div, ke, speed
     );
-    assert!(div.is_finite() && div < 0.2, "interior divergence too large: {div}");
-    assert!(speed.is_finite() && speed > 0.0, "lid should drive a non-zero field");
+    assert!(
+        div.is_finite() && div < 0.2,
+        "interior divergence too large: {div}"
+    );
+    assert!(
+        speed.is_finite() && speed > 0.0,
+        "lid should drive a non-zero field"
+    );
     assert!(
         ke > 1e-6,
         "a driven lid must pump kinetic energy into the field (KE={ke})"
@@ -92,7 +98,10 @@ fn main() {
     // ---------------------------------------------------------------------
     let g = cavity.grid();
     let j = g.ny / 2; // mid-height row
-    println!("\n  u along horizontal centerline (x, u, p) at y = {:.3}:", (j as f64 + 0.5) * g.dy);
+    println!(
+        "\n  u along horizontal centerline (x, u, p) at y = {:.3}:",
+        (j as f64 + 0.5) * g.dy
+    );
     let mut profile = Vec::with_capacity(g.nx);
     for i in 0..g.nx {
         let c = g.idx(i, j);
@@ -144,7 +153,10 @@ fn main() {
         last_div = d;
         last_ke = e;
     }
-    assert!(last_div < 0.2, "sweep divergence should stay small: {last_div}");
+    assert!(
+        last_div < 0.2,
+        "sweep divergence should stay small: {last_div}"
+    );
 
     println!("\nAll checks passed: the fine Re=2000 cavity reached a finite,");
     println!("near-divergence-free state with a rightward mid-height profile, and");

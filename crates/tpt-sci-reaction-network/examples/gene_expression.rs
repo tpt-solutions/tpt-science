@@ -88,16 +88,8 @@ fn build_programmatic() -> ReactionSystem {
     net.parameter("k_dm", K_DM);
     net.parameter("k_tl", K_TL);
     net.parameter("k_dp", K_DP);
-    net.reaction(
-        &[(g, 1.0)],
-        &[(gstar, 1.0)],
-        RateLaw::mass_action("k_on"),
-    );
-    net.reaction(
-        &[(gstar, 1.0)],
-        &[(g, 1.0)],
-        RateLaw::mass_action("k_off"),
-    );
+    net.reaction(&[(g, 1.0)], &[(gstar, 1.0)], RateLaw::mass_action("k_on"));
+    net.reaction(&[(gstar, 1.0)], &[(g, 1.0)], RateLaw::mass_action("k_off"));
     net.reaction(
         &[(gstar, 1.0)],
         &[(gstar, 1.0), (m, 1.0)],
@@ -110,7 +102,8 @@ fn build_programmatic() -> ReactionSystem {
         RateLaw::mass_action("k_tl"),
     );
     net.reaction(&[(p, 1.0)], &[], RateLaw::mass_action("k_dp"));
-    net.build().expect("programmatic gene-expression model should build")
+    net.build()
+        .expect("programmatic gene-expression model should build")
 }
 
 /// Deterministic steady-state protein `P_ss = k_tl·k_t·(k_on/(k_on+k_off))/k_dm/k_dp`.
@@ -124,7 +117,9 @@ fn steady_state(kt: f64) -> f64 {
     let sys = build_dsl(kt);
     let y0 = sys.initial_state(&[("G", 1.0)]).unwrap();
     let prob = sys.to_ode_problem(&y0, 0.0).expect("build ODE problem");
-    let y = prob.solve(Method::Bdf, 300.0).expect("integrate to steady state");
+    let y = prob
+        .solve(Method::Bdf, 300.0)
+        .expect("integrate to steady state");
     let g = sys.species_index("G").unwrap();
     let gstar = sys.species_index("Gstar").unwrap();
     let p = sys.species_index("P").unwrap();
@@ -165,7 +160,10 @@ fn main() {
     println!(
         "\n[deterministic] k_t = {K_T}: steady P = {p_ss:.4}, analytic = {p_exact:.4}, rel err = {rel:.3e}"
     );
-    assert!(rel < 5e-3, "steady-state protein must match the analytic form");
+    assert!(
+        rel < 5e-3,
+        "steady-state protein must match the analytic form"
+    );
 
     // --- 3. Parameter scan: P_ss ∝ k_t (linear transcription law) ------------
     println!("\n[parameter scan] steady-state protein vs transcription rate k_t:");
@@ -181,7 +179,10 @@ fn main() {
     // All three ratios must agree: P_ss is linear in k_t.
     let spread = ratios.iter().cloned().fold(0.0_f64, f64::max)
         - ratios.iter().cloned().fold(f64::INFINITY, f64::min);
-    assert!(spread / ratios[0] < 1e-2, "P_ss must scale linearly with k_t");
+    assert!(
+        spread / ratios[0] < 1e-2,
+        "P_ss must scale linearly with k_t"
+    );
 
     // --- 4. Exact stochastic SSA: mean tracks the deterministic steady state --
     let sys = build_dsl(K_T);
@@ -210,7 +211,9 @@ fn main() {
         "SSA mean steady protein {mean_p:.3} too far from deterministic {p_ss:.3}"
     );
 
-    println!("\n=== gene-expression tour complete: deterministic, analytic, and stochastic agree ===");
+    println!(
+        "\n=== gene-expression tour complete: deterministic, analytic, and stochastic agree ==="
+    );
 }
 
 /// A tiny deterministic uniform RNG (`SplitMix64`) so the SSA tour does not

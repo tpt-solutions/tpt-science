@@ -115,7 +115,10 @@ fn demo_current_clamp() {
         firing_v[steps - 1]
     );
     assert!(silent_n == 0, "no current -> no action potentials");
-    assert!(firing_n >= 1, "supra-threshold current -> repetitive firing");
+    assert!(
+        firing_n >= 1,
+        "supra-threshold current -> repetitive firing"
+    );
     assert!(firing_v[steps - 1].is_finite());
     assert!(v_rest.is_finite());
 
@@ -132,7 +135,10 @@ fn demo_cable() {
 
     // Invalid configuration exercises the ElectrophysError surface.
     let err = Tissue::new(0, 1, 0.5).unwrap_err();
-    assert_eq!(err, ElectrophysError::InvalidTissue("dims must be > 0".into()));
+    assert_eq!(
+        err,
+        ElectrophysError::InvalidTissue("dims must be > 0".into())
+    );
     println!("rejected zero-size tissue: {err}");
 
     let nx = 60usize;
@@ -153,7 +159,10 @@ fn demo_cable() {
         t_down * 1000.0,
         velocity
     );
-    assert!(t_down > t_up, "front travels outward (downstream after upstream)");
+    assert!(
+        t_down > t_up,
+        "front travels outward (downstream after upstream)"
+    );
     assert!(velocity > 0.0, "conduction velocity positive");
     assert!(velocity.is_finite());
 

@@ -24,7 +24,7 @@
 //! Everything is deterministic scalar arithmetic. Run with
 //! `cargo run --example energy_balance -p tpt-sci-climate`.
 
-use tpt_sci_climate::{ClimateError, CO2_PREINDUSTRIAL, EnergyBalanceModel, SIGMA};
+use tpt_sci_climate::{CO2_PREINDUSTRIAL, ClimateError, EnergyBalanceModel, SIGMA};
 
 /// Seconds in a day (explicit-Euler stride for the transient integrations).
 const DAY: f64 = 86_400.0;
@@ -87,9 +87,7 @@ fn forcing_equivalence() {
     e.solar_constant = s_comp;
     let t_comp = e.equilibrium_temperature();
 
-    println!(
-        "  2xCO2 forcing F = {f_co2:.3} W/m^2  ->  compensate with ΔS = {ds:.2} W/m^2"
-    );
+    println!("  2xCO2 forcing F = {f_co2:.3} W/m^2  ->  compensate with ΔS = {ds:.2} W/m^2");
     println!(
         "  T_eq(base 1xCO2, S0)        = {t_base:.4} K\n  \
          T_eq(2xCO2, S0+ΔS)        = {t_comp:.4} K"
@@ -104,7 +102,10 @@ fn forcing_equivalence() {
     // `equilibrium_temperature` returns the balance temperature without mutating
     // the model, so pin the model's state to it before checking the flux.
     e.t = t_comp;
-    assert!(e.net_flux().abs() < 1e-6, "compensated TOA flux must balance");
+    assert!(
+        e.net_flux().abs() < 1e-6,
+        "compensated TOA flux must balance"
+    );
     println!("  -> solar and CO2 forcings are interchangeable in equilibrium ✓");
 }
 

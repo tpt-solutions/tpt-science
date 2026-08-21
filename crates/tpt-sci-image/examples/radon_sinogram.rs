@@ -27,11 +27,11 @@ use tpt_sci_image::{
 /// A Shepp–Logan-style phantom: list of `(centre_x, centre_y, semi_x, semi_y,
 /// rotation_rad, intensity)` ellipses in a `[-1, 1]²` field.
 const ELLIPSES: &[(f64, f64, f64, f64, f64, f64)] = &[
-    (0.0, 0.0, 0.75, 0.90, 0.0, 1.00), // outer skull
-    (0.0, 0.0, 0.55, 0.70, 0.0, 0.60), // inner cavity
+    (0.0, 0.0, 0.75, 0.90, 0.0, 1.00),      // outer skull
+    (0.0, 0.0, 0.55, 0.70, 0.0, 0.60),      // inner cavity
     (-0.22, 0.12, 0.20, 0.32, -0.30, 0.85), // large lobe
-    (0.30, -0.10, 0.18, 0.22, 0.20, 0.70), // small lobe
-    (0.0, 0.45, 0.12, 0.10, 0.0, 0.90), // top feature
+    (0.30, -0.10, 0.18, 0.22, 0.20, 0.70),  // small lobe
+    (0.0, 0.45, 0.12, 0.10, 0.0, 0.90),     // top feature
 ];
 
 /// Sample the phantom at image grid coordinate `(i, j)` of an `n x n` field,

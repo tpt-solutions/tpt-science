@@ -134,7 +134,10 @@ fn main() {
     assert_eq!(trace.n_chains(), 4);
     for p in 0..2 {
         let r = trace.rhat(p);
-        assert!(r.is_finite() && r < 1.1, "param {p} not converged: rhat = {r}");
+        assert!(
+            r.is_finite() && r < 1.1,
+            "param {p} not converged: rhat = {r}"
+        );
     }
     assert!(
         trace.divergence_rate() < 0.25,

@@ -114,7 +114,10 @@ fn main() {
     let rel = (u_num - u_exact).abs() / u_exact;
 
     println!("\n[Dirichlet]  u(x,y,0) = sin(πx)·sin(πy),  u = 0 on the boundary");
-    println!("  centre field u({:.3},{:.3},{:.1}) = {:.6}", xc, yc, t_final, u_num);
+    println!(
+        "  centre field u({:.3},{:.3},{:.1}) = {:.6}",
+        xc, yc, t_final, u_num
+    );
     println!("  analytic                = {u_exact:.6}");
     println!("  relative error          = {rel:.3e}");
 
@@ -133,12 +136,15 @@ fn main() {
     println!("  max |u| on the boundary = {boundary_max:.3e} (should be ~0)");
 
     assert!(u_num.is_finite(), "solution must stay finite");
-    assert!(u_num > 0.0, "centre must remain positive (decaying, not sign-flipping)");
-    assert!(rel < 1e-2, "Dirichlet centre must match the analytic solution");
     assert!(
-        boundary_max < 1e-9,
-        "Dirichlet boundary must stay at u = 0"
+        u_num > 0.0,
+        "centre must remain positive (decaying, not sign-flipping)"
     );
+    assert!(
+        rel < 1e-2,
+        "Dirichlet centre must match the analytic solution"
+    );
+    assert!(boundary_max < 1e-9, "Dirichlet boundary must stay at u = 0");
     // Heat leaks through the Dirichlet boundary (mass must drop).
     assert!(
         dir_flux > 0.0,
@@ -159,10 +165,7 @@ fn main() {
 
     assert!(peak1.is_finite(), "Neumann solution must stay finite");
     // The peak must smooth out (never grow, since there is no interior source).
-    assert!(
-        peak1 <= peak0 + 1e-9,
-        "Neumann peak must decay, not grow"
-    );
+    assert!(peak1 <= peak0 + 1e-9, "Neumann peak must decay, not grow");
     // Closed domain: total heat is conserved far better than through the
     // Dirichlet boundary. The dense one-sided Neumann stencil is not bit-exact
     // at the walls, so we check the drift is small (a few percent) rather than
@@ -180,7 +183,8 @@ fn main() {
     let rel_drift = (mass1 - mass0).abs() / mass0;
     println!(
         "  Neumann relative heat drift = {:.3e}  (Dirichlet bleeds {:.3e})",
-        rel_drift, dir_flux / mass0
+        rel_drift,
+        dir_flux / mass0
     );
     assert!(
         rel_drift < 0.05,

@@ -39,11 +39,7 @@ fn coulomb_well(z: f64, soft: f64, x: f64) -> f64 {
 
 /// Finite square well: `-v0` inside `|x| < half`, zero outside.
 fn square_well(v0: f64, half: f64, x: f64) -> f64 {
-    if x.abs() < half {
-        -v0
-    } else {
-        0.0
-    }
+    if x.abs() < half { -v0 } else { 0.0 }
 }
 
 /// Solve the 1-D Kohn–Sham equations for an external potential `v_ext` on a grid
@@ -187,7 +183,10 @@ fn main() {
             res.total_energy
         );
         assert!(res.total_energy.is_finite());
-        assert!((ne - 2.0).abs() < 0.3, "density stays normalized across grids");
+        assert!(
+            (ne - 2.0).abs() < 0.3,
+            "density stays normalized across grids"
+        );
     }
 
     println!("\n1-D hydrogen-like atom tour complete.");

@@ -183,7 +183,10 @@ fn main() -> Result<(), DftError> {
             "density profile must be finite and non-negative"
         );
         assert!(g.is_finite() && g > 0.0, "surface tension must be positive");
-        assert!(thick.is_finite() && thick > 0.0, "thickness must be positive");
+        assert!(
+            thick.is_finite() && thick > 0.0,
+            "thickness must be positive"
+        );
         g_vals.push(g);
         t_vals.push(thick);
     }

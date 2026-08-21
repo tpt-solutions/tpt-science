@@ -62,7 +62,12 @@ fn build_lattice(n: usize, box_len: f64, _sigma: f64) -> Vec<Particle> {
 
 /// Equilibrate the system at `target_t` with a Berendsen thermostat for
 /// `steps` velocity-Verlet steps, returning the final configuration.
-fn equilibrate(mut particles: Vec<Particle>, int: &Integrator, target_t: f64, steps: usize) -> Vec<Particle> {
+fn equilibrate(
+    mut particles: Vec<Particle>,
+    int: &Integrator,
+    target_t: f64,
+    steps: usize,
+) -> Vec<Particle> {
     // Prime the force field so the first velocity-Verlet half-step is correct.
     let _ = Forces::lennard_jones(&mut particles, int.box_len, int.sigma);
     for step in 0..steps {
@@ -71,10 +76,7 @@ fn equilibrate(mut particles: Vec<Particle>, int: &Integrator, target_t: f64, st
         if step % (steps / 5).max(1) == 0 {
             let t = int.temperature(&particles);
             let ekin = int.kinetic_energy(&particles);
-            println!(
-                "   eq {:>4}  T={:8.4}  E_kin={:10.4}",
-                step, t, ekin
-            );
+            println!("   eq {:>4}  T={:8.4}  E_kin={:10.4}", step, t, ekin);
         }
     }
     particles

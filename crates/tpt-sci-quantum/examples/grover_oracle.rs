@@ -59,12 +59,17 @@ fn main() {
         let sign = if i == marked { -1.0 } else { 1.0 };
         println!(
             "  |{:02b}> amplitude = {:+.4} (expect {:+.4})",
-            i, re, sign * amp
+            i,
+            re,
+            sign * amp
         );
         assert!((re - sign * amp).abs() < 1e-9, "oracle sign on |{i:02b}>");
     }
     // Exactly one amplitude is negated.
-    assert!((tagged.amplitude(marked).re + amp).abs() < 1e-9, "marked state flipped");
+    assert!(
+        (tagged.amplitude(marked).re + amp).abs() < 1e-9,
+        "marked state flipped"
+    );
     println!("  -> only the marked state |{marked:02b}> was phase-flipped\n");
 
     // ---------------------------------------------------------------------
@@ -97,7 +102,10 @@ fn main() {
         println!("  P(|{:02b}>) = {:.4}", i, pi);
     }
     println!("  norm = {:.6} (expect 1)", g.norm());
-    assert!((g.norm() - 1.0).abs() < 1e-12, "post-Grover state normalized");
+    assert!(
+        (g.norm() - 1.0).abs() < 1e-12,
+        "post-Grover state normalized"
+    );
     // One iteration on 2 qubits sends the marked state to certainty.
     assert!(
         (p[marked] - 1.0).abs() < 1e-6,
@@ -131,7 +139,10 @@ fn main() {
     println!(
         "Grover sampling over {trials} shots: P(|{marked:02b}>) = {frac:.4} (analytic = 1.000)"
     );
-    assert!(frac > 0.9, "Grover failed to identify the marked state: frac={frac}");
+    assert!(
+        frac > 0.9,
+        "Grover failed to identify the marked state: frac={frac}"
+    );
 
     println!("\nAll Grover/oracle checks passed.");
 }

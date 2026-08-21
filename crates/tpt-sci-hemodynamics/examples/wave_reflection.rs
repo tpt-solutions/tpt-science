@@ -74,9 +74,7 @@ fn reflection_run(
 
 /// Peak absolute deviation of the area trace from the reference area `A0`.
 fn peak_deviation(area: &[f64]) -> f64 {
-    area.iter()
-        .map(|&a| (a - A0).abs())
-        .fold(0.0_f64, f64::max)
+    area.iter().map(|&a| (a - A0).abs()).fold(0.0_f64, f64::max)
 }
 
 fn main() {
@@ -123,8 +121,14 @@ fn main() {
     println!("   long  chain (terminal far)  : peak |ΔA| = {dev_long:.4} cm²");
 
     // The inlet area must respond to the flow pulse in both chains.
-    assert!(dev_short > 1e-3, "inlet area must respond to the flow pulse (short)");
-    assert!(dev_long > 1e-3, "inlet area must respond to the flow pulse (long)");
+    assert!(
+        dev_short > 1e-3,
+        "inlet area must respond to the flow pulse (short)"
+    );
+    assert!(
+        dev_long > 1e-3,
+        "inlet area must respond to the flow pulse (long)"
+    );
     // In the short chain the reflected wave returns to the inlet within the window
     // and augments the incident disturbance; in the long chain the reflection has
     // not yet returned, so the inlet sees only the incident wave. The short-chain
