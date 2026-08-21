@@ -70,6 +70,37 @@ fn identity_2x2() -> DMatrix<f64> {
     DMatrix::from_fn(2, 2, |i, j| if i == j { 1.0 } else { 0.0 })
 }
 
+/// Real `2d×2d` block embedding of an arbitrary `d×d` complex matrix given
+/// row-major as `entries` (length `d*d`).
+///
+/// Generalizes [`embed_gate_2x2`]/[`embed_gate_4x4`] to any dimension `d`.
+/// Used by the [`crate::density`] module to embed density matrices and
+/// (possibly non-unitary) Kraus operators into the same real-embedded
+/// representation used for unitaries, so that gate/channel application can
+/// reuse ordinary real `DMatrix` multiplication.
+///
+/// A useful identity of this embedding: for any complex matrix `A`,
+/// `embed(A†) == embed(A).transpose()` (conjugate-transpose becomes plain
+/// real transpose), which is what lets [`crate::density::DensityMatrix`]
+/// implement `ρ ↦ K ρ K†` as ordinary real matrix products.
+pub(crate) fn embed_complex_square(entries: &[Complex<f64>], d: usize) -> DMatrix<f64> {
+    debug_assert_eq!(entries.len(), d * d);
+    DMatrix::from_fn(2 * d, 2 * d, |i, j| {
+        let qr = i / 2;
+        let qc = j / 2;
+        let sr = i % 2;
+        let sc = j % 2;
+        let z = entries[qr * d + qc];
+        block(z)[sr * 2 + sc]
+    })
+}
+
+/// Extract the complex entry `(i, j)` of a `d×d` complex matrix from its
+/// real `2d×2d` block embedding (the inverse of [`embed_complex_square`]).
+pub(crate) fn unembed_entry(real: &DMatrix<f64>, i: usize, j: usize) -> Complex<f64> {
+    Complex::new(real[(2 * i, 2 * j)], real[(2 * i + 1, 2 * j)])
+}
+
 /// Complex `4×4` matrix (row-major, 16 entries) of a controlled-`gate`.
 ///
 /// `gate` is applied to `target` whenever `control` is set. The two qubits
@@ -294,7 +325,11 @@ impl Circuit {
 }
 
 /// Expand a single-qubit gate to a full `2^(n+1) × 2^(.)` real-embedded matrix.
-fn expand_single(n: usize, qubit: usize, gate: &[Complex<f64>; 4]) -> DMatrix<f64> {
+///
+/// `pub(crate)` so the [`crate::density`] module can embed single-qubit Kraus
+/// operators (e.g. bit-flip/depolarizing noise) into the full `n`-qubit space
+/// the same way single-qubit gates are embedded here.
+pub(crate) fn expand_single(n: usize, qubit: usize, gate: &[Complex<f64>; 4]) -> DMatrix<f64> {
     let block = embed_gate_2x2(gate);
     let mut u: Option<DMatrix<f64>> = None;
     for q in 0..n {

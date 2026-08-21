@@ -13,7 +13,7 @@ The assembled operators are returned as `DMatrix` / `DVector` from the
 `tpt-math` dense linear-algebra substrate, an in-house, dual-licensed
 (MIT OR Apache-2.0) backend with no `nalgebra`/`faer` license exposure (ADR 0007).
 
-Depends on `tpt-math-linalg` (published).
+Depends on `tpt-math-linalg` and `tpt-math-numeric` (both published).
 
 ## Features
 
@@ -21,6 +21,10 @@ Depends on `tpt-math-linalg` (published).
   (`UniformGrid1D` / `UniformGrid2D` / `UniformGrid3D`).
 * Discrete Laplacians in 1-D, 2-D and 3-D (`laplacian_1d` / `laplacian_2d` /
   `laplacian_3d`), with homogeneous Dirichlet or Neumann boundaries.
+* `derivative_1d` — generic finite-difference first/second-derivative
+  operator driven by a `Stencil`.
+* `kron` — Kronecker product of two matrices, used to build the tensor-product
+  multi-D operators.
 * Feature-gated sparse backend (enable the `sparse` feature): a CSR
   `CsrMatrix` plus sparse Laplacian assemblers (`laplacian_1d_sparse`,
   `laplacian_2d_sparse`, `laplacian_3d_sparse`) and an explicit-Euler

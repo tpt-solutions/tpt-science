@@ -44,6 +44,12 @@ pub use error::ImageError;
 pub mod volume;
 pub use volume::{Volume, filtered_back_projection_3d, radon_transform_3d};
 
+/// General cone-beam (divergent source) forward/back-projection geometry and
+/// the Feldkamp-Davis-Kress (FDK) reconstruction, alongside (not replacing)
+/// the parallel-beam `volume` module.
+pub mod cone_beam;
+pub use cone_beam::{ConeBeamGeometry, cone_beam_forward_projection, fdk_reconstruction};
+
 /// Build an inclusive linearly-spaced vector of `n` points from `start` to
 /// `end`.
 ///
@@ -81,7 +87,7 @@ fn detector_count(image: &DMatrix<f64>) -> usize {
 /// coordinate, both in the image's own pixel grid with the origin at the
 /// top-left pixel. Values outside the image extent are treated as zero (the
 /// object is assumed supported on the image).
-fn sample_bilinear(image: &DMatrix<f64>, col: f64, row: f64) -> f64 {
+pub(crate) fn sample_bilinear(image: &DMatrix<f64>, col: f64, row: f64) -> f64 {
     let nrows = image.nrows() as f64;
     let ncols = image.ncols() as f64;
     if col < 0.0 || row < 0.0 || col > ncols - 1.0 || row > nrows - 1.0 {
@@ -177,7 +183,11 @@ pub fn radon_transform(image: &DMatrix<f64>, angles: &[f64]) -> Result<DMatrix<f
 /// The forward FFT is taken, each bin `k` is multiplied by `|k|`
 /// (`min(k, n - k)`, which is the folded positive frequency), and the result
 /// is inverse-transformed (normalized) before returning its real part.
-fn ramp_filter(p: &[f64]) -> Vec<f64> {
+///
+/// Shared by [`filtered_back_projection`], [`volume::filtered_back_projection_3d`]
+/// and [`cone_beam::fdk_reconstruction`] so the ram-lak machinery lives in one
+/// place.
+pub(crate) fn ramp_filter(p: &[f64]) -> Vec<f64> {
     let n = p.len();
     if n == 0 {
         return Vec::new();

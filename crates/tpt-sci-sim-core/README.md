@@ -16,7 +16,13 @@ It provides:
   restore every model's state and the global clock, for resumable /
   reproducible runs.
 
-Depends on `tpt-sci-ode`, `tpt-sci-grid`.
+Two ready-made `SubModel` implementations are provided: `OdeSubModel` wraps a
+`tpt-sci-ode` problem, and `DiffusionSubModel` wraps a 1-D diffusion field
+built on a `tpt-sci-grid` Laplacian.
+
+Depends on `tpt-sci-ode`, `tpt-sci-grid`. The `multi_scale_cookbook` example
+additionally dev-depends on `tpt-sci-reaction-network` to drive an
+`OdeSubModel` from a reaction-network model.
 
 ## Example
 

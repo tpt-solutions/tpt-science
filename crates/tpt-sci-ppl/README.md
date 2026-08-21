@@ -39,7 +39,8 @@ m.likelihood(|t, v, d| {
 });
 let model = m.build().unwrap();
 let mut rng = SplitMix64::seed_from_u64(1);
-let samples = model.fit(&mut rng, 500).unwrap();
+let trace = model.fit(&mut rng, 500).unwrap();
+let samples = trace.combined_samples();
 let mean: f64 = samples.iter().map(|s| s[0]).sum::<f64>() / samples.len() as f64;
 assert!((mean - 2.8).abs() < 0.6);
 ```

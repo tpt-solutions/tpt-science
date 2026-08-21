@@ -5,8 +5,10 @@
 //! This crate implements its own ODE integrators **from scratch** — no
 //! [`diffsol`](https://crates.io/crates/diffsol), `nalgebra`, or `faer` in the
 //! shipped dependency graph — so the whole crate is TPT-owned code under
-//! `MIT OR Apache-2.0`. It builds on the dual-licensed `tpt-math` dense linear
-//! algebra for the implicit-method linear solves.
+//! `MIT OR Apache-2.0`. It carries its own dual-licensed dense linear algebra
+//! (`DMat` + LU with partial pivoting, in `linalg`) for the implicit-method
+//! linear solves, and depends on `tpt-math-numeric` only for the `Scalar`
+//! numeric trait.
 //!
 //! Four methods are provided (see [`Method`]):
 //! * [`Method::Tsit45`] — explicit Runge–Kutta 4(5), non-stiff.
@@ -38,11 +40,15 @@ pub mod error;
 pub mod jit;
 pub mod linalg;
 pub mod problem;
+pub mod scalar;
+pub mod sensitivity;
 pub mod solver;
+pub mod sparse;
 
 pub use error::OdeError;
 pub use jit::{JitRhs, JitRhsBuilder, compile_rhs};
 pub use problem::{OdeProblem, OdeProblemBuilder, Rhs};
+pub use sensitivity::{SensitivityResult, forward_sensitivities};
 pub use solver::Method;
 
 /// A callable right-hand side for the ODE solvers.

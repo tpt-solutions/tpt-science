@@ -11,6 +11,17 @@ from scratch on top of [`tpt-sci-reaction-network`](https://docs.rs/tpt-sci-reac
 * `langmuir_hinshelwood_coverages` — single-site fractional surface coverages
   `θ_i = K_i·p_i / (1 + Σ K_j·p_j)` from adsorption equilibria + partial
   pressures (coverages sum to ≤ 1).
+* `multi_site_langmuir_hinshelwood_coverages` — the same isotherm generalized
+  to multiple independent site types (e.g. species adsorbing on site type A
+  vs site type B), normalizing each site type's coverages separately;
+  reduces to `langmuir_hinshelwood_coverages` for a single site type.
+* `EleyRideal` — Eley–Rideal surface mechanism where one reactant is adsorbed
+  (LH coverage `θ`) and the other reacts directly from the gas phase,
+  `r = k·θ_adsorbed·[gas_phase]`; `into_rate_law` plugs it in as a
+  `tpt-sci-reaction-network` `RateLaw::Custom` closure.
+* `CoverageDependentArrheniusRate` — Arrhenius rate with a linear
+  Brønsted–Evans–Polanyi-style coverage-dependent activation energy
+  `Ea(θ) = Ea0 + α·θ`, giving `k(T, θ) = A·exp(-Ea(θ)/(R·T))`.
 * `KineticsProblem` — binds an Arrhenius `ReactionSystem` to a temperature
   (`rate_constants`), integrating with `tpt-sci-ode`.
 
@@ -38,10 +49,13 @@ an Arrhenius-rate reaction system into a temperature-driven solve.
 
 ## Scope (v1)
 
-Arrhenius temperature dependence and Langmuir–Hinshelwood surface coverage, the
-two building blocks most reactor/catalysis models need on top of plain
-mass-action CRNs. Detailed micro-kinetic mechanisms (multiple site types, Eley–
-Rideal, coverage-dependent `Ea`) are out of scope for v1.
+Arrhenius temperature dependence and Langmuir–Hinshelwood surface coverage
+(single- and multi-site), the Eley–Rideal mechanism, and linear
+coverage-dependent activation energy — the building blocks most
+reactor/catalysis models need on top of plain mass-action CRNs. Further
+micro-kinetic detail (e.g. nonlinear coverage dependence, lateral-interaction
+lattice models, multi-step elementary mechanisms beyond LH/ER) is out of
+scope for v1.
 
 ## License
 

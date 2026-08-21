@@ -36,6 +36,11 @@ pub enum ReactionNetworkError {
     #[error("invalid reaction-network DSL: {0}")]
     Dsl(String),
 
+    /// The SBML document could not be parsed by the minimal reader in
+    /// [`crate::sbml`] (malformed XML, or outside the supported subset).
+    #[error("invalid or unsupported SBML: {0}")]
+    Sbml(String),
+
     /// Wraps an error from the underlying ODE solver ([`tpt_sci_ode`]).
     #[error("underlying ODE error: {0}")]
     Ode(#[from] tpt_sci_ode::OdeError),

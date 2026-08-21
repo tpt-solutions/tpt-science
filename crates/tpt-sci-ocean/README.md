@@ -13,6 +13,7 @@ rejected: GPL-3.0-only, same as CFD).
   `step`, `max_speed`).
 * Reuses `tpt-sci-cfd-core::CollocatedGrid` for discretization, so the same
   grid/convergence machinery carries over.
+* `OceanError` — construction errors for invalid model parameters.
 
 This is a reduced-order circulation primitive — not a full 3-D primitive-equation
 ocean GCM.

@@ -1,8 +1,8 @@
 # tpt-sci-electrophys
 
-Cardiac **electrophysiology** for the `tpt-science` pillar, built on
-[`tpt-sci-ode`](https://docs.rs/tpt-sci-ode) and
-[`tpt-sci-grid`](https://docs.rs/tpt-sci-grid).
+Cardiac **electrophysiology** for the `tpt-science` pillar, built from
+scratch (`HodgkinHuxley`/`Tissue` use a hand-rolled explicit-Euler stepper
+and a hand-rolled 5-point Laplacian, not `tpt-sci-ode`/`tpt-sci-grid`).
 
 ## Features
 
@@ -10,12 +10,10 @@ Cardiac **electrophysiology** for the `tpt-science` pillar, built on
   voltage-dependent rate laws and ionic current
   `I_ion = ḡNa·m³h·(V−E_Na) + ḡK·n⁴·(V−E_K) + ḡL·(V−E_L)`. Integrate the
   membrane ODE with `step(dt)`; inspect `state()` / `voltage()`.
-* `Tissue` — 2-D monodomain sheet coupling the HH membrane to a 5-point Laplacian
-  diffusion (`dVm/dt = −I_ion/Cm + D·∇²Vm`), so an action potential launched at
-  one node propagates through the tissue.
-
-The model integrates `dVi/dt = −I_ion/Cm + D·∇²V` across a grid, so an action
-potential launched at one node propagates through the tissue.
+* `Tissue` — 2-D **monodomain** sheet coupling the HH membrane to a 5-point
+  Laplacian diffusion (`dVm/dt = −I_ion/Cm + D·∇²Vm`), so an action potential
+  launched at one node propagates through the tissue. Bidomain is not
+  implemented (see Scope below).
 
 ## Example
 

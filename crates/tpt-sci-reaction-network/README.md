@@ -49,15 +49,40 @@ assert!((y[e] + y[se] - 10.0).abs() < 1e-6);
 
 **v1 (this crate):** a CRN IR (species / parameters / reactions), mass-action
 rate laws (plus custom non-mass-action rate closures), a stoichiometry matrix
-and reaction-rate builder, an `OdeProblem` bridge into `tpt-sci-ode`, and an
-exact stochastic backend ([`ReactionSystem::simulate_ssa`] — Gillespie's direct
-method). A textual Catalyst.jl-style DSL (`kB, S + E --> SE`) is provided for
+and reaction-rate builder, an `OdeProblem` bridge into `tpt-sci-ode`, three
+stochastic backends operating on the same IR, a minimal SBML reader, and
+stoichiometric network analysis:
+
+- **Exact SSA** ([`ReactionSystem::simulate_ssa`]) — Gillespie's direct
+  method.
+- **Tau-leaping** ([`ReactionSystem::simulate_tau_leaping`]) — explicit
+  tau-leaping with Poisson-distributed reaction counts per step and
+  (optional) adaptive step selection, for approximate trajectories at a
+  fraction of the SSA's cost.
+- **Chemical Langevin Equation** ([`ReactionSystem::simulate_cle`]) — the
+  diffusion-limit SDE, integrated by Euler–Maruyama with Gaussian noise.
+- **Minimal SBML reader** ([`ReactionNetwork::from_sbml`]) — parses a
+  practical subset of SBML Level 2/3 core (species with initial amounts,
+  parameters, and reactions with a mass-action `<kineticLaw>`) into this
+  crate's IR; see the [`sbml`](src/sbml.rs) module docs for exactly what
+  subset is (and is not) supported. No new XML-parsing dependency was
+  added — it's a small hand-rolled tag scanner, sufficient for the
+  supported subset.
+- **Conservation-law detection** ([`ReactionSystem::conservation_laws`]) —
+  finds a basis for the left null space of the stoichiometry matrix `S`
+  (vectors `c` with `cᵀS = 0`, i.e. `c · y` invariants) via Gaussian
+  elimination.
+
+A textual Catalyst.jl-style DSL (`kB, S + E --> SE`) is provided for
 convenience.
 
-**Out of v1 (documented, not built):** SDE/jump models, SBML I/O, network
-analysis, and conservation-law elimination. (The stochastic SSA backend was
+**Out of v1 (documented, not built):** general MathML/SBML rule and event
+evaluation (only mass-action `<kineticLaw>` expressions are read), and
+rank-revealing (SVD-based) conservation-law extraction for very large or
+ill-conditioned networks (Gaussian elimination is used instead, appropriate
+for the network sizes this crate targets). (The stochastic SSA backend was
 previously deferred to wrapping [`rebop`](https://crates.io/crates/rebop), MIT;
-it is now implemented from scratch instead.)
+it, tau-leaping, and the CLE are now all implemented from scratch instead.)
 
 ## License
 

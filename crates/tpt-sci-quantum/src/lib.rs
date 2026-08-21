@@ -37,6 +37,10 @@ const INV_SQRT2: f64 = 1.0 / SQRT_2;
 pub mod tensor;
 pub use tensor::{Circuit, embed_gate_2x2, kron};
 
+/// Density-matrix representation and Kraus-channel noise application.
+pub mod density;
+pub use density::{DensityMatrix, Matrix};
+
 /// Errors produced by state construction and gate application.
 pub mod error;
 pub use error::StateError;

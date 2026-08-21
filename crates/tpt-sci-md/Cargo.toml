@@ -1,6 +1,6 @@
 [package]
 name = "tpt-sci-md"
-description = "Classical molecular dynamics (Lennard-Jones / EAM, radial distribution function) for the tpt-science pillar"
+description = "Classical molecular dynamics (Lennard-Jones, radial distribution function) for the tpt-science pillar"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -41,4 +41,13 @@ pub enum ImageError {
         /// Supplied extent.
         got: usize,
     },
+
+    /// A [`crate::cone_beam::ConeBeamGeometry`] parameter was invalid: a
+    /// non-positive source/detector distance or pixel spacing, or a zero
+    /// detector pixel count / angle count.
+    #[error("invalid cone-beam geometry: {reason}")]
+    InvalidGeometry {
+        /// Human-readable description of what was invalid.
+        reason: String,
+    },
 }

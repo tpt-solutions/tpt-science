@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::error::ReactionNetworkError;
 use crate::ssa::SsaTrajectory;
+use crate::tau_leap::{TauLeapConfig, sample_poisson, sample_standard_normal};
 
 /// A user-supplied reaction rate law `r(y, p)` over the current state and the
 /// parameter vector.
@@ -457,19 +458,7 @@ impl ReactionSystem {
         t_max: f64,
         rng: &mut F,
     ) -> Result<SsaTrajectory, ReactionNetworkError> {
-        if y0.len() != self.n_species() {
-            return Err(ReactionNetworkError::StateDimension {
-                got: y0.len(),
-                expected: self.n_species(),
-            });
-        }
-        for (i, &v) in y0.iter().enumerate() {
-            if !v.is_finite() || v < 0.0 {
-                return Err(ReactionNetworkError::InvalidState(format!(
-                    "species {i} count {v} must be finite and non-negative"
-                )));
-            }
-        }
+        self.validate_stochastic_state(y0)?;
         let mut state = y0.to_vec();
         let mut t = 0.0_f64;
         let mut times = vec![0.0];
@@ -511,6 +500,221 @@ impl ReactionSystem {
         }
         times.push(t_max);
         states.push(state);
+        Ok(SsaTrajectory { times, states })
+    }
+
+    /// Validate a stochastic simulation's initial state: it must have one
+    /// entry per species, and every entry must be finite and non-negative.
+    /// Shared by [`Self::simulate_ssa`], [`Self::simulate_tau_leaping`], and
+    /// [`Self::simulate_cle`].
+    fn validate_stochastic_state(&self, y0: &[f64]) -> Result<(), ReactionNetworkError> {
+        if y0.len() != self.n_species() {
+            return Err(ReactionNetworkError::StateDimension {
+                got: y0.len(),
+                expected: self.n_species(),
+            });
+        }
+        for (i, &v) in y0.iter().enumerate() {
+            if !v.is_finite() || v < 0.0 {
+                return Err(ReactionNetworkError::InvalidState(format!(
+                    "species {i} count {v} must be finite and non-negative"
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Simplified adaptive tau-selection: bound the expected drift and
+    /// standard deviation of every species' propensity-driven change per
+    /// step to `epsilon` of its current population (a simplified version of
+    /// the Cao–Gillespie–Petzold rule — see [`TauLeapConfig::epsilon`] for
+    /// what is simplified away).
+    fn select_tau(&self, y: &[f64], a: &[f64], epsilon: f64) -> f64 {
+        let n = self.species.len();
+        let mut mu = vec![0.0_f64; n];
+        let mut sigma2 = vec![0.0_f64; n];
+        for (j, r) in self.reactions.iter().enumerate() {
+            let aj = a[j];
+            if aj <= 0.0 {
+                continue;
+            }
+            for (i, &dc) in r.stoich_col.iter().enumerate() {
+                if dc == 0.0 {
+                    continue;
+                }
+                mu[i] += dc * aj;
+                sigma2[i] += dc * dc * aj;
+            }
+        }
+        let mut tau = f64::INFINITY;
+        for i in 0..n {
+            let bound = (epsilon * y[i]).max(1.0);
+            if mu[i].abs() > 0.0 {
+                tau = tau.min(bound / mu[i].abs());
+            }
+            if sigma2[i] > 0.0 {
+                tau = tau.min(bound * bound / sigma2[i]);
+            }
+        }
+        if !tau.is_finite() || tau <= 0.0 {
+            // No species has any propensity-driven change under this bound
+            // (should not normally happen once a0 > 0 has been checked by
+            // the caller) — fall back to a conservatively small step.
+            tau = 1e-6;
+        }
+        tau
+    }
+
+    /// Draw an approximate stochastic trajectory via explicit tau-leaping
+    /// (Gillespie 2001): repeatedly advance the state by a step `τ`, firing
+    /// each reaction `k_j ~ Poisson(a_j(y)·τ)` times, independently across
+    /// reactions. This trades exactness for speed relative to
+    /// [`Self::simulate_ssa`] — valid whenever `τ` is small enough that
+    /// propensities change little over the step (the *leap condition*),
+    /// which [`TauLeapConfig`]'s adaptive mode enforces automatically unless
+    /// `fixed_tau` is set. See [`crate::tau_leap`] for background.
+    ///
+    /// `y0` gives the initial (finite, non-negative) species counts and the
+    /// trajectory is advanced until `t_max`. `rng` must return uniform
+    /// variates in `[0, 1)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ReactionNetworkError::StateDimension`] if `y0` does not have
+    /// one entry per species, or [`ReactionNetworkError::InvalidState`] if any
+    /// initial count is non-finite or negative.
+    pub fn simulate_tau_leaping<F: FnMut() -> f64>(
+        &self,
+        y0: &[f64],
+        t_max: f64,
+        config: &TauLeapConfig,
+        rng: &mut F,
+    ) -> Result<SsaTrajectory, ReactionNetworkError> {
+        self.validate_stochastic_state(y0)?;
+        let mut state = y0.to_vec();
+        let mut t = 0.0_f64;
+        let mut times = vec![0.0];
+        let mut states = vec![state.clone()];
+        while t < t_max {
+            let a = self.propensities(&state);
+            let a0: f64 = a.iter().sum();
+            if a0 <= 0.0 {
+                break;
+            }
+            let mut tau = match config.fixed_tau {
+                Some(tau) => tau,
+                None => self.select_tau(&state, &a, config.epsilon),
+            };
+            tau = tau.min(t_max - t);
+            if tau <= 0.0 {
+                break;
+            }
+            // Fire each reaction a Poisson(a_j * tau) number of times; if
+            // the leap would drive any species negative (an artifact of the
+            // Poisson approximation — impossible in the exact SSA), halve
+            // tau and retry before falling back to clamping at zero.
+            let mut attempt = 0;
+            loop {
+                let mut next = state.clone();
+                for (j, &aj) in a.iter().enumerate() {
+                    if aj <= 0.0 {
+                        continue;
+                    }
+                    let k = sample_poisson(aj * tau, rng);
+                    if k == 0.0 {
+                        continue;
+                    }
+                    for (s, dc) in next.iter_mut().zip(self.reactions[j].stoich_col.iter()) {
+                        *s += dc * k;
+                    }
+                }
+                let ok = next.iter().all(|&v| v >= 0.0);
+                if ok || attempt >= config.max_step_halvings {
+                    for v in next.iter_mut() {
+                        if *v < 0.0 {
+                            *v = 0.0;
+                        }
+                    }
+                    state = next;
+                    break;
+                }
+                tau *= 0.5;
+                attempt += 1;
+            }
+            t += tau;
+            let t_clamped = t.min(t_max);
+            times.push(t_clamped);
+            states.push(state.clone());
+            t = t_clamped;
+        }
+        if times.last() != Some(&t_max) {
+            times.push(t_max);
+            states.push(state);
+        }
+        Ok(SsaTrajectory { times, states })
+    }
+
+    /// Draw an approximate trajectory via the Chemical Langevin Equation
+    /// (CLE), Gillespie's diffusion approximation to the same jump process,
+    /// integrated by explicit Euler–Maruyama with fixed step `dt`:
+    ///
+    /// ```text
+    /// dY = S·a(Y) dt + S·diag(√a(Y)) dW
+    /// ```
+    ///
+    /// where `dW` is a vector of independent `N(0, dt)` increments, one per
+    /// reaction. This is only sensible in the regime where propensities stay
+    /// large enough that species counts can be treated as continuous, so it
+    /// is typically less robust than [`Self::simulate_tau_leaping`] at small
+    /// populations; negative excursions (again an artifact of the Gaussian
+    /// approximation) are clamped at zero. See [`crate::tau_leap`] for
+    /// background.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ReactionNetworkError::StateDimension`] if `y0` does not have
+    /// one entry per species, or [`ReactionNetworkError::InvalidState`] if any
+    /// initial count is non-finite or negative.
+    pub fn simulate_cle<F: FnMut() -> f64>(
+        &self,
+        y0: &[f64],
+        t_max: f64,
+        dt: f64,
+        rng: &mut F,
+    ) -> Result<SsaTrajectory, ReactionNetworkError> {
+        self.validate_stochastic_state(y0)?;
+        let mut state = y0.to_vec();
+        let mut t = 0.0_f64;
+        let mut times = vec![0.0];
+        let mut states = vec![state.clone()];
+        while t < t_max {
+            let step = dt.min(t_max - t);
+            if step <= 0.0 {
+                break;
+            }
+            let a = self.propensities(&state);
+            let mut next = state.clone();
+            for (j, &aj) in a.iter().enumerate() {
+                if aj <= 0.0 {
+                    continue;
+                }
+                let drift = aj * step;
+                let noise = (aj * step).sqrt() * sample_standard_normal(rng);
+                let dxj = drift + noise;
+                for (s, dc) in next.iter_mut().zip(self.reactions[j].stoich_col.iter()) {
+                    *s += dc * dxj;
+                }
+            }
+            for v in next.iter_mut() {
+                if *v < 0.0 {
+                    *v = 0.0;
+                }
+            }
+            state = next;
+            t += step;
+            times.push(t);
+            states.push(state.clone());
+        }
         Ok(SsaTrajectory { times, states })
     }
 

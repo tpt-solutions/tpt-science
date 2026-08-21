@@ -12,8 +12,9 @@ GPL-3.0-only).
   (`momentum`) plus a pressure-Poisson projection (`project`) that enforces
   `∇·u = 0`. `advance()` runs one full fractional step; `max_divergence()` is a
   quality metric.
-* `Boundary` walls (top/bottom/left/right) with `Step::set_boundary` for
-  moving-lid / no-slip conditions.
+* `Boundary` walls with `Step::set_boundary` for moving-lid / no-slip
+  conditions. `Step::apply_walls` currently enforces `Top`/`Bottom`; `Left`/
+  `Right` values are accepted by the API but not yet applied.
 * `turbulence::eddy_viscosity` — algebraic Smagorinsky eddy-viscosity estimate.
 
 The solver is intentionally 2-D and explicit — a teaching / coupling primitive,

@@ -5,12 +5,15 @@
 //! engine such as `rapier`). Bodies are spheres of arbitrary dimension (2-D or
 //! 3-D) described by [`Body`], simulated inside a [`World`] that supports
 //! constant gravity, axis-aligned bounding walls, and pairwise elastic
-//! collisions with a configurable restitution coefficient.
+//! collisions with a configurable restitution coefficient and an optional
+//! global Coulomb friction coefficient ([`World::set_friction`]).
 //!
 //! The integrator is a semi-implicit (symplectic) Euler scheme; collisions are
-//! resolved with the standard two-sphere impulse plus a positional
-//! (Baumgarte-style) correction to keep overlapping bodies from sinking into
-//! one another.
+//! resolved with the standard two-sphere normal impulse, a tangential impulse
+//! bounded by Coulomb's law (`|friction_impulse| <= mu * |normal_impulse|`),
+//! plus a positional (Baumgarte-style) correction to keep overlapping bodies
+//! from sinking into one another. Candidate colliding pairs are found with a
+//! sweep-and-prune broad-phase rather than an all-pairs `O(n^2)` scan.
 //!
 //! Each [`Body`] is a genuine rigid body, not just a point mass: it carries an
 //! orientation quaternion and an angular velocity, so torques change its spin
@@ -254,6 +257,9 @@ pub struct World {
     /// Half-extents of an axis-aligned box centered at the origin. `None`
     /// means unbounded.
     bounds: Option<DVector<f64>>,
+    /// Global Coulomb friction coefficient `mu >= 0`, applied to both
+    /// body-body collisions and wall bounces.
+    friction: f64,
 }
 
 impl Default for World {
@@ -272,6 +278,7 @@ impl World {
             gravity: None,
             restitution: 1.0,
             bounds: None,
+            friction: 0.0,
         }
     }
 
@@ -284,6 +291,7 @@ impl World {
             gravity: Some(g),
             restitution: 1.0,
             bounds: None,
+            friction: 0.0,
         }
     }
 
@@ -291,6 +299,14 @@ impl World {
     /// collisions and wall bounces. `1.0` is perfectly elastic.
     pub fn set_restitution(&mut self, restitution: f64) {
         self.restitution = restitution;
+    }
+
+    /// Set the global Coulomb friction coefficient `mu` (`mu >= 0`) used for
+    /// both body-body collisions and wall bounces. `0.0` (the default)
+    /// disables friction; the tangential impulse applied at a contact is
+    /// clamped so `|friction_impulse| <= mu * |normal_impulse|`.
+    pub fn set_friction(&mut self, mu: f64) {
+        self.friction = mu.max(0.0);
     }
 
     /// Restrict the world to an axis-aligned box centered at the origin with the
@@ -378,50 +394,73 @@ impl World {
         }
 
         // (2) Wall collisions. `DVector` has no `IndexMut`, so rebuild the
-        // position/velocity vectors via `from_fn` (reflecting the normal
-        // component and clamping the center inside the half-extent).
+        // position/velocity vectors from plain `Vec<f64>` buffers (reflecting
+        // the normal component and clamping the center inside the
+        // half-extent). Friction, if enabled, damps the tangential (all
+        // non-colliding axes) velocity component, bounded by
+        // `mu * |normal_impulse|` per Coulomb's law.
         if let Some(bounds) = &self.bounds {
             let rest = self.restitution;
+            let mu = self.friction;
             for b in &mut self.bodies {
                 let dim = b.position.len();
                 let r = b.radius;
-                let new_position = DVector::from_fn(dim, |axis| {
+                let mut pos: Vec<f64> = (0..dim).map(|axis| b.position[axis]).collect();
+                let mut vel: Vec<f64> = (0..dim).map(|axis| b.velocity[axis]).collect();
+                for axis in 0..dim {
                     if axis >= bounds.len() {
-                        return b.position[axis];
+                        continue;
                     }
                     let half = bounds[axis];
-                    let mut p = b.position[axis];
-                    if p - r < -half {
-                        p = -half + r;
-                    } else if p + r > half {
-                        p = half - r;
+                    let p = pos[axis];
+                    let collided = p - r < -half || p + r > half;
+                    if !collided {
+                        continue;
                     }
-                    p
-                });
-                let new_velocity = DVector::from_fn(dim, |axis| {
-                    if axis >= bounds.len() {
-                        return b.velocity[axis];
+                    pos[axis] = if p - r < -half { -half + r } else { half - r };
+
+                    // Normal impulse (per unit mass) delivered by the wall.
+                    let vn = vel[axis];
+                    let new_vn = -rest * vn;
+                    let j_n = (vn - new_vn).abs();
+                    vel[axis] = new_vn;
+
+                    if mu > 0.0 && j_n > 0.0 {
+                        let tangent_speed_sq: f64 = vel
+                            .iter()
+                            .enumerate()
+                            .filter(|&(k, _)| k != axis)
+                            .map(|(_, v)| v * v)
+                            .sum();
+                        if tangent_speed_sq > 1e-18 {
+                            let tangent_speed = tangent_speed_sq.sqrt();
+                            // Coulomb bound: friction impulse (per unit mass)
+                            // cannot exceed `mu * j_n`, and cannot reverse the
+                            // tangential motion.
+                            let j_t = (mu * j_n).min(tangent_speed);
+                            let scale = j_t / tangent_speed;
+                            for (k, v) in vel.iter_mut().enumerate() {
+                                if k != axis {
+                                    *v -= *v * scale;
+                                }
+                            }
+                        }
                     }
-                    let half = bounds[axis];
-                    let p = b.position[axis];
-                    let mut vel = b.velocity[axis];
-                    if p - r < -half || p + r > half {
-                        vel *= -rest;
-                    }
-                    vel
-                });
-                b.position = new_position;
-                b.velocity = new_velocity;
+                }
+                b.position = DVector::from_row_slice(&pos);
+                b.velocity = DVector::from_row_slice(&vel);
             }
         }
 
-        // (3) Pairwise body-body collisions.
-        let n = self.bodies.len();
-        for i in 0..n {
-            for j in (i + 1)..n {
-                let (a, b) = self.bodies.split_at_mut(j);
-                resolve_pair(&mut a[i], &mut b[0], self.restitution);
-            }
+        // (3) Pairwise body-body collisions. A sweep-and-prune broad-phase
+        // ([`sap_candidate_pairs`]) narrows the candidate set before the
+        // exact narrow-phase resolution in [`resolve_pair`].
+        let candidate_pairs = sap_candidate_pairs(&self.bodies);
+        let restitution = self.restitution;
+        let friction = self.friction;
+        for (i, j) in candidate_pairs {
+            let (a, b) = self.bodies.split_at_mut(j);
+            resolve_pair(&mut a[i], &mut b[0], restitution, friction);
         }
     }
 }
@@ -432,9 +471,10 @@ fn normalize(v: &DVector<f64>) -> DVector<f64> {
     v.clone() * (1.0 / n)
 }
 
-/// Resolve a single colliding pair of spheres: exchange the normal impulse when
-/// the bodies are approaching, and push them apart to remove overlap.
-fn resolve_pair(a: &mut Body, b: &mut Body, restitution: f64) {
+/// Resolve a single colliding pair of spheres: exchange the normal impulse
+/// when the bodies are approaching, apply a Coulomb-bounded tangential
+/// friction impulse, and push them apart to remove overlap.
+fn resolve_pair(a: &mut Body, b: &mut Body, restitution: f64, friction: f64) {
     let delta = b.position.clone() - a.position.clone();
     let dist = delta.norm();
     let sum_r = a.radius + b.radius;
@@ -456,6 +496,30 @@ fn resolve_pair(a: &mut Body, b: &mut Body, restitution: f64) {
         let impulse = normal.clone() * j_imp;
         a.velocity = a.velocity.clone() - (impulse.clone() * inv_mass_a);
         b.velocity = b.velocity.clone() + (impulse * inv_mass_b);
+
+        // Coulomb friction: clamp the tangential impulse needed to cancel
+        // the relative tangential (contact-plane) velocity to
+        // `mu * |normal impulse|`, applied along the tangential direction of
+        // the post-normal-impulse relative velocity.
+        if friction > 0.0 && j_imp > 0.0 {
+            let rel_vel2 = b.velocity.clone() - a.velocity.clone();
+            let vn2 = rel_vel2.dot(&normal);
+            let tangent_vec = rel_vel2 - (normal.clone() * vn2);
+            let tangent_speed = tangent_vec.norm();
+            if tangent_speed > 1e-9 {
+                // `tangent_dir` points along the existing relative tangential
+                // velocity (b relative to a); the friction impulse must
+                // oppose that motion, so apply it with the opposite sign
+                // convention from the normal impulse (subtract from `b`, add
+                // to `a`).
+                let tangent_dir = tangent_vec * (1.0 / tangent_speed);
+                let j_t_full = tangent_speed / (inv_mass_a + inv_mass_b);
+                let j_t = j_t_full.min(friction * j_imp);
+                let friction_impulse = tangent_dir * j_t;
+                a.velocity = a.velocity.clone() + (friction_impulse.clone() * inv_mass_a);
+                b.velocity = b.velocity.clone() - (friction_impulse * inv_mass_b);
+            }
+        }
     }
 
     // Positional correction: split the overlap by inverse mass so that the
@@ -464,6 +528,59 @@ fn resolve_pair(a: &mut Body, b: &mut Body, restitution: f64) {
     let correction = normal * (overlap / (inv_mass_a + inv_mass_b));
     a.position = a.position.clone() - (correction.clone() * inv_mass_a);
     b.position = b.position.clone() + (correction * inv_mass_b);
+}
+
+/// `true` if the axis-aligned bounding boxes of `a` and `b` (each sphere's
+/// center `±` radius on every shared axis) overlap.
+fn aabb_overlap(a: &Body, b: &Body) -> bool {
+    let dim = a.position.len().min(b.position.len());
+    for axis in 0..dim {
+        let a_min = a.position[axis] - a.radius;
+        let a_max = a.position[axis] + a.radius;
+        let b_min = b.position[axis] - b.radius;
+        let b_max = b.position[axis] + b.radius;
+        if a_max < b_min || b_max < a_min {
+            return false;
+        }
+    }
+    true
+}
+
+/// Sweep-and-prune broad-phase collision candidate search.
+///
+/// Sorts bodies by the lower extent of their axis-0 AABB interval and sweeps
+/// an "active" set, testing each newly-swept body's full AABB against every
+/// still-active body whose axis-0 interval could overlap it. This produces
+/// exactly the set of index pairs `(i, j)` (`i < j`, indices into `bodies`)
+/// that a brute-force `O(n^2)` all-pairs AABB check would produce, but visits
+/// far fewer pairs when the bodies are sparsely distributed along axis 0.
+fn sap_candidate_pairs(bodies: &[Body]) -> Vec<(usize, usize)> {
+    let n = bodies.len();
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by(|&i, &j| {
+        let mi = bodies[i].position[0] - bodies[i].radius;
+        let mj = bodies[j].position[0] - bodies[j].radius;
+        mi.partial_cmp(&mj).unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    let mut pairs = Vec::new();
+    let mut active: Vec<usize> = Vec::new();
+    for idx in order {
+        let min_x = bodies[idx].position[0] - bodies[idx].radius;
+        // Drop actives whose interval has already ended before `idx` starts.
+        active.retain(|&other| bodies[other].position[0] + bodies[other].radius >= min_x);
+        for &other in &active {
+            if aabb_overlap(&bodies[idx], &bodies[other]) {
+                pairs.push(if idx < other {
+                    (idx, other)
+                } else {
+                    (other, idx)
+                });
+            }
+        }
+        active.push(idx);
+    }
+    pairs
 }
 
 #[cfg(test)]
@@ -627,5 +744,138 @@ mod tests {
         assert_abs_diff_eq!(r[(0, 0)], -1.0, epsilon = 1e-9);
         assert_abs_diff_eq!(r[(1, 1)], -1.0, epsilon = 1e-9);
         assert_abs_diff_eq!(r[(2, 2)], 1.0, epsilon = 1e-9);
+    }
+
+    /// Build a world with a sphere dropping under gravity onto the floor
+    /// (a bounding wall) while sliding sideways (nonzero tangential
+    /// velocity), and return the tangential (x-axis) speed after `steps`
+    /// small time steps.
+    fn sliding_tangential_speed(mu: f64, steps: usize) -> f64 {
+        let mut world = World::with_gravity(v(&[0.0, -9.8]));
+        world.set_bounds(v(&[100.0, 5.0]));
+        world.set_restitution(0.0); // inelastic, so the body stays on the floor
+        world.set_friction(mu);
+        world
+            .add_body(Body::new(0, v(&[0.0, 4.6]), v(&[2.0, 0.0]), 1.0, 0.5).unwrap())
+            .unwrap();
+        let dt = 0.01;
+        for _ in 0..steps {
+            world.step(dt);
+        }
+        world.body(0).unwrap().velocity[0].abs()
+    }
+
+    #[test]
+    fn wall_friction_decelerates_tangential_slide() {
+        let speed_no_friction = sliding_tangential_speed(0.0, 200);
+        let speed_with_friction = sliding_tangential_speed(0.8, 200);
+        // Without friction the tangential (x) velocity is unaffected by the
+        // (purely normal) wall bounce; with friction it must be strictly
+        // smaller after the same number of steps sliding on the floor.
+        assert_abs_diff_eq!(speed_no_friction, 2.0, epsilon = 1e-6);
+        assert!(
+            speed_with_friction < speed_no_friction,
+            "friction should reduce tangential speed: {speed_with_friction} vs {speed_no_friction}"
+        );
+    }
+
+    #[test]
+    fn body_body_friction_decelerates_tangential_relative_velocity() {
+        // Two overlapping spheres centered along the x-axis (so the contact
+        // normal is exactly x), with `a` approaching `b` along x while also
+        // sliding relative to `b` along y (tangential to the contact).
+        // Resolve directly via `resolve_pair` (bypassing `World::step`'s
+        // position integration, which would otherwise perturb the contact
+        // normal) so the normal/tangential decomposition is exact.
+        fn run(mu: f64) -> f64 {
+            let mut a = Body::new(0, v(&[0.0, 0.0]), v(&[1.0, 1.0]), 1.0, 0.5).unwrap();
+            let mut b = Body::new(1, v(&[0.9, 0.0]), v(&[0.0, 0.0]), 1.0, 0.5).unwrap();
+            resolve_pair(&mut a, &mut b, 0.0, mu); // inelastic (restitution = 0)
+            let rel = b.velocity - a.velocity;
+            rel[1].abs() // relative tangential (y) speed after collision
+        }
+
+        let rel_tangential_no_friction = run(0.0);
+        let rel_tangential_with_friction = run(0.9);
+        assert_abs_diff_eq!(rel_tangential_no_friction, 1.0, epsilon = 1e-6);
+        assert!(
+            rel_tangential_with_friction < rel_tangential_no_friction,
+            "friction should reduce relative tangential speed: {rel_tangential_with_friction} vs {rel_tangential_no_friction}"
+        );
+    }
+
+    #[test]
+    fn friction_impulse_never_exceeds_coulomb_bound() {
+        // Directly probe `resolve_pair` at a variety of `mu` and check that
+        // the total impulse magnitude applied to `b` decomposes into a normal
+        // part `j_n` and tangential part `j_t` with `j_t <= mu * j_n` (up to
+        // float slop).
+        for &mu in &[0.0_f64, 0.1, 0.5, 1.0, 2.5] {
+            let mut a = Body::new(0, v(&[0.0, 0.0]), v(&[1.0, 0.5]), 1.0, 0.5).unwrap();
+            let mut b = Body::new(1, v(&[0.9, 0.0]), v(&[-0.5, -0.2]), 2.0, 0.5).unwrap();
+            let v_before = b.velocity.clone();
+            resolve_pair(&mut a, &mut b, 0.3, mu);
+            let delta_v = b.velocity.clone() - v_before;
+            let normal = normalize(&(v(&[0.9, 0.0]) - v(&[0.0, 0.0])));
+            let j_n = delta_v.dot(&normal); // impulse/mass along the normal
+            let tangential = delta_v.clone() - (normal.clone() * j_n);
+            let j_t = tangential.norm();
+            assert!(
+                j_t <= mu * j_n.abs() + 1e-9,
+                "mu={mu}: j_t={j_t} exceeds mu*j_n={}",
+                mu * j_n.abs()
+            );
+        }
+    }
+
+    #[test]
+    fn sap_matches_brute_force_pair_set() {
+        // Deterministic pseudo-random body layout (linear congruential
+        // generator, no external `rand` dependency) with several dozen
+        // bodies of varying radii, some clustered (overlapping) and some far
+        // apart, in 3-D.
+        fn lcg_next(state: &mut u64) -> f64 {
+            *state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+            ((*state >> 33) as f64) / (u32::MAX as f64) // in [0, 1)
+        }
+
+        let mut state = 42_u64;
+        let mut bodies = Vec::new();
+        for id in 0..60 {
+            let x = lcg_next(&mut state) * 20.0 - 10.0;
+            let y = lcg_next(&mut state) * 20.0 - 10.0;
+            let z = lcg_next(&mut state) * 20.0 - 10.0;
+            let r = 0.1 + lcg_next(&mut state) * 0.9;
+            bodies.push(Body::new(id, v(&[x, y, z]), v(&[0.0, 0.0, 0.0]), 1.0, r).unwrap());
+        }
+
+        let sap: std::collections::HashSet<(usize, usize)> =
+            sap_candidate_pairs(&bodies).into_iter().collect();
+
+        let mut brute = std::collections::HashSet::new();
+        for i in 0..bodies.len() {
+            for j in (i + 1)..bodies.len() {
+                if aabb_overlap(&bodies[i], &bodies[j]) {
+                    brute.insert((i, j));
+                }
+            }
+        }
+
+        assert_eq!(sap, brute);
+        assert!(!brute.is_empty(), "test setup should produce some overlaps");
+    }
+
+    #[test]
+    fn sap_excludes_clearly_separated_pair() {
+        let bodies = vec![
+            Body::new(0, v(&[0.0, 0.0, 0.0]), v(&[0.0, 0.0, 0.0]), 1.0, 0.5).unwrap(),
+            Body::new(1, v(&[100.0, 100.0, 100.0]), v(&[0.0, 0.0, 0.0]), 1.0, 0.5).unwrap(),
+        ];
+        let pairs = sap_candidate_pairs(&bodies);
+        assert!(
+            pairs.is_empty(),
+            "far-apart, non-overlapping AABBs should not be a candidate pair: {pairs:?}"
+        );
+        assert!(!aabb_overlap(&bodies[0], &bodies[1]));
     }
 }

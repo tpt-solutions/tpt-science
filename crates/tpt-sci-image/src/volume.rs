@@ -14,9 +14,9 @@
 //!   reconstructed [`Volume`].
 
 use tpt_math_linalg::tpt_math_linalg_dense::DMatrix;
-use tpt_math_signal_fft::{Complex, fft, ifft_normalized};
 
 use crate::error::ImageError;
+use crate::ramp_filter;
 
 /// A dense 3-D scalar field stored row-major as a flat buffer.
 ///
@@ -120,25 +120,38 @@ fn sample_1d(v: &[f64], x: f64) -> f64 {
     v[i0] * (1.0 - d) + v[i1] * d
 }
 
-/// Apply the ram-lak ramp filter to a single 1-D projection in the Fourier
-/// domain (see the crate-root [`crate::filtered_back_projection`] for the
-/// motivation). The returned real part is the filtered projection.
-fn ramp_filter(p: &[f64]) -> Vec<f64> {
-    let n = p.len();
-    if n == 0 {
-        return Vec::new();
+/// Trilinear sample of `vol` at fractional voxel coordinates `(x, y, z)`.
+///
+/// Unlike [`sample_slice`] (which only interpolates within a fixed `z`
+/// slice, sufficient for the parallel-beam geometry where rays never move in
+/// `z`), this interpolates all three axes — required for the divergent rays
+/// of [`crate::cone_beam`]. Out-of-extent coordinates return `0.0`.
+pub(crate) fn sample_trilinear(vol: &Volume, x: f64, y: f64, z: f64) -> f64 {
+    let nx = vol.nx as f64;
+    let ny = vol.ny as f64;
+    let nz = vol.nz as f64;
+    if x < 0.0 || y < 0.0 || z < 0.0 || x > nx - 1.0 || y > ny - 1.0 || z > nz - 1.0 {
+        return 0.0;
     }
-    let spectrum = fft(p);
-    let filtered: Vec<Complex<f64>> = spectrum
-        .iter()
-        .enumerate()
-        .map(|(k, &z)| {
-            let freq = if k <= n / 2 { k } else { n - k } as f64;
-            z * freq
-        })
-        .collect();
-    let back = ifft_normalized(&filtered);
-    back.iter().map(|z| z.re).collect()
+    let x0 = x.floor() as usize;
+    let y0 = y.floor() as usize;
+    let z0 = z.floor() as usize;
+    let x1 = (x0 + 1).min(vol.nx - 1);
+    let y1 = (y0 + 1).min(vol.ny - 1);
+    let z1 = (z0 + 1).min(vol.nz - 1);
+    let dx = x - x0 as f64;
+    let dy = y - y0 as f64;
+    let dz = z - z0 as f64;
+
+    let at = |ix: usize, iy: usize, iz: usize| -> f64 { vol.data[vol.index(ix, iy, iz)] };
+
+    let c00 = at(x0, y0, z0) * (1.0 - dx) + at(x1, y0, z0) * dx;
+    let c10 = at(x0, y1, z0) * (1.0 - dx) + at(x1, y1, z0) * dx;
+    let c01 = at(x0, y0, z1) * (1.0 - dx) + at(x1, y0, z1) * dx;
+    let c11 = at(x0, y1, z1) * (1.0 - dx) + at(x1, y1, z1) * dx;
+    let c0 = c00 * (1.0 - dy) + c10 * dy;
+    let c1 = c01 * (1.0 - dy) + c11 * dy;
+    c0 * (1.0 - dz) + c1 * dz
 }
 
 /// Forward 3-D Radon transform (parallel beam, rotation about `z`) of `volume`

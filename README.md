@@ -29,7 +29,7 @@ crate is implemented — Phase 1 (scaffolding) does not require those audits.
 | `tpt-sci-ppl` | probabilistic-programming | **implemented** | build from scratch (NUTS) | consolidates `tpt-augur`; `nuts-rs` wrap dropped |
 | `tpt-sci-image` | imaging | **implemented** | build from scratch | depends on `tpt-math-signal-fft`, `tpt-math-linalg`; 2-D CT only |
 | `tpt-sci-physics-rigid` | physics | **implemented** | build from scratch | rapier disqualified (ADR 0007) |
-| `tpt-sci-quantum` | quantum | **implemented** | build from scratch | QuantRS2 disqualified (ADR 0007); ≤20 qubits; no tensor-networks |
+| `tpt-sci-quantum` | quantum | **implemented** | build from scratch | QuantRS2 disqualified (ADR 0007); ≤20 qubits; tensor-product (Kronecker) circuit formulation via `Circuit` |
 | `tpt-sci-astro` | astrodynamics | **implemented** | build from scratch | two-body / Keplerian only |
 | `tpt-sci-reaction-network` | systems-biology | **implemented** | build from scratch | Catalyst.jl-style species/rate/stoichiometry DSL → mass-action ODE; depends on `tpt-sci-ode`; DSL + custom rate laws; SSA/SBML out of v1 |
 | `tpt-sci-md` | molecular-dynamics | **implemented** | build from scratch | depends on `tpt-math-linalg`; LJ / Verlet / RDF |

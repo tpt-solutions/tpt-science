@@ -1,7 +1,8 @@
 # tpt-sci-climate
 
-Reduced-order **climate modelling** for the `tpt-science` pillar, built on
-[`tpt-sci-ode`](https://docs.rs/tpt-sci-ode) and `tpt-math-linalg`.
+Reduced-order **climate modelling** for the `tpt-science` pillar, built from
+scratch (`EnergyBalanceModel`/`ChemistryBox` use a hand-rolled explicit-Euler
+stepper, not `tpt-sci-ode`/`tpt-math-linalg`).
 
 ## Features
 
@@ -20,14 +21,14 @@ Reduced-order **climate modelling** for the `tpt-science` pillar, built on
 use tpt_sci_climate::EnergyBalanceModel;
 
 // Heat capacity, albedo, emissivity, CO2 (ppm).
-let mut ebm = EnergyBalanceModel::new(1.0e7, 0.3, 0.61, 280.0).unwrap();
+let mut ebm = EnergyBalanceModel::new(1.0, 0.3, 0.61, 280.0).unwrap();
 let t0 = ebm.equilibrium_temperature();
 ebm.co2 = 560.0; // doubled
 let t2 = ebm.equilibrium_temperature();
 println!("equilibrium warming = {:.2} K", t2 - t0);
 
 // Time-march toward the new equilibrium.
-for _ in 0..5000 {
+for _ in 0..100 {
     ebm.step(1.0);
 }
 assert!(ebm.temperature().is_finite());

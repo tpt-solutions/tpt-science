@@ -9,7 +9,7 @@ shipped dependency graph — so the whole crate is TPT-owned code under
 (`DMat` + LU with partial pivoting) for the implicit-method linear solves, and
 depends on `tpt-math-numeric` for the `Scalar` numeric trait.
 
-Four methods are provided (see [`Method`](https://docs.rs/tpt-sci-ode/Method)):
+Four methods are provided (see [`Method`](https://docs.rs/tpt-sci-ode/latest/tpt_sci_ode/enum.Method.html)):
 
 * [`Method::Tsit45`] — explicit Runge–Kutta 4(5), non-stiff.
 * [`Method::TrBdf2`] — 2-stage SDIRK (TR-BDF2), A-stable, stiff.
@@ -49,8 +49,22 @@ assert!((y[0] - std::f64::consts::E.recip()).abs() < 1e-5);
 ## Scope
 
 v1 covers deterministic initial-value ODEs (non-stiff and stiff) with dense
-output. DAE index reduction, sensitivity/adjoint analysis, and sparse linear
-algebra are out of v1 scope.
+output. In addition to the dense [`DMat`](https://docs.rs/tpt-sci-ode/latest/tpt_sci_ode/linalg/struct.DMat.html)
+linear algebra used by the implicit methods, the crate also ships:
+
+* A sparse counterpart
+  ([`CsrMatrix`](https://docs.rs/tpt-sci-ode/latest/tpt_sci_ode/sparse/struct.CsrMatrix.html)
+  + sparse LU with partial pivoting) for large, sparse Jacobians.
+* Forward sensitivity analysis
+  ([`forward_sensitivities`](https://docs.rs/tpt-sci-ode/latest/tpt_sci_ode/fn.forward_sensitivities.html))
+  of `dy/dt = f(t, y, p)` via the augmented variational system.
+* A `Scalar`-generic (`f32`/`f64`) dense-LA + RK4 core
+  ([`scalar`](https://docs.rs/tpt-sci-ode/latest/tpt_sci_ode/scalar/index.html))
+  proving the engine math at both precisions; the public [`OdeProblem`] API
+  remains `f64`-instantiated (the v1 supported precision).
+
+DAE index reduction and adjoint (reverse) sensitivity analysis remain out of
+scope.
 
 ## License
 
