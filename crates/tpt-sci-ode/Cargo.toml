@@ -14,6 +14,9 @@ keywords = ["ode", "dae", "differential-equations", "science", "simulation", "ji
 categories = ["science", "simulation", "mathematics"]
 publish = false
 
+[lib]
+bench = false
+
 [dependencies]
 tpt-math-numeric = { workspace = true }
 thiserror = { workspace = true }

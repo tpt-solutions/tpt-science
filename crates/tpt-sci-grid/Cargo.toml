@@ -14,6 +14,9 @@ keywords = ["finite-difference", "pde", "grid", "science", "simulation"]
 categories = ["science", "simulation", "mathematics"]
 publish = false
 
+[lib]
+bench = false
+
 [dependencies]
 tpt-math-numeric = { workspace = true }
 tpt-math-linalg = { workspace = true }

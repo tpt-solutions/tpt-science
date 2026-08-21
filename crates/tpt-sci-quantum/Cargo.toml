@@ -14,6 +14,9 @@ keywords = ["quantum", "qubit", "simulation", "science"]
 categories = ["science", "simulation", "physics"]
 publish = false
 
+[lib]
+bench = false
+
 [dependencies]
 tpt-math-linalg = { workspace = true }
 tpt-math-prob-core = { workspace = true }
