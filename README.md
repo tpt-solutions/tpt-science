@@ -23,7 +23,7 @@ crate is implemented — Phase 1 (scaffolding) does not require those audits.
 
 | Crate | Domain | Status | Wrap / build | Notes |
 |-------|--------|--------|--------------|-------|
-| `tpt-sci-ode` | differential-equations | **implemented** | build from scratch | from-scratch ODE engine (diffsol is dev-only oracle); depends on `tpt-math-numeric`, `tpt-math-linalg` |
+| `tpt-sci-ode` | differential-equations | **implemented** | build from scratch | from-scratch ODE engine (diffsol is dev-only oracle); depends on `tpt-math-numeric` |
 | `tpt-sci-grid` | pde | **implemented** | build from scratch | depends on `tpt-math-linalg` |
 | `tpt-sci-sim-core` | simulation | **implemented** | build from scratch | depends on `tpt-sci-ode`, `tpt-sci-grid` |
 | `tpt-sci-ppl` | probabilistic-programming | **implemented** | build from scratch (NUTS) | consolidates `tpt-augur`; `nuts-rs` wrap dropped |
@@ -45,9 +45,9 @@ crate is implemented — Phase 1 (scaffolding) does not require those audits.
 ## no_std posture
 
 All crates in this pillar are `std`-only by design. The `tpt-math` dense
-linear-algebra substrate and the `diffsol` wrap target (`tpt-sci-ode`) are
-themselves `std` crates, so every simulation/physics/quantum crate transitively
-requires `std`. None currently target `no_std`.
+linear-algebra substrate and `tpt-sci-ode` (which implements its own ODE engine
+from scratch) are themselves `std` crates, so every simulation/physics/quantum
+crate transitively requires `std`. None currently target `no_std`.
 
 Per ADR 0001, `no_std` is opted into per-crate, never forced workspace-wide: the
 CI `no_std` job is an intentional no-op until a crate is explicitly confirmed
@@ -137,9 +137,13 @@ cargo run --example van_der_pol -p tpt-sci-ode
 
 ## Benchmarking & coverage
 
-- **Benchmarks.** Numerics-heavy crates carry `criterion` benches under
-  `benches/`. Run them with `cargo bench --workspace` (or per-crate). The CI
-  `benches` job runs a shortened measurement so the suite stays fast.
+- **Benchmarks.** `criterion` benches live in `crates/*/benches/`:
+  `tpt-sci-ode` (`solve`), `tpt-sci-grid` (`laplacian`), `tpt-sci-quantum`
+  (`apply_gate`), and `tpt-sci-image` (`radon`). Run a single crate with
+  `cargo bench -p <crate>`, or the whole workspace with `cargo bench
+  --workspace`. The CI `benches` job runs a shortened measurement so the suite
+  stays fast:
+  `cargo bench --workspace --benches -- --warm-up-time 0.5 --measurement-time 1 --sample-size 10`.
 - **Coverage.** The CI `coverage` job produces an lcov report via
   `cargo-llvm-cov` and uploads it as a build artifact.
 - **Docs.** The CI `doc` job builds docs with `RUSTDOCFLAGS=-D warnings`,

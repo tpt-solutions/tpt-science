@@ -158,7 +158,7 @@ fn integrate(
         // Snapshot the BDF history so a *rejected* step (which still mutates the
         // Nordsieck vector inside `step_bdf`) cannot corrupt the integration.
         // On rejection we restore this snapshot before retrying.
-        let bdf_snapshot = bdf_state.as_ref().map(|s| s.clone());
+        let bdf_snapshot = bdf_state.clone();
         match try_step(method, f, t, &y, h, bdf_state.as_mut()) {
             Ok(res) => {
                 let err_est = weighted_norm(&res.err, &res.y, rtol, atol);

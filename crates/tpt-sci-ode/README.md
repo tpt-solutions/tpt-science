@@ -5,8 +5,9 @@ ODE/DAE solving substrate for the `tpt-science` pillar.
 This crate implements its own ODE integrators **from scratch** — no
 [`diffsol`](https://crates.io/crates/diffsol), `nalgebra`, or `faer` in the
 shipped dependency graph — so the whole crate is TPT-owned code under
-`MIT OR Apache-2.0`. It builds on the dual-licensed `tpt-math` dense linear
-algebra for the implicit-method linear solves.
+`MIT OR Apache-2.0`. It carries its own dual-licensed dense linear algebra
+(`DMat` + LU with partial pivoting) for the implicit-method linear solves, and
+depends on `tpt-math-numeric` for the `Scalar` numeric trait.
 
 Four methods are provided (see [`Method`](https://docs.rs/tpt-sci-ode/Method)):
 
@@ -20,7 +21,7 @@ All use a shared adaptive-step driver with Hermite dense output, so
 `diffsol` is retained only as an optional, dev-only verification oracle (feature
 `verify-diffsol`, excluded from license scanning).
 
-Depends on `tpt-math-numeric` and `tpt-math-linalg` (published, `tpt-math` repo).
+Depends on `tpt-math-numeric` (published, `tpt-math` repo).
 
 ## Features
 

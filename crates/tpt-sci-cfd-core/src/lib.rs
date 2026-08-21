@@ -366,9 +366,7 @@ mod tests {
     fn uniform_field_is_divergence_free() {
         let grid = CollocatedGrid::new(16, 16, 1.0, 1.0).unwrap();
         let mut step = Step::new(grid, 0.01, 0.01, 1.0);
-        for x in &mut step.u {
-            *x = 1.0;
-        }
+        step.u.fill(1.0);
         assert_abs_diff_eq!(step.max_divergence(), 0.0, epsilon = 1e-12);
     }
 }
