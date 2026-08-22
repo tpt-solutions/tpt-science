@@ -174,8 +174,11 @@ impl XcFunctional for Pbe {
         let u = -ec / PBE_GAMMA;
         let e_u = u.exp();
         let a = (PBE_BETA / PBE_GAMMA) / (e_u - 1.0);
-        let da_drho =
-            (PBE_BETA / PBE_GAMMA) * (e_u * (-dec_drho / PBE_GAMMA)) / (e_u - 1.0).powi(2);
+        // a = alpha / (exp(u) - 1), u = -ec/gamma  =>
+        // da/drho = alpha * exp(u) * (dec_drho / gamma) / (exp(u) - 1)^2
+        // (du/drho = -dec_drho/gamma cancels the minus from differentiating
+        // 1/(exp(u)-1)).
+        let da_drho = (PBE_BETA / PBE_GAMMA) * e_u * (dec_drho / PBE_GAMMA) / (e_u - 1.0).powi(2);
 
         let alpha = PBE_BETA / PBE_GAMMA;
         let num = t * t + a * t.powi(4);

@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- Criterion benchmark suite (enches/) covering the crate's core hot path.
+
 - `HodgkinHuxley` — classic giant-axon model: gating `m, h, n` with
   voltage-dependent rate laws and ionic current
   `I_ion = ḡNa·m³h·(V−E_Na) + ḡK·n⁴·(V−E_K) + ḡL·(V−E_L)`; `state`, `step`, `voltage`.
@@ -18,6 +20,8 @@ adheres to [Semantic Versioning](https://semver.org).
 Initial implementation of `tpt-sci-electrophys` (spec2.txt expanded vision).
 
 ### Added
+
+- Criterion benchmark suite (enches/) covering the crate's core hot path.
 
 - Cardiac electrophysiology built on `tpt-sci-ode` (membrane kinetics) and
   `tpt-sci-grid` (extracellular/bidomain diffusion).

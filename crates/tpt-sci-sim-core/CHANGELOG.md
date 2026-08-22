@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- Criterion benchmark suite (enches/) covering the crate's core hot path.
+
 - `OdeSubModel` wraps any `tpt-sci-ode` problem as a `SubModel` (used directly by
   the `multi_scale_cookbook` example).
 - `DiffusionSubModel` drives a 1-D `tpt-sci-grid` Laplacian field as a sub-model.
@@ -19,6 +21,8 @@ adheres to [Semantic Versioning](https://semver.org).
 Initial implementation of `tpt-sci-sim-core`.
 
 ### Added
+
+- Criterion benchmark suite (enches/) covering the crate's core hot path.
 
 - Multi-scale simulation orchestration above `tpt-sci-ode` and `tpt-sci-grid`.
 - Time-stepping across heterogeneous sub-models: each `SubModel` advances on its

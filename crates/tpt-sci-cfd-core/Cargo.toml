@@ -14,12 +14,16 @@ keywords = ["cfd", "navier-stokes", "finite-volume", "fluid", "science"]
 categories = ["science", "simulation"]
 publish = false
 
+[lib]
+bench = false
+
 [dependencies]
 tpt-math-linalg = { workspace = true }
 tpt-sci-grid = { workspace = true, features = ["sparse"] }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 approx = { workspace = true }
 
 [lints]
@@ -27,3 +31,7 @@ workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
+
+[[bench]]
+name = "cfd_core"
+harness = false

@@ -16,7 +16,7 @@
 //!   one 2-D projection image per angle.
 //! * [`fdk_reconstruction`] inverts that model: it cosine-weights each
 //!   projection for ray divergence, ram-lak filters it along the detector
-//!   row direction (reusing [`crate::ramp_filter`], the same machinery
+//!   row direction (reusing `crate::ramp_filter`, the same machinery
 //!   behind [`crate::filtered_back_projection`] and
 //!   [`crate::volume::filtered_back_projection_3d`]), and back-projects
 //!   along the divergent rays with an inverse-square distance weight.
@@ -161,7 +161,7 @@ fn detector_pixel_position(
 /// Forward cone-beam projection of `volume` under `geometry` over `angles`.
 ///
 /// For every angle and every detector pixel, a ray is marched (in
-/// [`RAY_STEP`]-sized steps, trilinearly interpolated per [`crate::volume`])
+/// `RAY_STEP`-sized steps, trilinearly interpolated per [`crate::volume`])
 /// from the point source through the pixel, and the samples are summed
 /// (scaled by the step size) into an approximate line integral — the same
 /// forward model used by [`crate::radon_transform`] and
@@ -274,7 +274,7 @@ pub fn cone_beam_forward_projection(
 ///    `SDD / sqrt(SDD^2 + u^2 + v^2)` (`SDD` = [`ConeBeamGeometry::source_to_detector`])
 ///    to account for ray divergence.
 /// 2. Each detector row (fixed `v`, varying `u`) is ram-lak filtered via
-///    [`crate::ramp_filter`] — the same filter used by
+///    `crate::ramp_filter` — the same filter used by
 ///    [`crate::filtered_back_projection`] and
 ///    [`crate::volume::filtered_back_projection_3d`].
 /// 3. Each voxel is back-projected along the divergent ray through it at

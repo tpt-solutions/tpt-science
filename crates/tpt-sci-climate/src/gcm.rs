@@ -97,10 +97,8 @@ impl AtmosphereGcm {
         if !(g.is_finite() && g > 0.0) {
             return Err(ClimateError::InvalidModel("g must be positive".into()));
         }
-        let grid =
-            UniformGrid3D::new(nx, 0.0, lx, ny, 0.0, ly, nz, 0.0, lz).map_err(|e| {
-                ClimateError::InvalidModel(e.to_string())
-            })?;
+        let grid = UniformGrid3D::new(nx, 0.0, lx, ny, 0.0, ly, nz, 0.0, lz)
+            .map_err(|e| ClimateError::InvalidModel(e.to_string()))?;
         let n = grid.len();
         let y_mid = ly / 2.0;
         let yc = grid.y_coordinates();
@@ -245,11 +243,9 @@ impl AtmosphereGcm {
                             + (cv(ix, jp) - 2.0 * v0[c] + cv(ix, jm)) / (dy * dy);
                     }
                     nu[c] = u0[c]
-                        + dt * (inv * fx[c] + fc * v0[c] - self.friction * u0[c]
-                            + self.kh * lap_u);
+                        + dt * (inv * fx[c] + fc * v0[c] - self.friction * u0[c] + self.kh * lap_u);
                     nv[c] = v0[c]
-                        + dt * (inv * fy[c] - fc * u0[c] - self.friction * v0[c]
-                            + self.kh * lap_v);
+                        + dt * (inv * fy[c] - fc * u0[c] - self.friction * v0[c] + self.kh * lap_v);
 
                     // Upwind horizontal advection of temperature.
                     let im = clamp(ix as isize - 1, nx);
@@ -417,7 +413,19 @@ mod tests {
 
     fn model() -> AtmosphereGcm {
         AtmosphereGcm::new(
-            9, 3, 5, 100.0, 30.0, 50.0, 1.2, 1.0 / 300.0, 250.0, 9.81, 1e-4, 1.6e-11, 0.0,
+            9,
+            3,
+            5,
+            100.0,
+            30.0,
+            50.0,
+            1.2,
+            1.0 / 300.0,
+            250.0,
+            9.81,
+            1e-4,
+            1.6e-11,
+            0.0,
         )
         .unwrap()
     }
@@ -470,8 +478,14 @@ mod tests {
         let bottom = nz - 1;
         let left = a.index(cx - 2, cy, bottom);
         let right = a.index(cx + 2, cy, bottom);
-        assert!(fx[left] > 0.0, "left-of-centre flow should head toward the anomaly");
-        assert!(fx[right] < 0.0, "right-of-centre flow should head toward the anomaly");
+        assert!(
+            fx[left] > 0.0,
+            "left-of-centre flow should head toward the anomaly"
+        );
+        assert!(
+            fx[right] < 0.0,
+            "right-of-centre flow should head toward the anomaly"
+        );
         for _ in 0..5 {
             a.step(0.5);
         }

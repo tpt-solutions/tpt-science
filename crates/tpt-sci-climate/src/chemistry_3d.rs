@@ -58,7 +58,8 @@ impl Tracer3D {
         loss: f64,
     ) -> Result<Self, ClimateError> {
         let n = grid.len();
-        if conc.len() != n || u.len() != n || v.len() != n || w.len() != n || production.len() != n {
+        if conc.len() != n || u.len() != n || v.len() != n || w.len() != n || production.len() != n
+        {
             return Err(ClimateError::InvalidModel(
                 "velocity/production/conc length must equal grid nodes".into(),
             ));

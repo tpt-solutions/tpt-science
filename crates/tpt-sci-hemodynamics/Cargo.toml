@@ -14,6 +14,9 @@ keywords = ["hemodynamics", "cfd", "womersley", "vascular", "science"]
 categories = ["science", "simulation", "medicine"]
 publish = false
 
+[lib]
+bench = false
+
 [dependencies]
 tpt-sci-cfd-core = { workspace = true }
 tpt-sci-ode = { workspace = true }
@@ -22,6 +25,7 @@ num-complex = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 approx = { workspace = true }
 
 [lints]
@@ -29,3 +33,7 @@ workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
+
+[[bench]]
+name = "hemodynamics"
+harness = false

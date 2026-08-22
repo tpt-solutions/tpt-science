@@ -14,12 +14,16 @@ keywords = ["dft", "electronic-structure", "kohn-sham", "lda", "science"]
 categories = ["science", "simulation", "chemistry"]
 publish = false
 
+[lib]
+bench = false
+
 [dependencies]
 tpt-math-linalg = { workspace = true }
 tpt-sci-grid = { workspace = true, features = ["sparse"] }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 approx = { workspace = true }
 
 [lints]
@@ -27,3 +31,7 @@ workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
+
+[[bench]]
+name = "dft_electronic"
+harness = false

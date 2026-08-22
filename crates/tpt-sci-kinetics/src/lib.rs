@@ -263,7 +263,7 @@ impl EleyRideal {
         self.k * theta_adsorbed * gas_phase_concentration
     }
 
-    /// Wrap this rate law as a [`RateLaw::Custom`] closure suitable for use
+    /// Wrap this rate law as a `RateLaw::Custom` closure suitable for use
     /// directly in a [`ReactionSystem`](tpt_sci_reaction_network::ReactionSystem):
     /// `theta_index` is the index into the state vector `y` holding the
     /// adsorbed species' surface coverage, and `gas_index` is the index

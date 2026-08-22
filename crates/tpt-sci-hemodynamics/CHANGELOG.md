@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- Criterion benchmark suite (enches/) covering the crate's core hot path.
+
 - `Vessel` — 1-D compliant artery: cross-sectional area, flow, linear tube-law
   pressure `p = β·(√A − √A0)`, wave speed `c`.
 - `tube_law_beta` — wall stiffness from Young's modulus + thickness.
@@ -19,6 +21,8 @@ adheres to [Semantic Versioning](https://semver.org).
 Initial implementation of `tpt-sci-hemodynamics` (spec2.txt expanded vision).
 
 ### Added
+
+- Criterion benchmark suite (enches/) covering the crate's core hot path.
 
 - 1-D compliant-vessel hemodynamics built on `tpt-sci-cfd-core` and `tpt-sci-ode`,
   using the 1-D augmented Navier–Stokes equations reduced to a vessel centerline.

@@ -14,6 +14,9 @@ keywords = ["ocean", "shallow-water", "circulation", "cfd", "science"]
 categories = ["science", "simulation"]
 publish = false
 
+[lib]
+bench = false
+
 [dependencies]
 tpt-sci-cfd-core = { workspace = true }
 tpt-sci-grid = { workspace = true, features = ["sparse"] }
@@ -21,6 +24,7 @@ tpt-math-linalg = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 approx = { workspace = true }
 
 [lints]
@@ -28,3 +32,7 @@ workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
+
+[[bench]]
+name = "ocean"
+harness = false

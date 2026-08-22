@@ -14,6 +14,9 @@ keywords = ["simulation", "multi-scale", "orchestration", "science"]
 categories = ["science", "simulation"]
 publish = false
 
+[lib]
+bench = false
+
 [dependencies]
 tpt-sci-ode = { workspace = true }
 tpt-sci-grid = { workspace = true }
@@ -21,6 +24,7 @@ tpt-math-linalg = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 # For the multi-scale cookbook example (reaction network -> sim-core coupling).
 tpt-sci-reaction-network = { version = "0.1.0", path = "../tpt-sci-reaction-network" }
 approx = { workspace = true }
@@ -30,3 +34,7 @@ workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
+
+[[bench]]
+name = "sim_core"
+harness = false

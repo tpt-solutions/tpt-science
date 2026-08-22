@@ -67,10 +67,9 @@ so warnings, rustdoc warnings, and broken intra-doc links fail the build.
 
 ## Benchmarks
 
-`criterion` benches live in `crates/*/benches/`: `tpt-sci-ode` (solve),
-`tpt-sci-grid` (laplacian), `tpt-sci-quantum` (apply_gate), `tpt-sci-image`
-(radon). Run a single crate with `cargo bench -p <crate>`. CI runs a shortened
-measurement: `cargo bench -p tpt-sci-grid -p tpt-sci-image -p tpt-sci-ode -p tpt-sci-quantum --benches -- --warm-up-time 0.5 --measurement-time 1 --sample-size 10`.
+`criterion` benches live in every `crates/*/benches/` (18 crates). Run a single
+crate with `cargo bench -p <crate>`. CI runs a shortened measurement:
+`cargo bench --workspace --benches -- --warm-up-time 0.5 --measurement-time 1 --sample-size 10`.
 
 ## Coverage
 

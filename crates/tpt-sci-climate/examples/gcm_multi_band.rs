@@ -50,9 +50,22 @@ fn main() {
     );
 
     // --- 3. GCM dynamical core coupled to the EBM ---------------------------
-    let mut gcm =
-        AtmosphereGcm::new(11, 5, 7, 100.0, 40.0, 60.0, 1.2, 1.0 / 300.0, 250.0, 9.81, 1e-4, 1.6e-11, 0.01)
-            .expect("gcm");
+    let mut gcm = AtmosphereGcm::new(
+        11,
+        5,
+        7,
+        100.0,
+        40.0,
+        60.0,
+        1.2,
+        1.0 / 300.0,
+        250.0,
+        9.81,
+        1e-4,
+        1.6e-11,
+        0.01,
+    )
+    .expect("gcm");
     let mut ebm = EnergyBalanceModel::new(1.0e7, 0.3, 0.61, 280.0).unwrap();
     let teq = gcm.couple_to_ebm(&ebm);
     println!("GCM coupled to EBM: target T_eq = {teq:.1} K");
@@ -69,12 +82,19 @@ fn main() {
     // Doubling CO2 warms the EBM target; the GCM relaxes toward it.
     ebm.co2 = 560.0;
     gcm.couple_to_ebm(&ebm);
-    println!("after CO2 doubling: EBM-driven target T_eq = {:.1} K", gcm.t_eq);
+    println!(
+        "after CO2 doubling: EBM-driven target T_eq = {:.1} K",
+        gcm.t_eq
+    );
 
     // Single-tracer box sanity (existing API).
     let mut c = ChemistryBox::new(0.0, 1.0, 0.1).unwrap();
     for _ in 0..1000 {
         c.step(0.1);
     }
-    println!("ChemistryBox steady state = {:.3} (target {:.3})", c.concentration, c.steady_state());
+    println!(
+        "ChemistryBox steady state = {:.3} (target {:.3})",
+        c.concentration,
+        c.steady_state()
+    );
 }

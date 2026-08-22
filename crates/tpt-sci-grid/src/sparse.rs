@@ -248,7 +248,10 @@ pub fn conjugate_gradient(
     };
     let mut r = {
         let ax = a.mul_vec(&x);
-        b.iter().zip(&ax).map(|(bi, axi)| bi - axi).collect::<Vec<f64>>()
+        b.iter()
+            .zip(&ax)
+            .map(|(bi, axi)| bi - axi)
+            .collect::<Vec<f64>>()
     };
     let mut p = r.clone();
     let mut rsold = r.iter().zip(&r).map(|(a, b)| a * b).sum::<f64>();
@@ -436,7 +439,10 @@ mod tests {
         let g = UniformGrid1D::new(81, 0.0, 1.0).unwrap();
         let a = laplacian_1d_sparse(&g, Boundary::Dirichlet);
         let xs = g.coordinates();
-        let u: Vec<f64> = xs.iter().map(|&x| (std::f64::consts::PI * x).sin()).collect();
+        let u: Vec<f64> = xs
+            .iter()
+            .map(|&x| (std::f64::consts::PI * x).sin())
+            .collect();
         let f: Vec<f64> = a.mul_vec(&u);
         let x = conjugate_gradient(&a, &f, None, 1e-12, 1000);
         for i in 1..g.n() - 1 {

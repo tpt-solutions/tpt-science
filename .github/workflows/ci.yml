@@ -34,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --workspace
+      - run: cargo test --workspace --all-features
 
   # Build the documentation and fail on any rustdoc warning (including broken
   # intra-doc links). This catches doc rot that `cargo test` only surfaces
@@ -97,7 +97,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Run benchmarks
-        run: cargo bench -p tpt-sci-grid -p tpt-sci-image -p tpt-sci-ode -p tpt-sci-quantum --benches -- --warm-up-time 0.5 --measurement-time 1 --sample-size 10
+        run: cargo bench --workspace --benches -- --warm-up-time 0.5 --measurement-time 1 --sample-size 10
 
   cargo-deny:
     runs-on: ubuntu-latest

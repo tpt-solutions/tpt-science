@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- Criterion benchmark suite (enches/) covering the crate's core hot path.
+
 - `ClassicalDft` — a handle owning any concrete `feos` Helmholtz energy
   functional (PC-SAFT, PeTS, …) and the entry point for 1-D profile solves.
 - Re-exports of `feos` and `feos_dft` so downstream code can reach the full
@@ -17,6 +19,8 @@ adheres to [Semantic Versioning](https://semver.org).
 Initial implementation of `tpt-sci-dft-classical` (spec2.txt expanded vision).
 
 ### Added
+
+- Criterion benchmark suite (enches/) covering the crate's core hot path.
 
 - Classical / soft-matter DFT provided by wrapping the `feos` framework
   (`feos_dft`, MIT OR Apache-2.0). Functional derivatives, FFT convolutions, and

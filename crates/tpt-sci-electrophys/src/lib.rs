@@ -941,15 +941,10 @@ mod tests {
         cell.v = 20.0; // depolarizing stimulus
         let mut peak = cell.v;
         // Single-node monodomain integration: dV/dt = -I_ion/Cm.
-        for k in 0..600 {
+        for _ in 0..600 {
             cell.advance_reaction(cell.v, 0.01);
             cell.v += 0.01 * (-cell.ionic_current() / cell.cm);
             if !cell.v.is_finite() {
-                eprintln!(
-                    "TT NaN at step {k}: v={} i_ion={}",
-                    cell.v,
-                    cell.ionic_current()
-                );
                 break;
             }
             peak = peak.max(cell.v);

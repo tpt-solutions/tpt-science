@@ -47,12 +47,7 @@ fn main() {
     }
     let phi = mesh.solve_poisson(1.0, &source, &dirichlet);
     let mut max_err = 0.0_f64;
-    for (c, (&is_b, &phi_val)) in mesh
-        .is_boundary_cell
-        .iter()
-        .zip(phi.iter())
-        .enumerate()
-    {
+    for (c, (&is_b, &phi_val)) in mesh.is_boundary_cell.iter().zip(phi.iter()).enumerate() {
         if is_b {
             continue;
         }

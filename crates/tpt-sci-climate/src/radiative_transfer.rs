@@ -39,7 +39,9 @@ impl Band {
     /// and a non-negative optical path).
     pub fn new(weight: f64, absorption: f64, path_length: f64) -> Result<Self, ClimateError> {
         if weight < 0.0 {
-            return Err(ClimateError::InvalidModel("band weight must be >= 0".into()));
+            return Err(ClimateError::InvalidModel(
+                "band weight must be >= 0".into(),
+            ));
         }
         if absorption < 0.0 {
             return Err(ClimateError::InvalidModel(
@@ -111,10 +113,7 @@ impl MultiBandRadiativeTransfer {
     /// replacement for the single grey-band emissivity.
     #[must_use]
     pub fn effective_emissivity(&self) -> f64 {
-        self.bands
-            .iter()
-            .map(|b| b.weight * b.emissivity())
-            .sum()
+        self.bands.iter().map(|b| b.weight * b.emissivity()).sum()
     }
 
     /// Per-band upwelling longwave flux at the top of the atmosphere (W/m²),
@@ -140,7 +139,10 @@ impl MultiBandRadiativeTransfer {
     #[must_use]
     pub fn downward_flux(&self) -> f64 {
         let sat4 = SIGMA * self.t_atm.powi(4);
-        self.bands.iter().map(|b| b.weight * b.emissivity() * sat4).sum()
+        self.bands
+            .iter()
+            .map(|b| b.weight * b.emissivity() * sat4)
+            .sum()
     }
 }
 
@@ -166,7 +168,9 @@ impl CorrelatedKBand {
     /// `g`-point weights do not sum to `1 ± 1e-6`.
     pub fn new(weight: f64, k_g: Vec<f64>, w_g: Vec<f64>) -> Result<Self, ClimateError> {
         if weight < 0.0 {
-            return Err(ClimateError::InvalidModel("band weight must be >= 0".into()));
+            return Err(ClimateError::InvalidModel(
+                "band weight must be >= 0".into(),
+            ));
         }
         if k_g.len() != w_g.len() {
             return Err(ClimateError::InvalidModel(
@@ -322,12 +326,7 @@ mod tests {
 
     #[test]
     fn correlated_k_is_monotonic_in_path() {
-        let ck = CorrelatedKBand::new(
-            1.0,
-            vec![0.02, 0.1, 0.5],
-            vec![0.5, 0.3, 0.2],
-        )
-        .unwrap();
+        let ck = CorrelatedKBand::new(1.0, vec![0.02, 0.1, 0.5], vec![0.5, 0.3, 0.2]).unwrap();
         let thin = CorrelatedKRt::new(vec![ck.clone()], 250.0, 1.0).unwrap();
         let thick = CorrelatedKRt::new(vec![ck], 250.0, 50.0).unwrap();
         // A thicker path traps more longwave: OLR decreases.

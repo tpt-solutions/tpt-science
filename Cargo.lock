@@ -2115,6 +2115,7 @@ name = "tpt-sci-astro"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "criterion",
  "thiserror 2.0.20",
  "tpt-math-linalg",
 ]
@@ -2124,6 +2125,7 @@ name = "tpt-sci-cfd-core"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "criterion",
  "thiserror 2.0.20",
  "tpt-math-linalg",
  "tpt-sci-grid",
@@ -2134,6 +2136,7 @@ name = "tpt-sci-climate"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "criterion",
  "thiserror 2.0.20",
  "tpt-math-linalg",
  "tpt-sci-grid",
@@ -2145,6 +2148,7 @@ name = "tpt-sci-dft-classical"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "criterion",
  "feos",
  "feos-core",
  "feos-dft",
@@ -2157,6 +2161,7 @@ name = "tpt-sci-dft-electronic"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "criterion",
  "thiserror 2.0.20",
  "tpt-math-linalg",
  "tpt-sci-grid",
@@ -2167,6 +2172,7 @@ name = "tpt-sci-electrophys"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "criterion",
  "thiserror 2.0.20",
  "tpt-math-linalg",
  "tpt-sci-grid",
@@ -2189,6 +2195,7 @@ name = "tpt-sci-hemodynamics"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "criterion",
  "num-complex",
  "thiserror 2.0.20",
  "tpt-math-linalg",
@@ -2212,6 +2219,7 @@ name = "tpt-sci-kinetics"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "criterion",
  "thiserror 2.0.20",
  "tpt-sci-ode",
  "tpt-sci-reaction-network",
@@ -2222,6 +2230,7 @@ name = "tpt-sci-md"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "criterion",
  "thiserror 2.0.20",
  "tpt-math-linalg",
 ]
@@ -2231,6 +2240,7 @@ name = "tpt-sci-ocean"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "criterion",
  "thiserror 2.0.20",
  "tpt-math-linalg",
  "tpt-sci-cfd-core",
@@ -2259,6 +2269,7 @@ name = "tpt-sci-physics-rigid"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "criterion",
  "thiserror 2.0.20",
  "tpt-math-linalg",
 ]
@@ -2268,6 +2279,7 @@ name = "tpt-sci-ppl"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "criterion",
  "thiserror 2.0.20",
  "tpt-math-autodiff-rev",
  "tpt-math-linalg",
@@ -2292,6 +2304,7 @@ name = "tpt-sci-reaction-network"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "criterion",
  "thiserror 2.0.20",
  "tpt-sci-ode",
 ]
@@ -2301,6 +2314,7 @@ name = "tpt-sci-sim-core"
 version = "0.1.0"
 dependencies = [
  "approx",
+ "criterion",
  "thiserror 2.0.20",
  "tpt-math-linalg",
  "tpt-sci-grid",

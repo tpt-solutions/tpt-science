@@ -7,7 +7,7 @@
 //! * A **0-D energy-balance model** [`EnergyBalanceModel`] — global-mean
 //!   surface temperature under incoming shortwave, grey-body longwave outgoing,
 //!   and a CO₂ radiative-forcing term (`ΔF = 5.35·ln(C/C0)` W/m²).
-//! * **Multi-band longwave radiative transfer** ([`radiative_transfer`]) — a
+//! * **Multi-band longwave radiative transfer** (`radiative_transfer`) — a
 //!   simplified multi-band grey-slab scheme [`MultiBandRadiativeTransfer`] and a
 //!   `k`-distribution [`CorrelatedKRt`], replacing the single grey band of
 //!   [`grey_radiative_transfer`].

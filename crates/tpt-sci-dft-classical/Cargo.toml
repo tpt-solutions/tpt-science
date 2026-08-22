@@ -14,6 +14,9 @@ keywords = ["dft", "density-functional-theory", "pcsaft", "adsorption", "science
 categories = ["science", "simulation", "chemistry"]
 publish = false
 
+[lib]
+bench = false
+
 [dependencies]
 feos = { workspace = true }
 feos-dft = { workspace = true }
@@ -21,6 +24,7 @@ thiserror = { workspace = true }
 tpt-sci-grid = { workspace = true, features = ["sparse"] }
 
 [dev-dependencies]
+criterion = { workspace = true }
 approx = { workspace = true }
 # Dev-only: the `adsorption` example wraps a concrete PC-SAFT functional, which
 # needs the `pcsaft` feature and `feos-core` (State / IdentifierOption).
@@ -32,3 +36,7 @@ workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
+
+[[bench]]
+name = "square_gradient"
+harness = false

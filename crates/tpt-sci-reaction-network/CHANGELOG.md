@@ -7,6 +7,8 @@ project adheres to [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- Criterion benchmark suite (enches/) covering the crate's core hot path.
+
 - From-scratch Catalyst.jl-style species/rate/stoichiometry DSL and mass-action
   ODE builder, depending on `tpt-sci-ode`:
   - Programmatic `ReactionNetwork` builder and a textual (`kB, S + E --> SE`)

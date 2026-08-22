@@ -14,11 +14,15 @@ keywords = ["physics", "rigid-body", "collision", "simulation"]
 categories = ["science", "simulation", "game-development"]
 publish = false
 
+[lib]
+bench = false
+
 [dependencies]
 tpt-math-linalg = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
 approx = { workspace = true }
 
 [lints]
@@ -26,3 +30,7 @@ workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
+
+[[bench]]
+name = "physics_rigid"
+harness = false

@@ -74,17 +74,17 @@ impl Pseudopotential {
         -self.z * Self::erf(r / self.sigma) / r
     }
 
-/// Error function via the Abramowitz & Stegun 7.1.26 rational approximation
-/// (absolute accuracy better than 1.5e-7 across the real line).
-fn erf(x: f64) -> f64 {
-    let sign = if x < 0.0 { -1.0 } else { 1.0 };
-    let ax = x.abs();
-    let t = 1.0 / (1.0 + 0.3275911 * ax);
-    let poly = (((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t
-        + 0.254829592;
-    let y = 1.0 - poly * t * (-ax * ax).exp();
-    sign * y
-}
+    /// Error function via the Abramowitz & Stegun 7.1.26 rational approximation
+    /// (absolute accuracy better than 1.5e-7 across the real line).
+    fn erf(x: f64) -> f64 {
+        let sign = if x < 0.0 { -1.0 } else { 1.0 };
+        let ax = x.abs();
+        let t = 1.0 / (1.0 + 0.3275911 * ax);
+        let poly = (((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t
+            + 0.254829592;
+        let y = 1.0 - poly * t * (-ax * ax).exp();
+        sign * y
+    }
 
     /// Sample the pseudopotential on a 3-D grid, returning a vector of length
     /// `grid.len()` addressed by `grid.index(ix, iy, iz)`.

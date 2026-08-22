@@ -53,7 +53,9 @@ pub(crate) fn jacobi(a: &[Vec<f64>]) -> (Vec<f64>, Vec<Vec<f64>>) {
         let app = m[p][p];
         let aqq = m[q][q];
         let apq = m[p][q];
-        let phi = 0.5 * (aqq - app).atan2(apq);
+        // tan(2φ) = 2·a_pq / (a_qq − a_pp) is the classic Jacobi rotation angle
+        // that zeros a_pq; `atan2` keeps this well-defined at a_pp == a_qq.
+        let phi = 0.5 * (2.0 * apq).atan2(aqq - app);
         let c = phi.cos();
         let s = phi.sin();
         // Rotate columns p,q for all rows, then rows p,q for all columns,

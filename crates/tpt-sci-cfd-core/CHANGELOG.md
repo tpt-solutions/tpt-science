@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- Criterion benchmark suite (enches/) covering the crate's core hot path.
+
 - `CollocatedGrid` — uniform 2-D collocated grid with cell-centred velocity
   storage (`idx`, `len`).
 - `Step` — fractional-step (Chorin) incompressible Navier–Stokes solver:
@@ -28,6 +30,8 @@ adheres to [Semantic Versioning](https://semver.org).
 Initial implementation of `tpt-sci-cfd-core` (spec2.txt expanded vision).
 
 ### Added
+
+- Criterion benchmark suite (enches/) covering the crate's core hot path.
 
 - From-scratch 2-D incompressible Navier–Stokes solver (no wrapped engine;
   `pravash` was audited and rejected, GPL-3.0-only) on a uniform collocated grid

@@ -18,11 +18,11 @@
 use std::f64::consts::PI;
 
 use tpt_sci_grid::sparse::conjugate_gradient;
-use tpt_sci_grid::{laplacian_3d_sparse, Boundary, CsrMatrix, UniformGrid3D};
+use tpt_sci_grid::{Boundary, CsrMatrix, UniformGrid3D, laplacian_3d_sparse};
 
+use crate::DftError;
 use crate::eigen::lanczos_lowest;
 use crate::xc::XcFunctional;
-use crate::DftError;
 
 /// Result of a 3-D Kohn–Sham solve.
 #[derive(Debug, Clone)]
@@ -111,11 +111,7 @@ impl KohnSham3D {
             let mut row = Vec::new();
             for p in start..end {
                 let c_full = lap.col_ind[p];
-                if is_b(
-                    c_full % nx,
-                    (c_full / nx) % ny,
-                    c_full / (nx * ny),
-                ) {
+                if is_b(c_full % nx, (c_full / nx) % ny, c_full / (nx * ny)) {
                     continue;
                 }
                 let c_local = interior.iter().position(|&x| x == c_full).unwrap();
@@ -364,11 +360,7 @@ impl KohnSham3D {
     fn matvec_int(&self, x: &[f64]) -> Vec<f64> {
         self.lap_int_rows
             .iter()
-            .map(|row| {
-                row.iter()
-                    .map(|&(c, v)| v * x[c])
-                    .sum::<f64>()
-            })
+            .map(|row| row.iter().map(|&(c, v)| v * x[c]).sum::<f64>())
             .collect()
     }
 
@@ -425,7 +417,8 @@ impl KohnSham3D {
                 .map(|((&xi, &v), &ti)| -0.5 * ti + v * xi)
                 .collect()
         };
-        let (eigvals, eigvecs) = lanczos_lowest(self.n_int, self.n_bands, self.n_int.min(200), matvec);
+        let (eigvals, eigvecs) =
+            lanczos_lowest(self.n_int, self.n_bands, self.n_int.min(200), matvec);
         let (rho, occ) = self.density_from_orbitals(&eigvecs);
         let energy: f64 = eigvals.iter().zip(&occ).map(|(&e, &o)| e * o as f64).sum();
         let orbitals = eigvecs.iter().map(|v| self.to_full(v)).collect();
@@ -482,21 +475,8 @@ impl KohnSham3D {
         let gr = self.gradient_magnitude(&self.rho);
         let vh = self.hartree_potential(&self.rho);
         let vxc = self.xc_potential(&self.rho, &gr);
-        let e_h = 0.5
-            * self
-                .rho
-                .iter()
-                .zip(&vh)
-                .map(|(&r, &v)| r * v)
-                .sum::<f64>()
-            * self.dv;
-        let e_int_rho_vxc = self
-            .rho
-            .iter()
-            .zip(&vxc)
-            .map(|(&r, &v)| r * v)
-            .sum::<f64>()
-            * self.dv;
+        let e_h = 0.5 * self.rho.iter().zip(&vh).map(|(&r, &v)| r * v).sum::<f64>() * self.dv;
+        let e_int_rho_vxc = self.rho.iter().zip(&vxc).map(|(&r, &v)| r * v).sum::<f64>() * self.dv;
         let e_xc = self.xc.total_energy(&self.rho, &gr, self.dv);
         let kinetic_plus_ext: f64 = eigvals.iter().zip(&occ).map(|(&e, &o)| e * o as f64).sum();
         let total = kinetic_plus_ext - e_h - e_int_rho_vxc + e_xc;
@@ -528,7 +508,10 @@ mod tests {
         let mut ks = KohnSham3D::new(grid, v_ext, 2, Box::new(Lda)).unwrap();
         let res = ks.solve_bare();
         assert!(res.total_energy.is_finite());
-        assert!(res.orbital_energies[0] > 0.0, "kinetic energy must be positive");
+        assert!(
+            res.orbital_energies[0] > 0.0,
+            "kinetic energy must be positive"
+        );
         let dv = ks.volume_element();
         let integral: f64 = res.density.iter().sum::<f64>() * dv;
         assert!(

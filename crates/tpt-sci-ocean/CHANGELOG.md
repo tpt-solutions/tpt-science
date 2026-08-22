@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- Criterion benchmark suite (enches/) covering the crate's core hot path.
+
 - `ShallowWater` — 2-D shallow-water model: height `h` + depth-averaged `u`/`v`,
   continuity + momentum with gravity and Coriolis `f`, on a uniform grid
   (`new`, `perturb_center`, `step`, `max_speed`).
@@ -30,6 +32,8 @@ to [Semantic Versioning](https://semver.org).
 Initial implementation of `tpt-sci-ocean` (spec2.txt expanded vision).
 
 ### Added
+
+- Criterion benchmark suite (enches/) covering the crate's core hot path.
 
 - 2-D shallow-water / primitive-equation ocean circulation built on
   `tpt-sci-cfd-core`. `pravash` was audited and rejected (GPL-3.0-only), same as

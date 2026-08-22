@@ -205,7 +205,6 @@ mod tests {
             200,
         );
         let y = traj.last().unwrap()[0];
-        eprintln!("y={:?} exp={:?}", y, (-1.0_f64).exp());
         assert!((y - (-1.0_f64).exp()).abs() < 1e-4);
     }
 
@@ -219,7 +218,6 @@ mod tests {
             200,
         );
         let y = traj.last().unwrap()[0];
-        eprintln!("y={:?} exp={:?}", y, (-1.0_f64).exp());
         assert!((y - (-1.0_f32).exp()).abs() < 1e-3);
     }
 
