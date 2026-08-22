@@ -3,10 +3,23 @@
 All notable changes to `tpt-sci-ode` are documented here. This project adheres
 to [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+## [0.1.0] — 2026-08-22
+
+Initial release of `tpt-sci-ode` to crates.io.
 
 ### Added
 
+- From-scratch ODE/DAE integrators on the dual-licensed `tpt-math` dense
+  linear algebra:
+  - `Method::Tsit45` — explicit Runge–Kutta 4(5), non-stiff.
+  - `Method::TrBdf2` — 2-stage SDIRK (TR-BDF2), A-stable, stiff.
+  - `Method::Esdirk34` — 4-stage ESDIRK order 3(4), A-/L-stable, stiff.
+  - `Method::Bdf` — variable-order (1–5) backward differentiation, stiff, with a
+    Nordsieck predictor-corrector and Hermite dense output.
+- Closure-first `OdeProblem` API (`Rhs = Fn(f64, &[f64], &mut [f64])`) and an
+  `Rc<dyn RhsCallable>` pipeline shared by closures and JIT RHS.
+- Adaptive-step driver with Hermite dense output so `solve_dense` lands exactly on
+  requested `t_eval` points.
 - `JitRhs` / `JitRhsBuilder` / `compile_rhs` — an optional Cranelift JIT-compiled
   right-hand side that plugs into the same `RhsCallable` trait as a plain closure.
 - `verify-diffsol` dev feature — retains `diffsol` only as an optional, dev-only
@@ -16,8 +29,8 @@ to [Semantic Versioning](https://semver.org).
   finite-difference Jacobians directly in compressed CSR storage and factor
   the Newton matrix `I − γ·J` with the in-crate sparse LU (`sparse` module),
   never materialising a dense Jacobian. Small systems keep the dense path.
-  The `CsrMatrix` API is now public (`nrows`, `ncols`, `nnz`, `get`,
-  `mat_vec`, `jacobian`, `scaled_identity_minus_scaled`, `sparse_solve`).
+  The `CsrMatrix` API is public (`nrows`, `ncols`, `nnz`, `get`, `mat_vec`,
+  `jacobian`, `scaled_identity_minus_scaled`, `sparse_solve`).
 
 ### Changed
 
@@ -29,31 +42,5 @@ to [Semantic Versioning](https://semver.org).
 - `solve_dense` now builds the solver once and walks a single trajectory
   (`solver.solve_dense(t_eval)`), removing the previous O(n) redundant
   re-integration from `t0` for each evaluation point.
-
-### Added (initial methods)
-
-- `Method::Tsit45` — explicit Runge–Kutta 4(5), non-stiff.
-- `Method::TrBdf2` — 2-stage SDIRK (TR-BDF2), A-stable, stiff.
-- `Method::Esdirk34` — 4-stage ESDIRK order 3(4), A-/L-stable, stiff.
-- `Method::Bdf` — variable-order (1–5) backward differentiation, stiff, with a
-  Nordsieck predictor-corrector and Hermite dense output.
-
-## [0.1.0] — 2026-08-16
-
-Initial implementation of `tpt-sci-ode`.
-
-### Added
-
-- From-scratch ODE/DAE integrators (see methods above) on the dual-licensed
-  `tpt-math` dense linear algebra.
-- Closure-first `OdeProblem` API (`Rhs = Fn(f64, &[f64], &mut [f64])`) and an
-  `Rc<dyn RhsCallable>` pipeline shared by closures and JIT RHS.
-- Adaptive-step driver with Hermite dense output so `solve_dense` lands exactly on
-  requested `t_eval` points.
-
-### Notes
-
-- Crate is `publish = false` and consumed as a path/workspace dependency; no
-  crates.io release has been cut yet.
 
 [0.1.0]: https://github.com/tpt-solutions/tpt-science/releases/tag/v0.1.0
