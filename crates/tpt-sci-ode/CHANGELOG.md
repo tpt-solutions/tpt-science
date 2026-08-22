@@ -11,6 +11,13 @@ to [Semantic Versioning](https://semver.org).
   right-hand side that plugs into the same `RhsCallable` trait as a plain closure.
 - `verify-diffsol` dev feature — retains `diffsol` only as an optional, dev-only
   verification oracle (excluded from `cargo deny` license scanning).
+- Sparse Newton path for the implicit solvers: for systems with ≥ 64 states,
+  `sdirk_stage` (TR-BDF2 / ESDIRK34) and the BDF corrector build their
+  finite-difference Jacobians directly in compressed CSR storage and factor
+  the Newton matrix `I − γ·J` with the in-crate sparse LU (`sparse` module),
+  never materialising a dense Jacobian. Small systems keep the dense path.
+  The `CsrMatrix` API is now public (`nrows`, `ncols`, `nnz`, `get`,
+  `mat_vec`, `jacobian`, `scaled_identity_minus_scaled`, `sparse_solve`).
 
 ### Changed
 

@@ -7,7 +7,7 @@ adheres to [Semantic Versioning](https://semver.org).
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - Rigid-body rotation: `Body` carries an orientation quaternion, angular velocity,
   and isotropic `inertia`; `apply_torque` / `spin` / `quat_to_matrix` etc.
@@ -19,7 +19,7 @@ Initial implementation of `tpt-sci-physics-rigid`.
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - From-scratch rigid-body (sphere) physics world with analytic collision
   resolution. `rapier` is disqualified per ADR 0007 (Apache-2.0-only).

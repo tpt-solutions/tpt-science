@@ -949,3 +949,38 @@ findings are tracked here rather than fixed in this pass:
       correct. (Separately, `xc::tests::pbe_derivatives_match_numeric` was
       found failing — pre-existing, unrelated to the eigensolver, not fixed
       in this pass.)
+
+## Phase 11 — Platform review follow-ups (2026-08-22)
+
+Open items from a fresh bugs/TODOs/missing-features review. Nothing new was
+found beyond what Phases 5–10 already cover except the three items below;
+tracked here rather than fixed inline.
+
+- [x] `tpt-sci-cfd-core`: resolve the collocated-grid SIMPLE corner-cell
+      divergence limitation. Root cause found and fixed (2026-08-22): the
+      Poisson matrix was assembled from *combined* per-cell flux columns
+      (x- and y-entries summed before the outer product), which injects
+      spurious `1/(dx·dy)` cross terms at edge/corner cells and breaks the
+      block adjoint identity `A = FₓFₓᵀ + F_yF_yᵀ` that the two-field
+      projection requires — no staggered grid or Rhie–Chow correction needed.
+      The assembly now accumulates each axis's outer product separately; the
+      `#[ignore]`d test passes un-ignored and a permanent adjoint-identity
+      regression test (`poisson_matrix_is_exact_adjoint_of_divergence`) was
+      added (`crates/tpt-sci-cfd-core/src/simple.rs`).
+- [x] `tpt-sci-ode`: `CsrMatrix` + sparse LU solve wired into an implicit
+      solver path (2026-08-22). For systems with ≥ 64 states
+      (`sparse::SPARSE_LU_MIN_N`), `linalg::sdirk_stage` (TR-BDF2 / ESDIRK34)
+      and the BDF corrector in `solver::step_bdf` route their Newton linear
+      solves through `sparse::sdirk_stage_sparse` / an inline sparse path:
+      the finite-difference Jacobian is built directly in compressed CSR
+      storage and `I − γ·J` is factored with the in-crate sparse LU, never
+      densified. All `#[allow(dead_code)]` markers removed; `CsrMatrix` is now
+      public with `scaled_identity_minus_scaled` building the Newton matrix in
+      pure CSR; covered by new tests including an end-to-end 80-state BDF run
+      (`crates/tpt-sci-ode/src/sparse.rs`, `src/linalg.rs`, `src/solver.rs`).
+- [x] `tpt-sci-hemodynamics`: `CHANGELOG.md` updated (2026-08-22) — the real
+      Womersley complex-Bessel solve (`src/womersley.rs`) and the 0-D/1-D/3-D
+      coupling interface (`src/coupling.rs`) moved into the `[Unreleased]`
+      "Added" list; the stale `[0.1.0]` "out of scope" claim replaced with a
+      note that both have since been implemented. Also repaired two literal
+      backspace control characters in the benchmark-suite lines.

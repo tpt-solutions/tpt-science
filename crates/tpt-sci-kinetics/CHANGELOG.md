@@ -7,7 +7,7 @@ adheres to [Semantic Versioning](https://semver.org).
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - `ArrheniusRate` — `k(T) = A·exp(-Ea/(R·T))`, validated, temperature-driven
   (`rate_constant`).
@@ -23,7 +23,7 @@ Initial implementation of `tpt-sci-kinetics` (spec2.txt expanded vision).
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - Surface and heterogeneous chemical kinetics built from scratch on
   `tpt-sci-reaction-network` (mass-action CRN engine) and `tpt-sci-ode`.

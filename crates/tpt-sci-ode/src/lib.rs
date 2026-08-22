@@ -18,6 +18,9 @@
 //!
 //! All use a shared adaptive-step driver with Hermite dense output, so
 //! [`OdeProblem::solve_dense`] returns exact states at the requested times.
+//! For systems with at least 64 states, the implicit methods build their
+//! Newton matrices through the in-crate sparse CSR/LU path ([`sparse`]),
+//! never materialising a dense Jacobian.
 //! `diffsol` is retained only as an optional, dev-only verification oracle
 //! (feature `verify-diffsol`, excluded from license scanning).
 //!

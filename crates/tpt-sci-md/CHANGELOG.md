@@ -7,7 +7,7 @@ All notable changes to `tpt-sci-md` are documented here. This project adheres to
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - `Particle` — point particle with position/velocity/force/mass/species,
   validated construction (`new`, `new_with_species`).
@@ -23,7 +23,7 @@ Initial implementation of `tpt-sci-md` (spec2.txt expanded vision).
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - From-scratch classical molecular dynamics engine (no wrapped engine; `lumol` was
   audited and rejected, BSD-3-Clause and alpha/stale) on `tpt-math-linalg`.

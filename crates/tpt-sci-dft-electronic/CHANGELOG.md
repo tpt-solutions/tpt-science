@@ -7,7 +7,7 @@ adheres to [Semantic Versioning](https://semver.org).
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - `Grid1D` — uniform 1-D real-space grid.
 - `lda_xc` — LDA exchange-correlation energy density `e_xc(ρ)` (Slater exchange +
@@ -37,7 +37,7 @@ Initial implementation of `tpt-sci-dft-electronic` (spec2.txt expanded vision).
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - From-scratch **1-D Kohn–Sham** electronic-structure DFT (LDA XC), scoped to 1-D
   model systems. This crate was `flagged-needs-audit-first` in spec2.txt; no Rust

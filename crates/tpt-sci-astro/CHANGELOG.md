@@ -7,7 +7,7 @@ to [Semantic Versioning](https://semver.org).
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - J2 perturbation model: `OrbitalElements::propagate_j2` and `j2_secular_rates`
   give first-order secular nodal-regression / apsidal-precession rates
@@ -21,7 +21,7 @@ Initial implementation of `tpt-sci-astro`.
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - From-scratch two-body / Keplerian orbital-mechanics primitives on
   `tpt-math-linalg`. `rapier` is not involved; `quantrs`/`quant-physics` not

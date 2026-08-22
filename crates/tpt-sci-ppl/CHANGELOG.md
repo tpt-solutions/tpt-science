@@ -7,7 +7,7 @@ to [Semantic Versioning](https://semver.org).
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - `Trace` convergence diagnostics: split-R-hat (`Trace::rhat`), Geyer ESS
   (`Trace::ess`), and divergence rate / count (`Trace::divergence_rate`,
@@ -23,7 +23,7 @@ Initial implementation of `tpt-sci-ppl`.
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - From-scratch NUTS (No-U-Turn Sampler) Hamiltonian Monte Carlo backend on
   `tpt-math-autodiff-rev` (reverse-mode gradients) and `tpt-math-prob`

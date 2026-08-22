@@ -802,17 +802,38 @@ fn step_bdf(
             converged = true;
             break;
         }
-        let jac = jacobian(f, t + h, &y_cur, &fk);
-        let mut a = DMat::new(n, n);
-        for i in 0..n {
-            for j in 0..n {
-                a.set(i, j, if i == j { 1.0 } else { 0.0 } - gamma * jac.get(i, j));
+        // Large systems route the Newton linear solve through the sparse
+        // CSR/LU path (`sparse` module): the finite-difference Jacobian is
+        // built directly in compressed storage and never materialised densely.
+        let delta = if n >= crate::sparse::SPARSE_LU_MIN_N {
+            let jac = crate::sparse::CsrMatrix::jacobian(
+                |t, y, dydt| {
+                    f.call(t, y, dydt)
+                        .expect("RHS evaluation must not fail for a well-formed problem");
+                },
+                t + h,
+                &y_cur,
+                &fk,
+                None,
+            );
+            let a = jac.scaled_identity_minus_scaled(gamma);
+            a.sparse_solve(&residual).ok_or(OdeError::Newton {
+                t: t + h,
+                residual: rnorm,
+            })?
+        } else {
+            let jac = jacobian(f, t + h, &y_cur, &fk);
+            let mut a = DMat::new(n, n);
+            for i in 0..n {
+                for j in 0..n {
+                    a.set(i, j, if i == j { 1.0 } else { 0.0 } - gamma * jac.get(i, j));
+                }
             }
-        }
-        let delta = a.solve(&residual).ok_or(OdeError::Newton {
-            t: t + h,
-            residual: rnorm,
-        })?;
+            a.solve(&residual).ok_or(OdeError::Newton {
+                t: t + h,
+                residual: rnorm,
+            })?
+        };
         for i in 0..n {
             y_cur[i] -= delta[i];
         }

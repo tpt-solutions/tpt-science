@@ -7,7 +7,7 @@ adheres to [Semantic Versioning](https://semver.org).
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - `CollocatedGrid` — uniform 2-D collocated grid with cell-centred velocity
   storage (`idx`, `len`).
@@ -25,13 +25,24 @@ adheres to [Semantic Versioning](https://semver.org).
   least-squares cell-gradient reconstruction and a diffusion + upwind-advection
   residual assembly, alongside the structured `CollocatedGrid` (`unstructured.rs`).
 
+### Fixed
+
+- **Collocated-grid SIMPLE corner-cell divergence**: the pressure-Poisson matrix
+  was assembled from combined per-cell flux columns, which added spurious
+  `1/(dx·dy)` cross terms at edge/corner cells and broke the required block
+  adjoint identity `A = FₓFₓᵀ + F_yF_yᵀ`. The assembly now accumulates each
+  axis's outer product separately, making the projection exactly
+  divergence-free (the previously `#[ignore]`d
+  `pressure_correction_reduces_divergence` test now passes and a permanent
+  adjoint-identity regression test guards the property).
+
 ## [0.1.0] — 2026-08-16
 
 Initial implementation of `tpt-sci-cfd-core` (spec2.txt expanded vision).
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - From-scratch 2-D incompressible Navier–Stokes solver (no wrapped engine;
   `pravash` was audited and rejected, GPL-3.0-only) on a uniform collocated grid

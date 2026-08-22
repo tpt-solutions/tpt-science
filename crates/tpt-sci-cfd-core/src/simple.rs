@@ -87,8 +87,9 @@ impl SimpleSolver {
     /// (zero-flux) boundary: the last cell per axis returns zero, so a uniform
     /// field is exactly divergence-free. Its exact negative adjoint is the
     /// one-sided pressure gradient used by [`SimpleSolver::correct`], and the
-    /// Poisson matrix in [`SimpleSolver::build_poisson_matrix`] is `A = FFᵀ`
-    /// for this divergence `F` — together they form a consistent, symmetric
+    /// Poisson matrix in [`SimpleSolver::build_poisson_matrix`] is the
+    /// block-form product `A = FₓFₓᵀ + F_yF_yᵀ` of the per-axis divergence
+    /// operators — together they form a consistent, symmetric
     /// pressure-projection scheme.
     #[must_use]
     pub fn divergence(&self, u: &[f64], v: &[f64]) -> Vec<f64> {
@@ -117,44 +118,55 @@ impl SimpleSolver {
     /// Build the pressure Poisson matrix `A = -∇²` on the structured collocated
     /// grid.
     ///
-    /// The operator is assembled as `A = FFᵀ`, where `F` is the forward
-    /// (face-flux) divergence of [`SimpleSolver::divergence`] — the standard
-    /// symmetric 5-point Neumann Laplacian with a constant-only nullspace.
-    /// Because `A` is built from the exact adjoint pair `(F, −Fᵀ)`, the
-    /// projection in [`SimpleSolver::correct`] is self-consistent: the discrete
-    /// divergence of the corrected field vanishes up to the conjugate-gradient
-    /// tolerance whenever the provisional field's net flux through the clamped
-    /// boundaries balances. The right-hand side is mean-projected for
-    /// compatibility. Only `∇p` feeds the velocity correction, so the additive
-    /// gauge is immaterial.
+    /// The operator is assembled as the block-form product `A = FₓFₓᵀ + F_yF_yᵀ`,
+    /// where `Fₓ`/`F_y` are the per-axis forward (face-flux) divergence
+    /// operators of [`SimpleSolver::divergence`] acting on the `u`/`v` fields —
+    /// the standard symmetric 5-point Neumann Laplacian with a constant-only
+    /// nullspace. Because `A` is built from the exact adjoint pair
+    /// `(F, −Fᵀ)`, the projection in [`SimpleSolver::correct`] is
+    /// self-consistent: the discrete divergence of the corrected field
+    /// vanishes up to the conjugate-gradient tolerance whenever the provisional
+    /// field's net flux through the clamped boundaries balances. The
+    /// right-hand side is mean-projected for compatibility. Only `∇p` feeds
+    /// the velocity correction, so the additive gauge is immaterial.
     #[must_use]
     pub fn build_poisson_matrix(&self) -> CsrMatrix {
         let g = &self.grid;
         let n = g.len();
         let mut rows: Vec<Vec<(usize, f64)>> = vec![Vec::new(); n];
-        // `A = F Fᵀ` for the collocated projection: assembled from the
-        // *columns* of the combined forward-divergence operator (each column
-        // holds the cell's outflow entries `−1/dx`, `−1/dy` plus the inflow
-        // entries `+1/dx`, `+1/dy` at the left/bottom neighbours). Symmetric
-        // by construction; pairs with the divergence (RHS) and the adjoint-
-        // gradient velocity correction.
         for j in 0..g.ny {
             for i in 0..g.nx {
-                let mut col: Vec<(usize, f64)> = Vec::with_capacity(4);
+                // The two-field collocated projection requires the *block*
+                // operator `A = FₓFₓᵀ + F_yF_yᵀ`, where `Fₓ`/`F_y` are the
+                // per-axis forward-difference divergence matrices acting on
+                // the `u`/`v` fields respectively. Each axis therefore
+                // contributes its own outer product below. Combining both
+                // axes into a single summed column before the outer product
+                // would add spurious `1/(dx·dy)` cross terms — precisely at
+                // edge/corner cells where both axes have boundary-clamped
+                // fluxes — which was the historical source of the O(1)
+                // residual divergence at corner cells.
+                let mut col_x: Vec<(usize, f64)> = Vec::with_capacity(2);
                 if i < g.nx - 1 {
-                    col.push((g.idx(i, j), -1.0 / g.dx));
+                    col_x.push((g.idx(i, j), -1.0 / g.dx));
                 }
                 if i > 0 {
-                    col.push((g.idx(i - 1, j), 1.0 / g.dx));
+                    col_x.push((g.idx(i - 1, j), 1.0 / g.dx));
                 }
+                let mut col_y: Vec<(usize, f64)> = Vec::with_capacity(2);
                 if j < g.ny - 1 {
-                    col.push((g.idx(i, j), -1.0 / g.dy));
+                    col_y.push((g.idx(i, j), -1.0 / g.dy));
                 }
                 if j > 0 {
-                    col.push((g.idx(i, j - 1), 1.0 / g.dy));
+                    col_y.push((g.idx(i, j - 1), 1.0 / g.dy));
                 }
-                for &(r, v1) in &col {
-                    for &(s, v2) in &col {
+                for &(r, v1) in &col_x {
+                    for &(s, v2) in &col_x {
+                        rows[r].push((s, v1 * v2));
+                    }
+                }
+                for &(r, v1) in &col_y {
+                    for &(s, v2) in &col_y {
                         rows[r].push((s, v1 * v2));
                     }
                 }
@@ -177,8 +189,9 @@ impl SimpleSolver {
     pub fn solve_pressure(&self) -> Vec<f64> {
         // The divergence is the exact negative adjoint of the gradient used in
         // [`SimpleSolver::correct`] and assembled into
-        // [`SimpleSolver::build_poisson_matrix`] (`A = FFᵀ`), so the discrete
-        // equation is exactly `A·p = -(ρ/dt)·∇·u*` with a symmetric `A`.
+        // [`SimpleSolver::build_poisson_matrix`] (`A = FₓFₓᵀ + F_yF_yᵀ`), so
+        // the discrete equation is exactly `A·p = -(ρ/dt)·∇·u*` with a
+        // symmetric `A`.
         let mut b: Vec<f64> = self
             .divergence(&self.u_star, &self.v_star)
             .iter()
@@ -386,9 +399,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "known limitation: collocated-grid projection with clamped \
-                boundaries leaves O(1) divergence at corner cells; tracked \
-                in the workspace todo.md (9e known issues)"]
     fn pressure_correction_reduces_divergence() {
         let g = CollocatedGrid::new(24, 24, 1.0, 1.0).unwrap();
         let mut solver = SimpleSolver::new(g.clone(), 1e-2, 1.0, 1e-3);
@@ -414,6 +424,52 @@ mod tests {
             after < before * 0.1,
             "pressure correction should reduce divergence (before={before}, after={after})"
         );
+    }
+
+    /// The Poisson matrix must equal the block-form operator product
+    /// `A = FₓFₓᵀ + F_yF_yᵀ`, the exact negative-adjoint pair consumed by the
+    /// two-field projection in [`SimpleSolver::correct`]. Assembling combined
+    /// per-cell columns instead adds spurious `1/(dx·dy)` cross terms at
+    /// edge/corner cells, which was the historical cause of O(1) residual
+    /// divergence there.
+    #[test]
+    fn poisson_matrix_is_exact_adjoint_of_divergence() {
+        let g = CollocatedGrid::new(24, 24, 1.0, 1.0).unwrap();
+        let solver = SimpleSolver::new(g.clone(), 1e-2, 1.0, 1e-3);
+        let a = solver.build_poisson_matrix();
+        let zeros = vec![0.0; g.len()];
+        for k in [0usize, 5, 23, 24, 100, 275, 300, 551, 575] {
+            // Independent construction of column `k` of `A`:
+            //   col_k(A) = Fₓ(Fₓᵀ e_k) + F_y(F_yᵀ e_k),
+            // where Fₓᵀ e_k is row `k` of Fₓ (the coefficients of cell `k`'s
+            // value in its own and its neighbour's x-divergence).
+            let mut wx = vec![0.0; g.len()];
+            let i = k % g.nx;
+            if i < g.nx - 1 {
+                wx[k] -= 1.0 / g.dx;
+                wx[k + 1] += 1.0 / g.dx;
+            }
+            let mut wy = vec![0.0; g.len()];
+            let j = k / g.nx;
+            if j < g.ny - 1 {
+                wy[k] -= 1.0 / g.dy;
+                wy[k + g.nx] += 1.0 / g.dy;
+            }
+            let expected = {
+                let cx = solver.divergence(&wx, &zeros);
+                let cy = solver.divergence(&zeros, &wy);
+                cx.iter().zip(&cy).map(|(x, y)| x + y).collect::<Vec<_>>()
+            };
+            let mut e = vec![0.0; g.len()];
+            e[k] = 1.0;
+            let a_col = a.mul_vec(&e);
+            let err: f64 = a_col
+                .iter()
+                .zip(&expected)
+                .map(|(x, y)| (x - y).abs())
+                .fold(0.0, f64::max);
+            assert!(err < 1e-9, "column {k}: |A e − (FₓFₓᵀ+F_yF_yᵀ) e| = {err}");
+        }
     }
 
     #[test]

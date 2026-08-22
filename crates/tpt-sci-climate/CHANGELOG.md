@@ -7,7 +7,7 @@ adheres to [Semantic Versioning](https://semver.org).
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - `EnergyBalanceModel` — 0-D global energy balance with CO₂ forcing
   `ΔF = 5.35·ln(C/C0)` (W/m²), explicit-Euler `step` and `equilibrium_temperature`
@@ -30,7 +30,7 @@ Initial implementation of `tpt-sci-climate` (spec2.txt expanded vision).
 
 ### Added
 
-- Criterion benchmark suite (enches/) covering the crate's core hot path.
+- Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - Reduced-order climate modelling built on `tpt-sci-ode` and `tpt-math-linalg`:
   0-D EBM, simple grey radiative transfer, single-tracer atmospheric chemistry.

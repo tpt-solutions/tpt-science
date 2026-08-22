@@ -190,6 +190,12 @@ pub(crate) fn sdirk_stage(
     k_guess: &[f64],
 ) -> Result<Vec<f64>, OdeError> {
     let n = y_base.len();
+    // Large systems route their Newton linear solves through the sparse
+    // CSR/LU path (`sparse` module): the finite-difference Jacobian is built
+    // directly in compressed storage and never materialised densely.
+    if n >= crate::sparse::SPARSE_LU_MIN_N {
+        return crate::sparse::sdirk_stage_sparse(f, t_stage, y_base, diag, k_guess);
+    }
     let mut k = k_guess.to_vec();
     for _iter in 0..50 {
         let y_stage: Vec<f64> = y_base.iter().zip(&k).map(|(b, kk)| b + diag * kk).collect();
