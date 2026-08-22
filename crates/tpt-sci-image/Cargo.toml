@@ -12,7 +12,6 @@ readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-image"
 keywords = ["tomography", "image-processing", "radon", "science", "simulation"]
 categories = ["science", "simulation"]
-publish = false
 
 [lib]
 bench = false

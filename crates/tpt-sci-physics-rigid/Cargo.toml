@@ -12,7 +12,6 @@ readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-physics-rigid"
 keywords = ["physics", "rigid-body", "collision", "simulation"]
 categories = ["science", "simulation", "game-development"]
-publish = false
 
 [lib]
 bench = false

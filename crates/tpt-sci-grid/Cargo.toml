@@ -12,7 +12,6 @@ readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-grid"
 keywords = ["finite-difference", "pde", "grid", "science", "simulation"]
 categories = ["science", "simulation", "mathematics"]
-publish = false
 
 [lib]
 bench = false
