@@ -12,7 +12,6 @@ readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-dft-electronic"
 keywords = ["dft", "electronic", "kohn-sham", "lda", "science"]
 categories = ["science", "simulation"]
-publish = false
 
 [lib]
 bench = false

@@ -12,7 +12,6 @@ readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-kinetics"
 keywords = ["kinetics", "reaction-network", "arrhenius", "catalysis", "science"]
 categories = ["science", "simulation"]
-publish = false
 
 [lib]
 bench = false
