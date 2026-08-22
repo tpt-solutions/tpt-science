@@ -10,7 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-kinetics"
-keywords = ["kinetics", "reaction-network", "arrhenius", "langmuir-hinshelwood", "science"]
+keywords = ["kinetics", "reaction-network", "arrhenius", "catalysis", "science"]
 categories = ["science", "simulation"]
 publish = false
 

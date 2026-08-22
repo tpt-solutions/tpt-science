@@ -10,7 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-dft-electronic"
-keywords = ["dft", "electronic-structure", "kohn-sham", "lda", "science"]
+keywords = ["dft", "electronic", "kohn-sham", "lda", "science"]
 categories = ["science", "simulation", "chemistry"]
 publish = false
 

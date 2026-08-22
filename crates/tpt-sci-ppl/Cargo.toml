@@ -10,7 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-ppl"
-keywords = ["probabilistic-programming", "bayesian", "nuts", "mcmc", "science"]
+keywords = ["probabilistic", "bayesian", "nuts", "mcmc", "science"]
 categories = ["science", "simulation", "mathematics"]
 
 [lib]

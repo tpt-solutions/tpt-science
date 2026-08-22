@@ -10,7 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-ode"
-keywords = ["ode", "dae", "differential-equations", "science", "simulation"]
+keywords = ["ode", "dae", "diffeq", "science", "simulation"]
 categories = ["science", "simulation", "mathematics"]
 
 [lib]

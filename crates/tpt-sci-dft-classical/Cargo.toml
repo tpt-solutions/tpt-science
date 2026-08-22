@@ -10,7 +10,7 @@ repository.workspace = true
 homepage.workspace = true
 readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-dft-classical"
-keywords = ["dft", "density-functional-theory", "pcsaft", "adsorption", "science"]
+keywords = ["dft", "density-functional", "pcsaft", "adsorption", "science"]
 categories = ["science", "simulation", "chemistry"]
 publish = false
 
