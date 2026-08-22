@@ -11,7 +11,7 @@ homepage.workspace = true
 readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-hemodynamics"
 keywords = ["hemodynamics", "cfd", "womersley", "vascular", "science"]
-categories = ["science", "simulation", "medicine"]
+categories = ["science", "simulation"]
 publish = false
 
 [lib]

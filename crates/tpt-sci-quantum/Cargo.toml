@@ -11,7 +11,7 @@ homepage.workspace = true
 readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-quantum"
 keywords = ["quantum", "qubit", "simulation", "science"]
-categories = ["science", "simulation", "physics"]
+categories = ["science", "simulation"]
 
 [lib]
 bench = false
