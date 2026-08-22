@@ -20,11 +20,11 @@ dep (external `tpt-math-*` crates are already on crates.io).
 
 ## Batch 2 — foundations (no `tpt-sci-*` deps)
 
-- [ ] `tpt-sci-quantum`
-- [ ] `tpt-sci-astro`
-- [ ] `tpt-sci-md`
-- [ ] `tpt-sci-dft-classical`
-- [ ] `tpt-sci-cfd-core`
+- [x] `tpt-sci-quantum`
+- [x] `tpt-sci-astro`
+- [x] `tpt-sci-md`
+- [x] `tpt-sci-dft-classical`
+- [x] `tpt-sci-cfd-core`
 
 ## Batch 3 — dependents (deps all in Batches 1–2)
 
