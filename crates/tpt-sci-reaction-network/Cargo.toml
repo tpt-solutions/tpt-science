@@ -12,7 +12,6 @@ readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-reaction-network"
 keywords = ["reaction-network", "systems-biology", "ode", "catalyst", "science"]
 categories = ["science", "simulation"]
-publish = false
 
 [lib]
 bench = false

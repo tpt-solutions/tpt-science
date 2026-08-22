@@ -12,7 +12,6 @@ readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-electrophys"
 keywords = ["electrophysiology", "hodgkin-huxley", "bidomain", "cardiac", "science"]
 categories = ["science", "simulation"]
-publish = false
 
 [lib]
 bench = false

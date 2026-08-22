@@ -12,7 +12,6 @@ readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-climate"
 keywords = ["climate", "energy-balance", "radiative-transfer", "science"]
 categories = ["science", "simulation"]
-publish = false
 
 [lib]
 bench = false

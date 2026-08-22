@@ -12,7 +12,6 @@ readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-ocean"
 keywords = ["ocean", "shallow-water", "circulation", "cfd", "science"]
 categories = ["science", "simulation"]
-publish = false
 
 [lib]
 bench = false
