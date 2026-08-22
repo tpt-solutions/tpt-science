@@ -28,11 +28,11 @@ dep (external `tpt-math-*` crates are already on crates.io).
 
 ## Batch 3 — dependents (deps all in Batches 1–2)
 
-- [ ] `tpt-sci-reaction-network`  (needs: ode)
-- [ ] `tpt-sci-climate`           (needs: ode)
-- [ ] `tpt-sci-electrophys`       (needs: ode, grid)
-- [ ] `tpt-sci-ocean`             (needs: cfd-core)
-- [ ] `tpt-sci-hemodynamics`      (needs: cfd-core, ode)
+- [x] `tpt-sci-reaction-network`  (needs: ode)
+- [x] `tpt-sci-climate`           (needs: ode)
+- [x] `tpt-sci-electrophys`       (needs: ode, grid)
+- [x] `tpt-sci-ocean`             (needs: cfd-core)
+- [x] `tpt-sci-hemodynamics`      (needs: cfd-core, ode)
 
 ## Batch 4 — final dependents (deps all in Batches 1–3)
 
