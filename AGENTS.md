@@ -8,7 +8,7 @@ no root package. Read `README.md`, `todo.md`, `spec.txt`, `spec2.txt` for scope.
 ```sh
 cargo fmt --check                                   # CI fmt (edition 2024, max_width 100)
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace
+cargo test --workspace --all-features
 cargo doc --workspace --no-deps --all-features       # run with RUSTDOCFLAGS=-D warnings
 cargo deny check                                     # license/security hygiene
 cargo bench --workspace                              # full criterion run
