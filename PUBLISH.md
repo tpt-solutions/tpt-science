@@ -12,11 +12,11 @@ dep (external `tpt-math-*` crates are already on crates.io).
 
 ## Batch 1 — foundations (no `tpt-sci-*` deps)
 
-- [ ] `tpt-sci-ode`
-- [ ] `tpt-sci-grid`
-- [ ] `tpt-sci-ppl`
-- [ ] `tpt-sci-image`
-- [ ] `tpt-sci-physics-rigid`
+- [x] `tpt-sci-ode`
+- [x] `tpt-sci-grid`
+- [x] `tpt-sci-ppl`
+- [x] `tpt-sci-image`
+- [x] `tpt-sci-physics-rigid`
 
 ## Batch 2 — foundations (no `tpt-sci-*` deps)
 
