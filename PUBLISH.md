@@ -36,9 +36,9 @@ dep (external `tpt-math-*` crates are already on crates.io).
 
 ## Batch 4 — final dependents (deps all in Batches 1–3)
 
-- [ ] `tpt-sci-sim-core`       (needs: ode, grid, reaction-network)
-- [ ] `tpt-sci-kinetics`       (needs: reaction-network, ode)
-- [ ] `tpt-sci-dft-electronic` (no `tpt-sci-*` deps)
+- [x] `tpt-sci-sim-core`       (needs: ode, grid, reaction-network)
+- [x] `tpt-sci-kinetics`       (needs: reaction-network, ode)
+- [x] `tpt-sci-dft-electronic` (no `tpt-sci-*` deps)
 
 ---
 ### Dependency graph (internal edges only)
