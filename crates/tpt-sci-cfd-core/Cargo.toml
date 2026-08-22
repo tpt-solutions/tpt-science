@@ -12,7 +12,6 @@ readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-cfd-core"
 keywords = ["cfd", "navier-stokes", "finite-volume", "fluid", "science"]
 categories = ["science", "simulation"]
-publish = false
 
 [lib]
 bench = false

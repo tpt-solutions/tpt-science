@@ -12,7 +12,6 @@ readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-astro"
 keywords = ["orbital-mechanics", "astrodynamics", "science", "simulation"]
 categories = ["science", "simulation"]
-publish = false
 
 [lib]
 bench = false

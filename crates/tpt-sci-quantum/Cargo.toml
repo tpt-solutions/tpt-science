@@ -12,7 +12,6 @@ readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-quantum"
 keywords = ["quantum", "qubit", "simulation", "science"]
 categories = ["science", "simulation", "physics"]
-publish = false
 
 [lib]
 bench = false

@@ -3,22 +3,9 @@
 All notable changes to `tpt-sci-quantum` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org).
 
-## [Unreleased]
+## [0.1.0] — 2026-08-22
 
-### Added
-
-- `State::measure_collapsing()` for post-measurement state collapse (Qiskit/Cirq
-  semantics); `measure()` remains non-destructive for inspection.
-
-### Changed
-
-- `StateError` moved into its own `error.rs` module, matching the per-crate error
-  convention; re-exported from the crate root (`UnitarySizeMismatch` also lives
-  there).
-
-## [0.1.0] — 2026-08-16
-
-Initial implementation of `tpt-sci-quantum`.
+Initial release of `tpt-sci-quantum` to crates.io.
 
 ### Added
 
@@ -28,10 +15,13 @@ Initial implementation of `tpt-sci-quantum`.
 - `State` with gate application (`h`, `cnot`, …), `Kronecker` circuit
   formulation, and Born-rule `measure` / `probabilities`. Non-adjacent two-qubit
   gates are SWAP-decomposed.
+- `State::measure_collapsing()` for post-measurement state collapse (Qiskit/Cirq
+  semantics); `measure()` remains non-destructive for inspection.
 
-### Notes
+### Changed
 
-- Crate is `publish = false` and consumed as a path/workspace dependency; no
-  crates.io release has been cut yet.
+- `StateError` moved into its own `error.rs` module, matching the per-crate error
+  convention; re-exported from the crate root (`UnitarySizeMismatch` also lives
+  there).
 
 [0.1.0]: https://github.com/tpt-solutions/tpt-science/releases/tag/v0.1.0

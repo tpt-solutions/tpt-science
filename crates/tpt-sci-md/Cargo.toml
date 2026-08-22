@@ -12,7 +12,6 @@ readme = "README.md"
 documentation = "https://docs.rs/tpt-sci-md"
 keywords = ["molecular-dynamics", "md", "lennard-jones", "rdf", "science"]
 categories = ["science", "simulation"]
-publish = false
 
 [lib]
 bench = false
