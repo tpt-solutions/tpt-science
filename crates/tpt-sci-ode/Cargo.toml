@@ -25,7 +25,7 @@ cranelift-codegen = { version = "0.109", features = ["host-arch"] }
 cranelift-frontend = "0.109"
 cranelift-module = "0.109"
 cranelift-jit = "0.109"
-cranelift-native = { version = "0.109", optional = true }
+cranelift-native = { version = "0.135", optional = true }
 target-lexicon = "0.12"
 
 # Optional verification oracle only (NOT shipped): compare our from-scratch
