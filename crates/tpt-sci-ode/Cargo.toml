@@ -22,7 +22,7 @@ thiserror = { workspace = true }
 
 # Cranelift JIT compilation backend for DiffSL RHS codegen
 cranelift-codegen = { version = "0.109", features = ["host-arch"] }
-cranelift-frontend = "0.109"
+cranelift-frontend = "0.135"
 cranelift-module = "0.109"
 cranelift-jit = "0.109"
 cranelift-native = { version = "0.135", optional = true }
