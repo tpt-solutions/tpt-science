@@ -2452,7 +2452,7 @@ dependencies = [
  "cranelift-native 0.135.1",
  "criterion",
  "diffsol",
- "target-lexicon 0.12.16",
+ "target-lexicon 0.13.5",
  "thiserror 2.0.20",
  "tpt-math-numeric",
 ]
