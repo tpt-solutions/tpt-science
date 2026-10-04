@@ -33,7 +33,7 @@ target-lexicon = "0.13"
 # dependency gated behind the `verify-diffsol` feature and excluded from
 # `cargo deny` license scanning (deny.toml `include-dev = false`), so it never
 # taints the shipped, dual-licensed graph. Enable with `--features verify-diffsol`.
-diffsol = { version = "0.16.1", default-features = false, features = ["faer"], optional = true }
+diffsol = { version = "0.17.1", default-features = false, features = ["faer"], optional = true }
 
 [dev-dependencies]
 approx = { workspace = true }
