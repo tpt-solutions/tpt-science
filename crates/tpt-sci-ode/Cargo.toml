@@ -21,7 +21,7 @@ tpt-math-numeric = { workspace = true }
 thiserror = { workspace = true }
 
 # Cranelift JIT compilation backend for DiffSL RHS codegen
-cranelift-codegen = { version = "0.135", features = ["host-arch"] }
+cranelift-codegen = { version = "0.136", features = ["host-arch"] }
 cranelift-frontend = "0.109"
 cranelift-module = "0.109"
 cranelift-jit = "0.109"
