@@ -123,23 +123,28 @@ impl ShallowWater {
                 let jm = idx(i, clamp(j as isize - 1, g.ny));
                 let jp = idx(i, clamp(j as isize + 1, g.ny));
 
-                // Continuity: dh/dt = -∇·(h u).
-                let div = (h[c] * u[c] - h[im] * u[im]) / dx + (h[c] * v[c] - h[jm] * v[jm]) / dy;
-                nh[c] = (h[c] - dt * div).max(1e-3);
+                // Continuity: dh/dt = -∇·(h u), Lax–Friedrichs form: the
+                // neighbour average replaces h[c] so the centred scheme is stable.
+                let div = (h[ip] * u[ip] - h[im] * u[im]) / (2.0 * dx)
+                    + (h[jp] * v[jp] - h[jm] * v[jm]) / (2.0 * dy);
+                let h_avg = 0.25 * (h[ip] + h[im] + h[jp] + h[jm]);
+                nh[c] = (h_avg - dt * div).max(1e-3);
 
                 // Momentum (x): du/dt = -(u·∇)u - g·∂η/∂x + f·v - k·u.
                 let dudx = (u[ip] - u[im]) / (2.0 * dx);
                 let dudy = (u[jp] - u[jm]) / (2.0 * dy);
                 let deta = (nh[ip] - nh[im]) / (2.0 * dx);
+                let u_avg = 0.25 * (u[ip] + u[im] + u[jp] + u[jm]);
                 nu[c] =
-                    u[c] + dt * (-(u[c] * dudx + v[c] * dudy) - grav * deta + f * v[c] - k * u[c]);
+                    u_avg + dt * (-(u[c] * dudx + v[c] * dudy) - grav * deta + f * v[c] - k * u[c]);
 
                 // Momentum (y): dv/dt = -(v·∇)v - g·∂η/∂y - f·u - k·v.
                 let dvdx = (v[ip] - v[im]) / (2.0 * dx);
                 let dvdy = (v[jp] - v[jm]) / (2.0 * dy);
                 let detay = (nh[jp] - nh[jm]) / (2.0 * dy);
-                nv[c] =
-                    v[c] + dt * (-(v[c] * dvdx + v[c] * dvdy) - grav * detay - f * u[c] - k * v[c]);
+                let v_avg = 0.25 * (v[ip] + v[im] + v[jp] + v[jm]);
+                nv[c] = v_avg
+                    + dt * (-(u[c] * dvdx + v[c] * dvdy) - grav * detay - f * u[c] - k * v[c]);
             }
         }
         self.h = nh;
