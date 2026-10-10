@@ -203,33 +203,65 @@ impl Network {
         })
     }
 
-    /// Right-hand side of the 1-D system at cell `i`, writing `[dA/dt, dQ/dt]`
-    /// into `out`. Uses a two-point (upwind) area gradient and the linear
-    /// tube-law pressure.
-    pub fn rhs(&self, i: usize, out: &mut [f64; 2]) {
-        let v = &self.vessels[i];
-        let c = v.wave_speed(self.rho);
-        // Linearized momentum: dQ/dt = -A·dp/dx / rho - friction·Q/A   (with
-        // dp/dx ≈ β·d(sqrt A)/dx ≈ β/(2·sqrt A)·dA/dx).
-        let dadv = if i + 1 < self.vessels.len() {
-            (self.vessels[i + 1].area - v.area) / 1.0
+    /// Flow at cell `j` with boundary ghosts: the inlet flow is imposed (zero
+    /// gradient at `j < 0`), and the terminal face is closed (`Q` antisymmetric
+    /// about the last cell, so the flux through it is zero).
+    fn flow_at(&self, j: isize) -> f64 {
+        let n = self.vessels.len() as isize;
+        if j < 0 {
+            self.vessels[0].flow
+        } else if j >= n {
+            -self.vessels[(n - 1) as usize].flow
         } else {
-            0.0
-        };
-        out[0] = -v.flow; // ∂Q/∂x ≈ Q/dx with dx = 1 (normalized vessel spacing)
-        out[1] = -v.area * (v.beta / (2.0 * v.area.sqrt()) * dadv) / self.rho
-            - self.friction * v.flow / v.area;
-        let _ = c;
+            self.vessels[j as usize].flow
+        }
     }
 
-    /// Advance the network by `dt` seconds using one explicit Euler substep.
+    /// Transmural pressure at cell `j`, clamped to the network ends (zero
+    /// pressure gradient across the boundary).
+    fn pressure_at(&self, j: isize) -> f64 {
+        let n = self.vessels.len() as isize;
+        self.vessels[j.clamp(0, n - 1) as usize].pressure()
+    }
+
+    /// Right-hand side of the 1-D area/flow system at cell `i`, writing
+    /// `[dA/dt, dQ/dt]` into `out`:
+    ///
+    /// * continuity `dA/dt = −∂Q/∂x`, with the centred difference over unit cell
+    ///   spacing (the cells are normalized to `dx = 1`);
+    /// * momentum `dQ/dt = −(A/ρ)·∂p/∂x − k·Q/A`, with the linear tube-law
+    ///   pressure `p = β(√A − √A0)` and friction `k`.
+    pub fn rhs(&self, i: usize, out: &mut [f64; 2]) {
+        let v = &self.vessels[i];
+        let ii = i as isize;
+        let dq_dx = (self.flow_at(ii + 1) - self.flow_at(ii - 1)) / 2.0;
+        let dp_dx = (self.pressure_at(ii + 1) - self.pressure_at(ii - 1)) / 2.0;
+        out[0] = -dq_dx;
+        out[1] = -(v.area / self.rho) * dp_dx - self.friction * v.flow / v.area;
+    }
+
+    /// Advance the network by `dt` seconds with one explicit step. The state is
+    /// averaged over the neighbouring cells (Lax-type stabilisation of the
+    /// centred differences in [`Network::rhs`]), so the scheme stays stable for
+    /// a Courant number below one.
     pub fn step(&mut self, dt: f64) {
-        let mut next = self.vessels.clone();
-        for (i, v) in self.vessels.iter().enumerate() {
-            let mut out = [0.0_f64; 2];
-            self.rhs(i, &mut out);
-            next[i].area = (v.area + dt * out[0]).max(1e-6);
-            next[i].flow = v.flow + dt * out[1];
+        let n = self.vessels.len();
+        let old = self.vessels.clone();
+        let mut next = old.clone();
+        for i in 0..n {
+            let ii = i as isize;
+            let v = &old[i];
+            // Explicit: continuity flux divergence and the pressure-gradient force.
+            let dq_dx = (self.flow_at(ii + 1) - self.flow_at(ii - 1)) / 2.0;
+            let dp_dx = (self.pressure_at(ii + 1) - self.pressure_at(ii - 1)) / 2.0;
+            let a_left = old[(ii - 1).max(0) as usize].area;
+            let a_right = old[(ii + 1).min(n as isize - 1) as usize].area;
+            let q_avg = 0.5 * (self.flow_at(ii - 1) + self.flow_at(ii + 1));
+            next[i].area = (0.5 * (a_left + a_right) - dt * dq_dx).max(1e-6);
+            // Friction is treated implicitly: it is a stiff damping term that
+            // destabilises the explicit update on long runs.
+            let pressure_force = -(v.area / self.rho) * dp_dx;
+            next[i].flow = (q_avg + dt * pressure_force) / (1.0 + dt * self.friction / v.area);
         }
         self.vessels = next;
     }
