@@ -1,4 +1,5 @@
-use criterion::{BatchSize, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
+use std::hint::black_box;
 use tpt_sci_reaction_network::ReactionNetwork;
 
 fn build_system() -> tpt_sci_reaction_network::ReactionSystem {

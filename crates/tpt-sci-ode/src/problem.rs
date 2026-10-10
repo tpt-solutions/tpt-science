@@ -18,7 +18,7 @@ pub struct OdeProblemBuilder {
     t0: f64,
     rtol: f64,
     atol: f64,
-    h0: f64,
+    h0: Option<f64>,
 }
 
 impl OdeProblemBuilder {
@@ -35,12 +35,12 @@ impl OdeProblemBuilder {
             t0,
             rtol: 1e-6,
             atol: 1e-6,
-            h0: 1.0,
+            h0: None,
         }
     }
 
     /// Start building a problem from any [`RhsCallable`] (e.g. a
-    /// [`crate::JitRhs`] compiled by the Cranelift JIT). Use this instead of
+    /// `JitRhs` with the `cranelift-jit` feature, compiled by the Cranelift JIT). Use this instead of
     /// [`OdeProblemBuilder::new`] when the RHS is not a plain closure.
     pub fn from_rhs<R: RhsCallable + 'static>(rhs: R, y0: Vec<f64>, t0: f64) -> Self {
         Self {
@@ -49,7 +49,7 @@ impl OdeProblemBuilder {
             t0,
             rtol: 1e-6,
             atol: 1e-6,
-            h0: 1.0,
+            h0: None,
         }
     }
 
@@ -65,9 +65,10 @@ impl OdeProblemBuilder {
         self
     }
 
-    /// Initial (guessed) step size.
+    /// Initial step size. If not set, the solver picks one from the interval
+    /// length. The value is clamped to the solver's step limits.
     pub fn h0(mut self, h0: f64) -> Self {
-        self.h0 = h0;
+        self.h0 = Some(h0);
         self
     }
 
@@ -110,7 +111,7 @@ pub struct OdeProblem {
     pub(crate) t0: f64,
     pub(crate) rtol: f64,
     pub(crate) atol: f64,
-    pub(crate) h0: f64,
+    pub(crate) h0: Option<f64>,
     pub(crate) nstates: usize,
 }
 
@@ -128,7 +129,7 @@ impl OdeProblem {
         OdeProblemBuilder::new(rhs, y0, t0).build()
     }
 
-    /// Build a problem from any [`RhsCallable`] (e.g. a [`crate::JitRhs`]).
+    /// Build a problem from any [`RhsCallable`] (e.g. a `JitRhs`, with the `cranelift-jit` feature).
     ///
     /// # Errors
     ///

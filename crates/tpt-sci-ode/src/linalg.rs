@@ -9,15 +9,43 @@
 
 use crate::error::OdeError;
 
+/// Error tolerances, used to weight the Newton convergence test so that it
+/// scales with the problem's magnitudes instead of using absolute thresholds.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Tol {
+    pub rtol: f64,
+    pub atol: f64,
+}
+
+impl Tol {
+    /// Weighted RMS norm of `v`, with each entry scaled by `atol + rtol·|y_i|`.
+    /// A value of at most 1 means `v` is within tolerance of the state `y`.
+    pub fn wrms(&self, v: &[f64], y: &[f64]) -> f64 {
+        if v.is_empty() {
+            return 0.0;
+        }
+        let sum: f64 = v
+            .iter()
+            .zip(y)
+            .map(|(vi, yi)| (vi / (self.atol + self.rtol * yi.abs())).powi(2))
+            .sum();
+        (sum / v.len() as f64).sqrt()
+    }
+}
+
+/// Newton convergence threshold, as a fraction of the tolerance: a correction
+/// whose weighted norm is below this is far smaller than the local error budget,
+/// so further iterations cannot change the accepted step.
+pub(crate) const NEWTON_TOL: f64 = 1e-3;
+
 /// RHS signature: any [`RhsCallable`](crate::RhsCallable) (closure or JIT).
 pub(crate) type RhsFn<'a> = dyn crate::RhsCallable + 'a;
 
 /// Evaluate `f(t, y)` into a fresh `Vec<f64>`.
-pub(crate) fn eval(f: &RhsFn<'_>, t: f64, y: &[f64]) -> Vec<f64> {
+pub(crate) fn eval(f: &RhsFn<'_>, t: f64, y: &[f64]) -> Result<Vec<f64>, OdeError> {
     let mut out = vec![0.0; y.len()];
-    f.call(t, y, &mut out)
-        .expect("RHS evaluation must not fail for a well-formed problem");
-    out
+    f.call(t, y, &mut out)?;
+    Ok(out)
 }
 
 /// Row-major dense `nrows × ncols` matrix.
@@ -95,6 +123,7 @@ impl DMat {
     pub fn solve(&self, b: &[f64]) -> Option<Vec<f64>> {
         debug_assert_eq!(self.nrows, self.ncols);
         let n = self.nrows;
+        let scale = self.data.iter().fold(0.0_f64, |m, v| m.max(v.abs()));
         let mut lu = self.data.clone();
         let mut piv = (0..n).collect::<Vec<_>>();
         for k in 0..n {
@@ -108,7 +137,7 @@ impl DMat {
                     p = i;
                 }
             }
-            if max < 1e-14 {
+            if max <= 1e-14 * scale {
                 return None;
             }
             if p != k {
@@ -160,7 +189,12 @@ pub(crate) fn norm2(v: &[f64]) -> f64 {
 /// difference quotient stays well-conditioned near zero states. Systems solved
 /// by this pillar are small (≲ a few hundred states), so the O(n²) evaluation
 /// cost is negligible.
-pub(crate) fn jacobian(f: &dyn crate::RhsCallable, t: f64, y: &[f64], f0: &[f64]) -> DMat {
+pub(crate) fn jacobian(
+    f: &dyn crate::RhsCallable,
+    t: f64,
+    y: &[f64],
+    f0: &[f64],
+) -> Result<DMat, OdeError> {
     let n = y.len();
     let sqrt_eps = f64::sqrt(f64::EPSILON);
     let mut j = DMat::new(n, n);
@@ -168,13 +202,13 @@ pub(crate) fn jacobian(f: &dyn crate::RhsCallable, t: f64, y: &[f64], f0: &[f64]
         let dy = sqrt_eps * y[col].abs().max(1.0);
         let mut yp = y.to_vec();
         yp[col] += dy;
-        let fp = eval(f, t, &yp);
+        let fp = eval(f, t, &yp)?;
         let inv = 1.0 / dy;
         for row in 0..n {
             j.set(row, col, (fp[row] - f0[row]) * inv);
         }
     }
-    j
+    Ok(j)
 }
 
 /// Solve one SDIRK stage `k = f(t_stage, y_base + diag·k)` by Newton iteration
@@ -188,23 +222,22 @@ pub(crate) fn sdirk_stage(
     y_base: &[f64],
     diag: f64,
     k_guess: &[f64],
+    tol: Tol,
 ) -> Result<Vec<f64>, OdeError> {
     let n = y_base.len();
     // Large systems route their Newton linear solves through the sparse
     // CSR/LU path (`sparse` module): the finite-difference Jacobian is built
     // directly in compressed storage and never materialised densely.
     if n >= crate::sparse::SPARSE_LU_MIN_N {
-        return crate::sparse::sdirk_stage_sparse(f, t_stage, y_base, diag, k_guess);
+        return crate::sparse::sdirk_stage_sparse(f, t_stage, y_base, diag, k_guess, tol);
     }
     let mut k = k_guess.to_vec();
+    let mut corr = f64::INFINITY;
     for _iter in 0..50 {
         let y_stage: Vec<f64> = y_base.iter().zip(&k).map(|(b, kk)| b + diag * kk).collect();
-        let fk = eval(f, t_stage, &y_stage);
+        let fk = eval(f, t_stage, &y_stage)?;
         let r: Vec<f64> = k.iter().zip(&fk).map(|(kk, fv)| kk - fv).collect();
-        if norm2(&r) < 1e-12 {
-            return Ok(k);
-        }
-        let jac = jacobian(f, t_stage, &y_stage, &fk);
+        let jac = jacobian(f, t_stage, &y_stage, &fk)?;
         // Newton matrix A = I - diag·J.
         let mut a = DMat::new(n, n);
         for i in 0..n {
@@ -219,13 +252,29 @@ pub(crate) fn sdirk_stage(
         for i in 0..n {
             k[i] -= delta[i];
         }
+        // The stage variable is a derivative; its effect on the state is diag·Δk.
+        let state_step: Vec<f64> = delta.iter().map(|d| diag * d).collect();
+        corr = tol.wrms(&state_step, &y_stage);
+        if corr < NEWTON_TOL {
+            return Ok(k);
+        }
     }
-    Ok(k)
+    // Budget exhausted without convergence: report failure so the driver shrinks
+    // the step instead of accepting an unconverged stage.
+    Err(OdeError::Newton {
+        t: t_stage,
+        residual: corr,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const TOL: Tol = Tol {
+        rtol: 1e-6,
+        atol: 1e-6,
+    };
 
     #[test]
     fn lu_solves_known_3x3_system() {
@@ -261,12 +310,21 @@ mod tests {
             dydt[1] = out[1];
         };
         let y = [0.7, -1.3];
-        let f0 = eval(&f, 0.0, &y);
-        let j = jacobian(&f, 0.0, &y, &f0);
+        let f0 = eval(&f, 0.0, &y).unwrap();
+        let j = jacobian(&f, 0.0, &y, &f0).unwrap();
         assert!((j.get(0, 0) - 0.0).abs() < 1e-8);
         assert!((j.get(0, 1) - 1.0).abs() < 1e-8);
         assert!((j.get(1, 0) - (-2.0)).abs() < 1e-8);
         assert!((j.get(1, 1) - (-3.0)).abs() < 1e-8);
+    }
+
+    #[test]
+    fn sdirk_stage_reports_non_convergence() {
+        // k = f(y + d·k) with f(z) = z² + 1, d = 1, y = 0 has no real root
+        // (the discriminant of the quadratic in k is negative), so Newton
+        // cannot converge and the stage must report failure.
+        let f = |_t: f64, y: &[f64], dydt: &mut [f64]| dydt[0] = y[0] * y[0] + 1.0;
+        assert!(sdirk_stage(&f, 0.0, &[0.0], 1.0, &[0.0], TOL).is_err());
     }
 
     #[test]
@@ -279,7 +337,7 @@ mod tests {
             dydt[0] = -2.0 * y[0];
             dydt[1] = -2.0 * y[1];
         };
-        let k = sdirk_stage(&f, 0.0, &y, diag, &[0.0, 0.0]).unwrap();
+        let k = sdirk_stage(&f, 0.0, &y, diag, &[0.0, 0.0], TOL).unwrap();
         let expected0 = -2.0 * y[0] / (1.0 + 2.0 * diag);
         let expected1 = -2.0 * y[1] / (1.0 + 2.0 * diag);
         assert!((k[0] - expected0).abs() < 1e-10);

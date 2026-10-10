@@ -7,6 +7,14 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
+    # The cranelift crates must move together: per-crate bumps left
+    # cranelift-codegen/module on 0.135 while frontend/jit stayed on 0.109,
+    # which broke the build on master.
+    groups:
+      cranelift:
+        patterns:
+          - "cranelift*"
+          - "target-lexicon"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

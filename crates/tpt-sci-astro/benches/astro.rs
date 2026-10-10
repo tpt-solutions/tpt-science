@@ -1,4 +1,5 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
+use std::hint::black_box;
 use tpt_sci_astro::{EARTH_J2, EARTH_MU, EARTH_RADIUS_EQ, OrbitalElements};
 
 fn elements() -> OrbitalElements {

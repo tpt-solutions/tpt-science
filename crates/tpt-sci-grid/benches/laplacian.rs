@@ -1,4 +1,5 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
+use std::hint::black_box;
 use tpt_sci_grid::{Boundary, UniformGrid1D, laplacian_1d};
 
 fn bench_laplacian_assembly(c: &mut Criterion) {

@@ -99,6 +99,15 @@ jobs:
       - name: Run benchmarks
         run: cargo bench --workspace --benches -- --warm-up-time 0.5 --measurement-time 1 --sample-size 10
 
+  # Build with default features off so the feature-gated paths (e.g. the
+  # `cranelift-jit` backend in tpt-sci-ode) keep compiling when disabled.
+  no-default-features:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo check --workspace --no-default-features
+
   cargo-deny:
     runs-on: ubuntu-latest
     steps:

@@ -1,27 +1,30 @@
 //! In-crate sparse linear algebra for the implicit ODE solvers.
 //!
-//! A compressed-sparse-row ([`CsrMatrix`]) type plus a hand-rolled sparse LU
-//! decomposition with partial pivoting ([`CsrMatrix::sparse_solve`]). This
-//! complements the dense `DMat` (in the `linalg` module): for systems with at
-//! least 64 states (the `SPARSE_LU_MIN_N` threshold), the implicit SDIRK and
-//! BDF solvers build their Newton matrices through this module, so large
-//! sparse Jacobians (e.g. from method-of-lines discretisations of PDEs) are
-//! factored without ever materialising a dense `n × n` Jacobian — keeping
-//! `tpt-sci-ode` free of any external linear-algebra dependency, per the
-//! Phase 7 rewrite decision (todo.md, 7.0b).
+//! A compressed-sparse-row ([`CsrMatrix`]) type plus a sparse LU decomposition
+//! with partial pivoting ([`CsrMatrix::sparse_solve`]). This complements the
+//! dense `DMat` (in the `linalg` module): for systems with at least 64 states
+//! (the `SPARSE_LU_MIN_N` threshold), the implicit SDIRK and BDF solvers build
+//! their Newton matrices in CSR storage and factor them with the sparse LU
+//! below, so the dense `n × n` matrix is never formed.
 //!
-//! The sparse LU is a left-looking factorisation (`L` unit-lower-triangular,
-//! `U` upper-triangular) with partial pivoting. It is exact for the sparsity
-//! pattern present at factorisation time and is intended for the modest system
-//! sizes this pillar solves (≲ a few thousand non-zeros).
+//! The factorisation is left-looking (Gilbert–Peierls): each column is solved
+//! against the already-computed `L` restricted to its reachable pattern, so the
+//! work and fill follow the sparsity of the matrix rather than `n²`. Pivoting is
+//! partial (largest magnitude in the column among the not-yet-pivoted rows).
+//! No fill-reducing column ordering is applied, so heavy fill is possible for
+//! matrices with unfavourable structure.
 
 use crate::error::OdeError;
+use crate::linalg::{NEWTON_TOL, Tol};
 
 /// Minimum system size for the implicit solvers to route their Newton linear
 /// solves through the sparse CSR/LU path instead of the dense `DMat` path.
 /// Below this threshold the dense factorisation is faster (no CSR build
 /// overhead).
 pub(crate) const SPARSE_LU_MIN_N: usize = 64;
+
+/// Sentinel for "no value" in index arrays.
+const NONE: usize = usize::MAX;
 
 /// Compressed-sparse-row matrix.
 ///
@@ -180,9 +183,19 @@ impl CsrMatrix {
     /// full dense pattern). When `cols` is `None` every column is finite-
     /// differenced, matching the dense `linalg::jacobian` helper but in
     /// compressed storage (exact-zero entries are dropped).
-    pub fn jacobian<F>(f: F, t: f64, y: &[f64], f0: &[f64], cols: Option<&[usize]>) -> CsrMatrix
+    ///
+    /// # Errors
+    ///
+    /// Propagates any error returned by the RHS `f`.
+    pub fn jacobian<F>(
+        f: F,
+        t: f64,
+        y: &[f64],
+        f0: &[f64],
+        cols: Option<&[usize]>,
+    ) -> Result<CsrMatrix, OdeError>
     where
-        F: Fn(f64, &[f64], &mut [f64]),
+        F: Fn(f64, &[f64], &mut [f64]) -> Result<(), OdeError>,
     {
         let n = y.len();
         let sqrt_eps = f64::sqrt(f64::EPSILON);
@@ -200,7 +213,7 @@ impl CsrMatrix {
             let mut yp = y.to_vec();
             yp[col] += dy;
             let mut fp = vec![0.0; n];
-            f(t, &yp, &mut fp);
+            f(t, &yp, &mut fp)?;
             let inv = 1.0 / dy;
             for row in 0..n {
                 let val = (fp[row] - f0[row]) * inv;
@@ -228,85 +241,198 @@ impl CsrMatrix {
             indices.push(cols[k]);
             data.push(vals[k]);
         }
-        CsrMatrix {
+        Ok(CsrMatrix {
             nrows: n,
             ncols: n,
             indptr,
             indices,
             data,
-        }
+        })
     }
 
     /// Solve `A x = b` via sparse LU with partial pivoting.
     ///
     /// Returns `None` if the matrix is (numerically) singular or the dimensions
-    /// mismatch. The factorisation is computed left-looking on the fly;
-    /// pivoting keeps the per-step implicit linear solves stable for the stiff
-    /// systems this crate targets.
+    /// mismatch.
     #[must_use]
     pub fn sparse_solve(&self, b: &[f64]) -> Option<Vec<f64>> {
         let n = self.nrows;
         if self.ncols != n || b.len() != n {
             return None;
         }
-        // Work on a dense copy of (L+U) for a compact, correct left-looking
-        // factorisation with partial pivoting. The sparsity structure is
-        // preserved for storage efficiency in the caller; the numeric
-        // factorisation itself operates on dense `L`/`U` working arrays sized
-        // to `n`, which is acceptable for the modest `n` this crate serves.
-        let mut lu = vec![0.0; n * n];
+        let lu = SparseLu::factor(self)?;
+        Some(lu.solve(b))
+    }
+}
+
+/// Sparse LU factors of `P·A = L·U`, stored by column.
+///
+/// Pivot step `k` eliminates original row `prow[k]`. Column `k` of `L` holds the
+/// multipliers for the rows not yet pivoted at that step, and column `k` of `U`
+/// holds the entries above the diagonal, indexed by pivot step.
+struct SparseLu {
+    n: usize,
+    /// `prow[k]`: original row chosen as the pivot at step `k`.
+    prow: Vec<usize>,
+    /// Column `k` of `L` below the diagonal: `(original row, multiplier)`.
+    lcols: Vec<Vec<(usize, f64)>>,
+    /// Column `k` of `U` above the diagonal: `(step i < k, value)`.
+    ucols: Vec<Vec<(usize, f64)>>,
+    /// Diagonal of `U`.
+    udiag: Vec<f64>,
+}
+
+impl SparseLu {
+    /// Left-looking (Gilbert–Peierls) factorisation with partial pivoting.
+    /// Returns `None` if a column has no usable pivot.
+    fn factor(a: &CsrMatrix) -> Option<SparseLu> {
+        let n = a.nrows;
+        let nnz = a.data.len();
+
+        // Column-compressed copy of A, so each column can be scattered directly.
+        let mut col_ptr = vec![0usize; n + 1];
+        for &c in &a.indices {
+            col_ptr[c + 1] += 1;
+        }
+        for c in 0..n {
+            col_ptr[c + 1] += col_ptr[c];
+        }
+        let mut fill = col_ptr.clone();
+        let mut rows_csc = vec![0usize; nnz];
+        let mut vals_csc = vec![0.0; nnz];
         for r in 0..n {
-            for k in self.indptr[r]..self.indptr[r + 1] {
-                lu[r * n + self.indices[k]] = self.data[k];
+            for k in a.indptr[r]..a.indptr[r + 1] {
+                let c = a.indices[k];
+                rows_csc[fill[c]] = r;
+                vals_csc[fill[c]] = a.data[k];
+                fill[c] += 1;
             }
         }
-        let mut piv = (0..n).collect::<Vec<_>>();
+
+        let scale = a.data.iter().fold(0.0_f64, |m, v| m.max(v.abs()));
+        let mut pinv = vec![NONE; n]; // original row -> pivot step
+        let mut prow = vec![NONE; n]; // pivot step -> original row
+        let mut lcols: Vec<Vec<(usize, f64)>> = vec![Vec::new(); n];
+        let mut ucols: Vec<Vec<(usize, f64)>> = vec![Vec::new(); n];
+        let mut udiag = vec![0.0; n];
+        let mut x = vec![0.0; n]; // dense work vector, indexed by original row
+        let mut mark = vec![NONE; n]; // DFS visit stamp, per column
+        let mut pattern: Vec<usize> = Vec::new(); // reached rows, in postorder
+        let mut stack: Vec<(usize, usize)> = Vec::new();
+
         for k in 0..n {
-            let mut p = k;
-            let mut max = lu[k * n + k].abs();
-            for i in (k + 1)..n {
-                let v = lu[i * n + k].abs();
-                if v > max {
-                    max = v;
-                    p = i;
+            pattern.clear();
+            for p in col_ptr[k]..col_ptr[k + 1] {
+                x[rows_csc[p]] = vals_csc[p];
+            }
+
+            // Reach of the column's nonzero rows through the pivoted part of L.
+            for &r0 in &rows_csc[col_ptr[k]..col_ptr[k + 1]] {
+                if mark[r0] == k {
+                    continue;
+                }
+                mark[r0] = k;
+                stack.push((r0, 0));
+                while let Some(top) = stack.last_mut() {
+                    let r = top.0;
+                    let children: &[(usize, f64)] = if pinv[r] == NONE {
+                        &[]
+                    } else {
+                        &lcols[pinv[r]]
+                    };
+                    if top.1 < children.len() {
+                        let child = children[top.1].0;
+                        top.1 += 1;
+                        if mark[child] != k {
+                            mark[child] = k;
+                            stack.push((child, 0));
+                        }
+                    } else {
+                        pattern.push(r);
+                        stack.pop();
+                    }
                 }
             }
-            if max < 1e-14 {
+
+            // Sparse triangular solve: apply the earlier pivots in topological
+            // order (reverse postorder), so each row is final before it is used.
+            for &r in pattern.iter().rev() {
+                let j = pinv[r];
+                if j == NONE {
+                    continue;
+                }
+                let xr = x[r];
+                if xr != 0.0 {
+                    for &(i, l) in &lcols[j] {
+                        x[i] -= l * xr;
+                    }
+                }
+            }
+
+            // Partial pivot among the rows not yet pivoted.
+            let mut piv_row = NONE;
+            let mut piv_mag = 0.0_f64;
+            for &r in &pattern {
+                if pinv[r] == NONE && x[r].abs() > piv_mag {
+                    piv_mag = x[r].abs();
+                    piv_row = r;
+                }
+            }
+            if piv_row == NONE || piv_mag <= 1e-14 * scale {
                 return None;
             }
-            if p != k {
-                for j in 0..n {
-                    lu.swap(k * n + j, p * n + j);
+
+            let pivot = x[piv_row];
+            udiag[k] = pivot;
+            prow[k] = piv_row;
+            pinv[piv_row] = k;
+            for &r in &pattern {
+                if r == piv_row || x[r] == 0.0 {
+                    continue;
                 }
-                piv.swap(k, p);
+                if pinv[r] == NONE {
+                    lcols[k].push((r, x[r] / pivot));
+                } else {
+                    ucols[k].push((pinv[r], x[r]));
+                }
             }
-            let pivot = lu[k * n + k];
-            for i in (k + 1)..n {
-                let fac = lu[i * n + k] / pivot;
-                lu[i * n + k] = fac;
-                for j in (k + 1)..n {
-                    lu[i * n + j] -= fac * lu[k * n + j];
+            for &r in &pattern {
+                x[r] = 0.0;
+            }
+        }
+
+        Some(SparseLu {
+            n,
+            prow,
+            lcols,
+            ucols,
+            udiag,
+        })
+    }
+
+    /// Solve `A x = b` using the stored factors.
+    fn solve(&self, b: &[f64]) -> Vec<f64> {
+        let n = self.n;
+        // Forward substitution with L, in original row indices.
+        let mut y = b.to_vec();
+        for k in 0..n {
+            let yk = y[self.prow[k]];
+            if yk != 0.0 {
+                for &(i, l) in &self.lcols[k] {
+                    y[i] -= l * yk;
                 }
             }
         }
-        let mut y = vec![0.0; n];
-        for i in 0..n {
-            let pi = piv[i];
-            let mut s = b[pi];
-            for j in 0..i {
-                s -= lu[i * n + j] * y[j];
-            }
-            y[i] = s;
-        }
+        // Back substitution with U, column-oriented, in pivot-step indices.
+        let mut z: Vec<f64> = (0..n).map(|k| y[self.prow[k]]).collect();
         let mut x = vec![0.0; n];
-        for i in (0..n).rev() {
-            let mut s = y[i];
-            for j in (i + 1)..n {
-                s -= lu[i * n + j] * x[j];
+        for k in (0..n).rev() {
+            x[k] = z[k] / self.udiag[k];
+            for &(i, u) in &self.ucols[k] {
+                z[i] -= u * x[k];
             }
-            x[i] = s / lu[i * n + i];
         }
-        Some(x)
+        x
     }
 }
 
@@ -321,29 +447,24 @@ pub(crate) fn sdirk_stage_sparse(
     y_base: &[f64],
     diag: f64,
     k_guess: &[f64],
+    tol: Tol,
 ) -> Result<Vec<f64>, OdeError> {
     let n = y_base.len();
     let mut k = k_guess.to_vec();
+    let mut corr = f64::INFINITY;
     for _iter in 0..50 {
         let y_stage: Vec<f64> = y_base.iter().zip(&k).map(|(b, kk)| b + diag * kk).collect();
         let mut fk = vec![0.0; n];
-        f.call(t_stage, &y_stage, &mut fk)
-            .expect("RHS evaluation must not fail for a well-formed problem");
+        f.call(t_stage, &y_stage, &mut fk)?;
         let r: Vec<f64> = k.iter().zip(&fk).map(|(kk, fv)| kk - fv).collect();
         let rnorm = r.iter().map(|x| x * x).sum::<f64>().sqrt();
-        if rnorm < 1e-12 {
-            return Ok(k);
-        }
         let jac = CsrMatrix::jacobian(
-            |t, y, dydt| {
-                f.call(t, y, dydt)
-                    .expect("RHS evaluation must not fail for a well-formed problem");
-            },
+            |t, y, dydt| f.call(t, y, dydt),
             t_stage,
             &y_stage,
             &fk,
             None,
-        );
+        )?;
         // Newton matrix A = I - diag·J (sparse, since J is sparse).
         let a = jac.scaled_identity_minus_scaled(diag);
         let delta = a.sparse_solve(&r).ok_or(OdeError::Newton {
@@ -353,8 +474,19 @@ pub(crate) fn sdirk_stage_sparse(
         for (ki, di) in k.iter_mut().zip(&delta) {
             *ki -= di;
         }
+        // The stage variable is a derivative; its effect on the state is diag·Δk.
+        let state_step: Vec<f64> = delta.iter().map(|d| diag * d).collect();
+        corr = tol.wrms(&state_step, &y_stage);
+        if corr < NEWTON_TOL {
+            return Ok(k);
+        }
     }
-    Ok(k)
+    // Budget exhausted without convergence: report failure so the driver shrinks
+    // the step instead of accepting an unconverged stage.
+    Err(OdeError::Newton {
+        t: t_stage,
+        residual: corr,
+    })
 }
 
 #[cfg(test)]
@@ -398,6 +530,46 @@ mod tests {
     fn sparse_solve_detects_singular() {
         let a = CsrMatrix::from_dense(&[1.0, 1.0, 2.0, 2.0], 2, 2);
         assert!(a.sparse_solve(&[1.0, 1.0]).is_none());
+        // An all-zero column has no pivot.
+        let z = CsrMatrix::from_dense(&[1.0, 0.0, 2.0, 0.0], 2, 2);
+        assert!(z.sparse_solve(&[1.0, 1.0]).is_none());
+    }
+
+    #[test]
+    fn sparse_lu_matches_dense_on_banded_system_with_fill() {
+        // A banded, non-symmetric system with a few long-range entries. The
+        // long-range entries force fill and off-diagonal pivoting.
+        const N: usize = 150;
+        let mut dense = vec![0.0; N * N];
+        for i in 0..N {
+            dense[i * N + i] = 4.0 + (i % 7) as f64 * 0.25;
+            for d in 1..=3usize {
+                if i + d < N {
+                    dense[i * N + i + d] = -1.0 + 0.1 * d as f64;
+                }
+                if i >= d {
+                    dense[i * N + i - d] = 0.7 - 0.2 * d as f64;
+                }
+            }
+        }
+        dense[3 * N + 140] = 0.9;
+        dense[140 * N + 3] = -1.1;
+        dense[77 * N + 2] = 2.5; // large off-diagonal, pivoting needed
+        let a = CsrMatrix::from_dense(&dense, N, N);
+        let b: Vec<f64> = (0..N).map(|i| (i as f64 * 0.37).sin() + 0.5).collect();
+
+        let x = a.sparse_solve(&b).expect("non-singular");
+        let mut dm = crate::linalg::DMat::new(N, N);
+        dm.data.copy_from_slice(&dense);
+        let xd = dm.solve(&b).expect("non-singular");
+        for (i, (xs, xdv)) in x.iter().zip(&xd).enumerate() {
+            assert!((xs - xdv).abs() < 1e-9, "component {i}: {xs} vs {xdv}");
+        }
+        // Residual check, independent of the dense oracle.
+        let ax = a.mat_vec(&x);
+        for (axi, bi) in ax.iter().zip(&b) {
+            assert!((axi - bi).abs() < 1e-9);
+        }
     }
 
     #[test]
@@ -408,11 +580,12 @@ mod tests {
             let out = a.mat_vec(y);
             dydt[0] = out[0];
             dydt[1] = out[1];
+            Ok(())
         };
         let y = [0.7, -1.3];
         let mut f0 = [0.0; 2];
-        f(0.0, &y, &mut f0);
-        let j = CsrMatrix::jacobian(&f, 0.0, &y, &f0, None);
+        f(0.0, &y, &mut f0).unwrap();
+        let j = CsrMatrix::jacobian(&f, 0.0, &y, &f0, None).unwrap();
         assert!((j.get(0, 0) - 0.0).abs() < 1e-8);
         assert!((j.get(0, 1) - 1.0).abs() < 1e-8);
         assert!((j.get(1, 0) - (-2.0)).abs() < 1e-8);
@@ -483,6 +656,10 @@ mod tests {
         // stage equation k = A(y + diag·k) has the closed form
         // k = (I - diag·A)⁻¹ A y, computable with the dense DMat oracle.
         const N: usize = 80;
+        const TOL: Tol = Tol {
+            rtol: 1e-6,
+            atol: 1e-6,
+        };
         let mut dense = vec![0.0; N * N];
         for i in 0..N {
             dense[i * N + i] = -2.0;
@@ -500,7 +677,7 @@ mod tests {
         };
         let y: Vec<f64> = (0..N).map(|i| 0.1 * (i as f64).sin() + 0.2).collect();
         let diag = 0.05;
-        let k = sdirk_stage_sparse(&f, 0.0, &y, diag, &vec![0.0; N]).unwrap();
+        let k = sdirk_stage_sparse(&f, 0.0, &y, diag, &vec![0.0; N], TOL).unwrap();
         // Dense oracle.
         let mut am = crate::linalg::DMat::new(N, N);
         for i in 0..N {

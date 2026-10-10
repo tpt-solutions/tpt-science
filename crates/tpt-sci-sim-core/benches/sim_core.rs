@@ -1,4 +1,5 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
+use std::hint::black_box;
 use tpt_sci_sim_core::{OdeSubModel, Simulation};
 
 fn bench_step_until(c: &mut Criterion) {

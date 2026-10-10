@@ -23,24 +23,24 @@ crate is implemented — Phase 1 (scaffolding) does not require those audits.
 
 | Crate | Domain | Status | Wrap / build | Notes |
 |-------|--------|--------|--------------|-------|
-| `tpt-sci-ode` | differential-equations | **implemented** | build from scratch | from-scratch ODE engine (diffsol is dev-only oracle); depends on `tpt-math-numeric` |
-| `tpt-sci-grid` | pde | **implemented** | build from scratch | depends on `tpt-math-linalg` |
-| `tpt-sci-sim-core` | simulation | **implemented** | build from scratch | depends on `tpt-sci-ode`, `tpt-sci-grid` |
-| `tpt-sci-ppl` | probabilistic-programming | **implemented** | build from scratch (NUTS) | consolidates `tpt-augur`; `nuts-rs` wrap dropped |
-| `tpt-sci-image` | imaging | **implemented** | build from scratch | depends on `tpt-math-signal-fft`, `tpt-math-linalg`; 2-D CT only |
-| `tpt-sci-physics-rigid` | physics | **implemented** | build from scratch | rapier disqualified (ADR 0007) |
-| `tpt-sci-quantum` | quantum | **implemented** | build from scratch | QuantRS2 disqualified (ADR 0007); ≤20 qubits; tensor-product (Kronecker) circuit formulation via `Circuit` |
-| `tpt-sci-astro` | astrodynamics | **implemented** | build from scratch | two-body / Keplerian only |
-| `tpt-sci-reaction-network` | systems-biology | **implemented** | build from scratch | Catalyst.jl-style species/rate/stoichiometry DSL → mass-action ODE; depends on `tpt-sci-ode`; DSL + custom rate laws; SSA/SBML out of v1 |
-| `tpt-sci-md` | molecular-dynamics | **implemented** | build from scratch | depends on `tpt-math-linalg`; LJ / Verlet / RDF |
-| `tpt-sci-dft-classical` | materials | **implemented** | wrap `feos` (`feos-dft`) | classical/soft-matter DFT (PC-SAFT), MIT OR Apache-2.0 |
-| `tpt-sci-kinetics` | chemical-kinetics | **implemented** | build from scratch | depends on `tpt-sci-reaction-network`; Arrhenius + Langmuir–Hinshelwood |
-| `tpt-sci-cfd-core` | fluid-dynamics | **implemented** | build from scratch | depends on `tpt-math-linalg`; 2-D incompressible Navier–Stokes |
-| `tpt-sci-hemodynamics` | biomechanics | **implemented** | build from scratch | depends on `tpt-sci-cfd-core`, `tpt-sci-ode`; 1-D compliant vessels |
-| `tpt-sci-electrophys` | biomechanics | **implemented** | build from scratch | depends on `tpt-sci-ode`, `tpt-sci-grid`; Hodgkin–Huxley + bidomain |
-| `tpt-sci-climate` | earth-science | **implemented** | build from scratch | depends on `tpt-sci-ode`, `tpt-math-linalg`; 0-D EBM |
-| `tpt-sci-ocean` | earth-science | **implemented** | build from scratch | depends on `tpt-sci-cfd-core`; 2-D shallow-water |
-| `tpt-sci-dft-electronic` | materials | **implemented** | build from scratch | 1-D Kohn–Sham LDA; scoped per spec2.txt audit |
+| `tpt-sci-ode` | differential-equations | **implemented** | build from scratch | from-scratch ODE/DAE engine (Tsit45, TR-BDF2, ESDIRK34, variable-order BDF); dense + sparse LU; forward sensitivities; `f32`/`f64`; optional Cranelift JIT (`cranelift-jit`); diffsol is a dev-only oracle |
+| `tpt-sci-grid` | pde | **implemented** | build from scratch | 1-D/2-D/3-D finite-difference grids; dense and `sparse` (CSR) Laplacians; depends on `tpt-math-linalg` |
+| `tpt-sci-sim-core` | simulation | **implemented** | build from scratch | multi-scale orchestration, ODE and diffusion sub-models, cross-scale coupling, checkpoints; depends on `tpt-sci-ode`, `tpt-sci-grid` |
+| `tpt-sci-ppl` | probabilistic-programming | **implemented** | build from scratch (NUTS) | consolidates `tpt-augur`; `nuts-rs` wrap dropped; R-hat, ESS, divergence-rate diagnostics via `Trace` |
+| `tpt-sci-image` | imaging | **implemented** | build from scratch | 2-D parallel-beam CT, 3-D volume CT, and cone-beam FDK; depends on `tpt-math-signal-fft`, `tpt-math-linalg` |
+| `tpt-sci-physics-rigid` | physics | **implemented** | build from scratch | rigid bodies with quaternion orientation, Coulomb friction, sweep-and-prune broad phase; rapier disqualified (ADR 0007) |
+| `tpt-sci-quantum` | quantum | **implemented** | build from scratch | state-vector (≤20 qubits) and density-matrix paths with Kraus noise channels; QuantRS2 disqualified (ADR 0007) |
+| `tpt-sci-astro` | astrodynamics | **implemented** | build from scratch | Keplerian two-body; J2/J4 secular rates; atmospheric drag; third-body (Kozai-Lidov); solar radiation pressure |
+| `tpt-sci-reaction-network` | systems-biology | **implemented** | build from scratch | Catalyst.jl-style DSL → mass-action ODE; exact SSA, tau-leaping/CLE, minimal SBML reader, conservation laws; SDE/jump out of scope |
+| `tpt-sci-md` | molecular-dynamics | **implemented** | build from scratch | Lennard-Jones and EAM; direct-sum Ewald; SHAKE/RATTLE constraints; cell lists; RDF; depends on `tpt-math-linalg` |
+| `tpt-sci-dft-classical` | materials | **implemented** | wrap `feos` (`feos-dft`) | PC-SAFT classical/soft-matter DFT via `feos`; from-scratch square-gradient solver in 1-D and 3-D; MIT OR Apache-2.0 |
+| `tpt-sci-kinetics` | chemical-kinetics | **implemented** | build from scratch | depends on `tpt-sci-reaction-network`; Arrhenius, Langmuir–Hinshelwood (multi-site), Eley–Rideal, coverage-dependent activation |
+| `tpt-sci-cfd-core` | fluid-dynamics | **implemented** | build from scratch | depends on `tpt-math-linalg`; incompressible Navier–Stokes with explicit and SIMPLE schemes, k-ε/k-ω SST, unstructured FVM/FEM |
+| `tpt-sci-hemodynamics` | biomechanics | **implemented** | build from scratch | depends on `tpt-sci-cfd-core`, `tpt-sci-ode`; 1-D compliant vessel network, Womersley flow, Windkessel 0-D/1-D/3-D coupling |
+| `tpt-sci-electrophys` | biomechanics | **implemented** | build from scratch | depends on `tpt-sci-ode`, `tpt-sci-grid`; Hodgkin–Huxley and Ten Tusscher ionic models, anisotropic tensor diffusion, bidomain |
+| `tpt-sci-climate` | earth-science | **implemented** | build from scratch | depends on `tpt-sci-ode`, `tpt-math-linalg`; 0-D EBM, multi-band and correlated-k radiative transfer, 3-D tracer transport, primitive-equation GCM |
+| `tpt-sci-ocean` | earth-science | **implemented** | build from scratch | depends on `tpt-sci-cfd-core`; 2-D shallow water, 3-D z-level ocean with non-hydrostatic projection, nudging, EnKF, 3D-Var-lite |
+| `tpt-sci-dft-electronic` | materials | **implemented** | build from scratch | Kohn–Sham in 1-D and 3-D real space; LDA and PBE; norm-conserving local pseudopotentials; periodic k-point band structure (1-D) |
 
 ## no_std posture
 

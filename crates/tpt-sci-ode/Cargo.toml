@@ -20,13 +20,15 @@ bench = false
 tpt-math-numeric = { workspace = true }
 thiserror = { workspace = true }
 
-# Cranelift JIT compilation backend for DiffSL RHS codegen
-cranelift-codegen = { version = "0.135", features = ["host-arch"] }
-cranelift-frontend = "0.109"
-cranelift-module = "0.109"
-cranelift-jit = "0.109"
+# Cranelift JIT compilation backend for DiffSL RHS codegen. Every cranelift
+# crate is optional and enabled only by the `cranelift-jit` feature, so the
+# JIT and its `unsafe` code can be compiled out entirely.
+cranelift-codegen = { version = "0.135", features = ["host-arch"], optional = true }
+cranelift-frontend = { version = "0.135", optional = true }
+cranelift-module = { version = "0.135", optional = true }
+cranelift-jit = { version = "0.135", optional = true }
 cranelift-native = { version = "0.135", optional = true }
-target-lexicon = "0.13"
+target-lexicon = { version = "0.13", optional = true }
 
 # Optional verification oracle only (NOT shipped): compare our from-scratch
 # trajectories against diffsol's on a battery of problems. It is a dev-only
@@ -42,8 +44,16 @@ criterion = { workspace = true }
 [features]
 default = ["cranelift-jit"]
 verify-diffsol = ["dep:diffsol"]
-# Use native Cranelift backend (requires target-lexicon and cranelift-native)
-cranelift-jit = ["cranelift-native"]
+# Cranelift JIT backend (`jit` module). Disable with `--no-default-features`
+# to build the closure-only solver with no cranelift or `unsafe` code.
+cranelift-jit = [
+    "dep:cranelift-codegen",
+    "dep:cranelift-frontend",
+    "dep:cranelift-module",
+    "dep:cranelift-jit",
+    "dep:cranelift-native",
+    "dep:target-lexicon",
+]
 
 [lints]
 workspace = true
@@ -51,6 +61,10 @@ workspace = true
 [[bench]]
 name = "solve"
 harness = false
+
+[[example]]
+name = "van_der_pol"
+required-features = ["cranelift-jit"]
 
 [package.metadata.docs.rs]
 all-features = true

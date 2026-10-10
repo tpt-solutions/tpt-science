@@ -1,4 +1,5 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
+use std::hint::black_box;
 use tpt_sci_hemodynamics::{Network, Vessel, tube_law_beta, womersley_velocity_profile};
 
 fn bench_network_step(c: &mut Criterion) {
