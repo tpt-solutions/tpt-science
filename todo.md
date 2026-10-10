@@ -1047,7 +1047,7 @@ adoption). Items are untriaged; pull them into work in this order.
 - [ ] Add Windows and macOS runners to the `test` job. Not done: the
       `link.exe` 1180 issue above is unreproduced, so a Windows runner is
       untested.
-- [ ] Add an "run all examples" smoke job so examples cannot rot.
+- [x] Add an "run all examples" smoke job so examples cannot rot. (`examples` job in `ci.yml` builds every example in release and runs each one.)
 - [ ] Add `cargo-semver-checks` for when publishing starts; consider
       `release-plz`/`cargo-release` to replace the manual `RELEASE.md`.
 - [ ] Benchmark regression tracking against a stored baseline; add a coverage
