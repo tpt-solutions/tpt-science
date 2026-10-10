@@ -61,7 +61,14 @@ fn solve(
 /// Count sign changes of an orbital coefficient vector (0 = nodeless ground
 /// state).
 fn sign_changes(orb: &[f64]) -> usize {
-    orb.windows(2).filter(|w| w[0] * w[1] < 0.0).count()
+    // Ignore numerically-zero tails, whose sign is round-off noise.
+    let peak = orb.iter().fold(0.0_f64, |m, v| m.max(v.abs()));
+    let significant: Vec<f64> = orb
+        .iter()
+        .copied()
+        .filter(|v| v.abs() > 1e-6 * peak)
+        .collect();
+    significant.windows(2).filter(|w| w[0] * w[1] < 0.0).count()
 }
 
 /// Peak position (x) of the self-consistent density.

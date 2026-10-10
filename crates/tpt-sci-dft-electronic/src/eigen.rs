@@ -24,8 +24,16 @@ pub(crate) fn normalize(v: &mut [f64]) {
     }
 }
 
-/// Symmetric eigendecomposition of a small real symmetric matrix `a` by Jacobi
-/// rotations. Returns `(eigenvalues, eigenvectors_columns)`.
+/// Maximum number of cyclic Jacobi sweeps. Each sweep visits every off-diagonal
+/// pair once; convergence is quadratic, so well under 20 sweeps is typical.
+const JACOBI_MAX_SWEEPS: usize = 100;
+
+/// Symmetric eigendecomposition of a small real symmetric matrix `a` by cyclic
+/// Jacobi rotations. Returns `(eigenvalues, eigenvectors_columns)` sorted by
+/// ascending eigenvalue.
+///
+/// Sweeps over all `(p, q)` pairs until the off-diagonal Frobenius norm is
+/// negligible relative to the matrix norm (or `JACOBI_MAX_SWEEPS` is reached).
 #[allow(clippy::needless_range_loop)]
 pub(crate) fn jacobi(a: &[Vec<f64>]) -> (Vec<f64>, Vec<Vec<f64>>) {
     let n = a.len();
@@ -34,63 +42,73 @@ pub(crate) fn jacobi(a: &[Vec<f64>]) -> (Vec<f64>, Vec<Vec<f64>>) {
     for i in 0..n {
         v[i][i] = 1.0;
     }
-    for _ in 0..100 {
-        let mut p = 0;
-        let mut q = 1;
-        let mut max = 0.0_f64;
-        for i in 0..n {
-            for j in (i + 1)..n {
-                if m[i][j].abs() > max {
-                    max = m[i][j].abs();
-                    p = i;
-                    q = j;
-                }
-            }
-        }
-        if max < 1e-12 {
+    let frob: f64 = m.iter().flatten().map(|x| x * x).sum::<f64>().sqrt();
+    for _ in 0..JACOBI_MAX_SWEEPS {
+        let off: f64 = (0..n)
+            .flat_map(|i| (0..n).filter(move |&j| j != i).map(move |j| (i, j)))
+            .map(|(i, j)| m[i][j] * m[i][j])
+            .sum::<f64>()
+            .sqrt();
+        if off <= 1e-15 * frob || off == 0.0 {
             break;
         }
-        let app = m[p][p];
-        let aqq = m[q][q];
-        let apq = m[p][q];
-        // tan(2φ) = 2·a_pq / (a_qq − a_pp) is the classic Jacobi rotation angle
-        // that zeros a_pq; `atan2` keeps this well-defined at a_pp == a_qq.
-        let phi = 0.5 * (2.0 * apq).atan2(aqq - app);
-        let c = phi.cos();
-        let s = phi.sin();
-        // Rotate columns p,q for all rows, then rows p,q for all columns,
-        // keeping the matrix symmetric. The diagonal and (p,q) entries are set
-        // explicitly from the *original* submatrix to avoid reading values that
-        // the column sweep has already overwritten.
-        for i in 0..n {
-            if i != p && i != q {
-                let mip = m[i][p];
-                let miq = m[i][q];
-                let new_p = c * mip - s * miq;
-                let new_q = s * mip + c * miq;
-                m[i][p] = new_p;
-                m[p][i] = new_p;
-                m[i][q] = new_q;
-                m[q][i] = new_q;
+        for p in 0..n {
+            for q in (p + 1)..n {
+                jacobi_rotate(&mut m, &mut v, p, q);
             }
         }
-        m[p][p] = c * c * app - 2.0 * s * c * apq + s * s * aqq;
-        m[q][q] = s * s * app + 2.0 * s * c * apq + c * c * aqq;
-        m[p][q] = 0.0;
-        m[q][p] = 0.0;
-        for i in 0..n {
-            let vip = v[i][p];
-            let viq = v[i][q];
-            v[i][p] = c * vip - s * viq;
-            v[i][q] = s * vip + c * viq;
+    }
+    // Pair each eigenvalue with its eigenvector (a column of `v`) and return
+    // them in ascending eigenvalue order, which callers rely on.
+    let mut pairs: Vec<(f64, Vec<f64>)> = (0..n)
+        .map(|j| (m[j][j], (0..n).map(|i| v[i][j]).collect()))
+        .collect();
+    pairs.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    pairs.into_iter().unzip()
+}
+
+/// Apply one Jacobi rotation in the `(p, q)` plane, zeroing `m[p][q]` and
+/// accumulating the rotation into the eigenvector matrix `v` (columns).
+#[allow(clippy::needless_range_loop)]
+fn jacobi_rotate(m: &mut [Vec<f64>], v: &mut [Vec<f64>], p: usize, q: usize) {
+    let n = m.len();
+    let apq = m[p][q];
+    if apq == 0.0 {
+        return;
+    }
+    let app = m[p][p];
+    let aqq = m[q][q];
+    // tan(2φ) = 2·a_pq / (a_qq − a_pp) is the classic Jacobi rotation angle
+    // that zeros a_pq; `atan2` keeps this well-defined at a_pp == a_qq.
+    let phi = 0.5 * (2.0 * apq).atan2(aqq - app);
+    let c = phi.cos();
+    let s = phi.sin();
+    // Rotate columns p,q for all rows, then rows p,q for all columns, keeping
+    // the matrix symmetric. The diagonal and (p,q) entries are set explicitly
+    // from the *original* submatrix to avoid reading values the column sweep has
+    // already overwritten.
+    for i in 0..n {
+        if i != p && i != q {
+            let mip = m[i][p];
+            let miq = m[i][q];
+            let new_p = c * mip - s * miq;
+            let new_q = s * mip + c * miq;
+            m[i][p] = new_p;
+            m[p][i] = new_p;
+            m[i][q] = new_q;
+            m[q][i] = new_q;
         }
     }
-    let mut eig = vec![0.0; n];
-    for i in 0..n {
-        eig[i] = m[i][i];
+    m[p][p] = c * c * app - 2.0 * s * c * apq + s * s * aqq;
+    m[q][q] = s * s * app + 2.0 * s * c * apq + c * c * aqq;
+    m[p][q] = 0.0;
+    m[q][p] = 0.0;
+    for row in v.iter_mut() {
+        let vip = row[p];
+        let viq = row[q];
+        row[p] = c * vip - s * viq;
+        row[q] = s * vip + c * viq;
     }
-    let vecs: Vec<Vec<f64>> = (0..n).map(|j| (0..n).map(|i| v[i][j]).collect()).collect();
-    (eig, vecs)
 }
 
 /// Extract the `num_eig` lowest eigenvalues and their (Ritz) eigenvectors of a
@@ -199,4 +217,36 @@ pub(crate) fn lanczos_lowest(
         eigvecs.push(r);
     }
     (eigvals, eigvecs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn jacobi_diagonalizes_tridiagonal_with_known_spectrum() {
+        // Eigenvalues of the 4×4 tridiagonal (2, −1) matrix are 2 − 2cos(kπ/5).
+        let n = 4;
+        let mut a = vec![vec![0.0; n]; n];
+        for i in 0..n {
+            a[i][i] = 2.0;
+            if i + 1 < n {
+                a[i][i + 1] = -1.0;
+                a[i + 1][i] = -1.0;
+            }
+        }
+        let (mut eig, vecs) = jacobi(&a);
+        eig.sort_by(|x, y| x.partial_cmp(y).unwrap());
+        for (k, &lam) in eig.iter().enumerate() {
+            let exact = 2.0 - 2.0 * ((k + 1) as f64 * std::f64::consts::PI / 5.0).cos();
+            assert!((lam - exact).abs() < 1e-10, "λ{k}: {lam} vs {exact}");
+        }
+        // Each eigenvector satisfies A·v = λ·v.
+        for (lam, col) in eig.iter().zip(&vecs) {
+            for i in 0..n {
+                let av: f64 = (0..n).map(|j| a[i][j] * col[j]).sum();
+                assert!((av - lam * col[i]).abs() < 1e-8);
+            }
+        }
+    }
 }
