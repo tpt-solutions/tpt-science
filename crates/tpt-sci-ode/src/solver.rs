@@ -103,7 +103,7 @@ fn integrate(
     let dir = if t_final >= t { 1.0 } else { -1.0 };
     let span = (t_final - t).abs();
 
-    let h_min = 1e-14_f64.max(span * 1e-12);
+    let h_min = 1e-14_f64.max(span * 1e-15);
     let h_max = span; // never step past the whole interval at once
     let max_steps = 100_000usize;
     let safety = 0.9_f64;
