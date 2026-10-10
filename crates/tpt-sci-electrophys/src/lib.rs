@@ -110,7 +110,7 @@ impl HodgkinHuxley {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            v: 0.0,
+            v: -65.0,
             m: 0.0529,
             h: 0.5961,
             n: 0.3177,
@@ -706,9 +706,12 @@ impl Tissue {
             Diffusivity::Scalar(d) => *d,
             Diffusivity::Tensor(_) => 1.0,
         };
-        let cells = (0..n).map(|_| model.clone_box()).collect();
+        let cells: Vec<Box<dyn IonicModel>> = (0..n).map(|_| model.clone_box()).collect();
+        // Start every node at its cell's resting potential so the membrane state
+        // is consistent with the gating variables.
+        let vm = cells.iter().map(|c| c.voltage()).collect();
         Ok(Self {
-            vm: vec![0.0; n],
+            vm,
             ve: vec![0.0; n],
             diff,
             nx,
@@ -759,6 +762,10 @@ impl Tissue {
     pub fn stimulate(&mut self, i: usize, j: usize, v: f64) {
         let c = self.idx(i, j);
         self.vm[c] = v;
+        // Keep the cell's internal voltage in sync: the ionic current is read
+        // from the cell, so a zero-length reaction step sets `v` without moving
+        // the gating variables.
+        self.cells[c].advance_reaction(v, 0.0);
     }
 
     /// Solve the extracellular elliptic equation `(σ_i + σ_e)·L·Ve = −σ_i·L·Vm`
@@ -919,7 +926,7 @@ mod tests {
         for _ in 0..100 {
             t.step(0.005);
         }
-        // A stimulus should depolarize the tissue well above the resting (0 mV)
+        // A stimulus should depolarize the tissue well above the resting (−65 mV)
         // field — the depolarization propagates and recruits the sheet.
         assert!(t.max_voltage().is_finite());
         assert!(

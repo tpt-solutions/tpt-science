@@ -87,12 +87,12 @@ fn demo_single_cell() {
 /// of the resulting depolarization, activation-time ordering, and an apparent
 /// conduction velocity.
 ///
-/// Note: in this v1 model `Tissue::stimulate` sets the node potential `Vm`
-/// directly, and the per-node membrane current is evaluated from the coupled
-/// `HodgkinHuxley` cell. The depolarization therefore spreads outward as a
-/// diffusing front (strongly attenuated with distance) rather than a fully
-/// regenerated action-potential train. We measure the front's arrival at two
-/// nodes along the strip and report the apparent front velocity.
+/// Note: `Tissue::stimulate` sets the node potential `Vm` directly, and the
+/// per-node membrane current is evaluated from the coupled `HodgkinHuxley`
+/// cell. The stimulus is held on the left edge, so the depolarization spreads
+/// outward and recruits the excitable cells. We measure the front's arrival at
+/// two nodes along the strip and report the apparent front velocity in model
+/// units (the grid spacing and diffusivity are not calibrated to tissue).
 fn demo_tissue_wave() {
     println!("=== 2-D tissue sheet (monodomain) ===");
 
@@ -120,6 +120,10 @@ fn demo_tissue_wave() {
     let mut upstream_t: Option<usize> = None;
     let mut downstream_t: Option<usize> = None;
     for k in 0..steps {
+        // Sustained electrode on the left edge, as in `cable_propagation`.
+        for jj in 0..t.ny {
+            t.stimulate(0, jj, 80.0);
+        }
         t.step(DT);
         if upstream_t.is_none() && t.vm[upstream] > ACTIVATION_MV {
             upstream_t = Some(k);
@@ -139,10 +143,11 @@ fn demo_tissue_wave() {
     let t_up = u as f64 * DT;
     let t_down = d as f64 * DT;
     let distance = (5 - 2) as f64 * DX_CM;
-    let velocity = distance / (t_down - t_up);
+    // Distance (cm) over elapsed time (ms), converted to cm/s.
+    let velocity = distance / (t_down - t_up) * 1000.0;
 
-    println!("upstream node activated   at t = {:.1} ms", t_up * 1000.0);
-    println!("downstream node activated at t = {:.1} ms", t_down * 1000.0);
+    println!("upstream node activated   at t = {t_up:.3} ms");
+    println!("downstream node activated at t = {t_down:.3} ms");
     println!("apparent conduction velocity = {velocity:.2} cm/s");
 
     assert!(t.max_voltage().is_finite(), "tissue field stays finite");

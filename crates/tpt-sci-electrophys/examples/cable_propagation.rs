@@ -32,10 +32,10 @@ use tpt_sci_electrophys::{ElectrophysError, HodgkinHuxley, Tissue};
 const ACTIVATION_MV: f64 = 0.0;
 /// Assumed inter-node spacing (cm) for the conduction-velocity estimate.
 const DX_CM: f64 = 0.02;
-/// Integration timestep (s). The Hodgkin–Huxley membrane ODE has a fastest
+/// Integration timestep (ms). The Hodgkin–Huxley membrane ODE has a fastest
 /// time constant of order 0.1 ms, so an explicit-Euler step must stay well
-/// below ~0.025 ms to remain stable (a 0.002 s step spuriously fires).
-const DT: f64 = 2.5e-5;
+/// below ~0.025 ms to remain stable (a 2 ms step spuriously fires).
+const DT: f64 = 0.025;
 
 /// Count rising-edge crossings of `thresh` in a voltage trace (one per spike).
 fn count_spikes(voltage: &[f64], thresh: f64) -> usize {
@@ -146,18 +146,17 @@ fn demo_cable() {
     let steps = 20000usize;
 
     // Normal coupling: measure arrival at two probes -> conduction velocity.
-    let normal = cable_arrivals(nx, 30.0, source_v, &[4, 10], steps);
+    let normal = cable_arrivals(nx, 10.0, source_v, &[4, 10], steps);
     let (t_up, t_down) = match (normal[0], normal[1]) {
         (Some(u), Some(d)) => (u, d),
         _ => panic!("front must reach both probes in the normal cable"),
     };
-    let velocity = ((10 - 4) as f64 * DX_CM) / (t_down - t_up);
+    // Distance (cm) over elapsed time (ms), converted to cm/s.
+    let velocity = ((10 - 4) as f64 * DX_CM) / (t_down - t_up) * 1000.0;
     println!(
         "normal coupling  : upstream t = {:.1} ms, downstream t = {:.1} ms, \
          velocity = {:.2} cm/s",
-        t_up * 1000.0,
-        t_down * 1000.0,
-        velocity
+        t_up, t_down, velocity
     );
     assert!(
         t_down > t_up,
@@ -167,11 +166,11 @@ fn demo_cable() {
     assert!(velocity.is_finite());
 
     // Reduced coupling ("ischemic"): the front arrives later at the same probe.
-    let ischemic = cable_arrivals(nx, 12.0, source_v, &[4], steps);
+    let ischemic = cable_arrivals(nx, 3.0, source_v, &[4], steps);
     let t_isc = ischemic[0].expect("ischemic front must still reach probe 4");
     println!(
         "ischemic coupling: probe-4 arrival t = {:.1} ms (slower than normal)",
-        t_isc * 1000.0
+        t_isc
     );
     assert!(t_isc > t_up, "reduced coupling slows the front");
 
