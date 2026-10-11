@@ -13,3 +13,6 @@ ode_out.txt
 # The Python crate is its own workspace root; keep its build output out of git.
 crates/tpt-sci-py/target/
 crates/tpt-sci-py/Cargo.lock
+
+# Generated wasm-bindgen glue for the playground page.
+crates/tpt-sci-wasm/www/pkg/

@@ -18,6 +18,9 @@ bench = false
 [dependencies]
 tpt-sci-cli = { path = "../tpt-sci-cli" }
 tpt-sci-climate = { workspace = true }
+tpt-sci-image = { workspace = true }
+tpt-sci-cfd-core = { workspace = true }
+tpt-math-linalg = { workspace = true }
 wasm-bindgen = "0.2"
 
 [lints]

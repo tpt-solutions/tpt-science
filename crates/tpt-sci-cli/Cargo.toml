@@ -21,6 +21,8 @@ bench = false
 name = "tpt-sci"
 path = "src/main.rs"
 bench = false
+# Shares its name with the `tpt-sci` umbrella library, so skip its rustdoc output.
+doc = false
 
 [dependencies]
 # The runner needs only the closure solver, so the native-only JIT backend is off

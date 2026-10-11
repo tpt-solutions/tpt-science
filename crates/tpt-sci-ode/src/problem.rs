@@ -72,7 +72,7 @@ impl OdeProblemBuilder {
     /// Declare the Jacobian's sparsity pattern for the implicit sparse path.
     ///
     /// With a pattern, sparse Newton solves (state size at least
-    /// [`SPARSE_LU_MIN_N`](crate::sparse::SPARSE_LU_MIN_N)) build the Jacobian
+    /// `SPARSE_LU_MIN_N` (a private constant)) build the Jacobian
     /// with one RHS call per color (see
     /// [`CsrMatrix::jacobian_colored`](crate::sparse::CsrMatrix::jacobian_colored))
     /// rather than one per state. The pattern must cover every structural

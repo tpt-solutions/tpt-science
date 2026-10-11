@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tpt-science playground</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 52rem; padding: 0 1rem; line-height: 1.5; }
+  h1 { font-size: 1.5rem; }
+  h2 { font-size: 1.1rem; margin-top: 2rem; }
+  textarea { width: 100%; min-height: 9rem; font-family: ui-monospace, monospace; font-size: 0.9rem; box-sizing: border-box; }
+  input[type=number] { width: 9rem; font-size: 1rem; }
+  button { margin-top: 0.5rem; padding: 0.4rem 1rem; font-size: 1rem; }
+  pre { background: #f4f4f4; padding: 0.75rem; overflow-x: auto; white-space: pre-wrap; }
+  .error { color: #b00020; }
+  #status { color: #666; }
+</style>
+</head>
+<body>
+<h1>tpt-science playground</h1>
+<p id="status">Loading WebAssembly module…</p>
+
+<h2>Reaction-network spec</h2>
+<p>A JSON spec, run in the browser. Output is the trajectory as CSV.</p>
+<textarea id="spec">{
+  "network": "k, A --> B",
+  "parameters": { "k": 1.0 },
+  "initial": { "A": 1.0 },
+  "t_final": 5.0,
+  "points": 6
+}</textarea>
+<br>
+<button id="run" disabled>Run spec</button>
+<pre id="spec-out"></pre>
+
+<h2>Energy-balance model</h2>
+<p>Equilibrium surface temperature at a CO₂ concentration.</p>
+<label>CO₂ (ppm) <input id="co2" type="number" value="280" min="1" step="10"></label>
+<button id="ebm" disabled>Compute</button>
+<pre id="ebm-out"></pre>
+
+<h2>CT reconstruction</h2>
+<p>Reconstruct a two-disc phantom from its projections. Filtered back-projection
+(FBP) removes the blur that naive back-projection leaves.</p>
+<label>Grid <input id="ct-n" type="number" value="64" min="8" max="128" step="8"></label>
+<label>Angles <input id="ct-angles" type="number" value="90" min="4" max="360"></label>
+<button id="ct" disabled>Reconstruct</button>
+<div class="row">
+  <figure><canvas id="ct-truth" width="256" height="256"></canvas><figcaption>Phantom</figcaption></figure>
+  <figure><canvas id="ct-naive" width="256" height="256"></canvas><figcaption>Naive back-projection</figcaption></figure>
+  <figure><canvas id="ct-fbp" width="256" height="256"></canvas><figcaption>Filtered back-projection</figcaption></figure>
+</div>
+<pre id="ct-out"></pre>
+
+<h2>Lid-driven cavity</h2>
+<p>Speed of the incompressible flow in a square cavity whose top lid moves at
+unit speed. Larger Reynolds numbers and grids take longer in the browser.</p>
+<label>Grid <input id="cav-n" type="number" value="32" min="8" max="64" step="4"></label>
+<label>Reynolds <input id="cav-re" type="number" value="1000" min="10" max="2000" step="100"></label>
+<label>Steps <input id="cav-steps" type="number" value="200" min="1" max="2000" step="50"></label>
+<button id="cav" disabled>Run cavity</button>
+<canvas id="cav-canvas" width="256" height="256"></canvas>
+<pre id="cav-out"></pre>
+
+<style>
+  .row { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+  figure { margin: 0; }
+  canvas { image-rendering: pixelated; width: 256px; height: 256px; border: 1px solid #ccc; }
+</style>
+
+<script type="module">
+  const status = document.getElementById("status");
+  const specOut = document.getElementById("spec-out");
+  const ebmOut = document.getElementById("ebm-out");
+  const ctOut = document.getElementById("ct-out");
+  const cavOut = document.getElementById("cav-out");
+
+  // Paint an n × n row-major field onto a canvas, scaled to [lo, hi] and
+  // mapped through a grey ramp (CT) or a blue–red diverging ramp (cavity).
+  function paint(canvas, field, n, lo, hi, ramp) {
+    const ctx = canvas.getContext("2d");
+    const img = ctx.createImageData(n, n);
+    const span = hi - lo || 1;
+    for (let k = 0; k < n * n; k++) {
+      const t = Math.min(1, Math.max(0, (field[k] - lo) / span));
+      const [r, g, b] = ramp(t);
+      img.data.set([r, g, b, 255], 4 * k);
+    }
+    const off = document.createElement("canvas");
+    off.width = n;
+    off.height = n;
+    off.getContext("2d").putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(off, 0, 0, canvas.width, canvas.height);
+  }
+  const grey = (t) => [255 * t, 255 * t, 255 * t];
+  const heat = (t) => [255 * t, 255 * (1 - Math.abs(2 * t - 1)), 255 * (1 - t)];
+
+  try {
+    const wasm = await import("./pkg/tpt_sci_wasm.js");
+    await wasm.default();
+    status.textContent = "Ready.";
+
+    document.getElementById("run").disabled = false;
+    document.getElementById("ebm").disabled = false;
+    document.getElementById("ct").disabled = false;
+    document.getElementById("cav").disabled = false;
+
+    document.getElementById("ct").addEventListener("click", () => {
+      const n = Number(document.getElementById("ct-n").value);
+      const angles = Number(document.getElementById("ct-angles").value);
+      try {
+        const truth = wasm.ct_phantom(n);
+        const naive = wasm.ct_reconstruct(n, angles, false);
+        const fbp = wasm.ct_reconstruct(n, angles, true);
+        paint(document.getElementById("ct-truth"), truth, n, 0, 1, grey);
+        paint(document.getElementById("ct-naive"), naive, n, 0, 1, grey);
+        paint(document.getElementById("ct-fbp"), fbp, n, 0, 1, grey);
+        const rmse = (a) => Math.sqrt(a.reduce((s, v, k) => s + (v - truth[k]) ** 2, 0) / a.length);
+        ctOut.textContent = `RMSE: naive ${rmse(naive).toFixed(4)}, filtered ${rmse(fbp).toFixed(4)}`;
+        ctOut.className = "";
+      } catch (e) {
+        ctOut.textContent = String(e);
+        ctOut.className = "error";
+      }
+    });
+
+    document.getElementById("cav").addEventListener("click", () => {
+      const n = Number(document.getElementById("cav-n").value);
+      const re = Number(document.getElementById("cav-re").value);
+      const steps = Number(document.getElementById("cav-steps").value);
+      try {
+        const speed = wasm.lid_cavity_speed(n, re, steps);
+        const max = Math.max(...speed);
+        paint(document.getElementById("cav-canvas"), speed, n, 0, max, heat);
+        cavOut.textContent = `max speed ${max.toFixed(4)} after ${steps} steps`;
+        cavOut.className = "";
+      } catch (e) {
+        cavOut.textContent = String(e);
+        cavOut.className = "error";
+      }
+    });
+
+    document.getElementById("run").addEventListener("click", () => {
+      try {
+        const csv = wasm.run_spec(document.getElementById("spec").value);
+        specOut.textContent = csv;
+        specOut.className = "";
+      } catch (e) {
+        specOut.textContent = String(e);
+        specOut.className = "error";
+      }
+    });
+
+    document.getElementById("ebm").addEventListener("click", () => {
+      const co2 = Number(document.getElementById("co2").value);
+      try {
+        const t = wasm.ebm_equilibrium_temperature(co2);
+        ebmOut.textContent = `${t.toFixed(2)} K (${(t - 273.15).toFixed(2)} °C)`;
+        ebmOut.className = "";
+      } catch (e) {
+        ebmOut.textContent = String(e);
+        ebmOut.className = "error";
+      }
+    });
+  } catch (e) {
+    status.textContent = "Failed to load the WebAssembly module: " + e;
+    status.className = "error";
+  }
+</script>
+</body>
+</html>

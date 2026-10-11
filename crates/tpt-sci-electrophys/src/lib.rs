@@ -43,12 +43,14 @@ pub use error::ElectrophysError;
 use tpt_sci_grid::sparse::{conjugate_gradient, laplacian_1d_sparse, laplacian_2d_sparse};
 use tpt_sci_grid::{Boundary, UniformGrid1D, UniformGrid2D};
 
+mod contraction;
 mod diffusion;
 mod hodgkin_huxley;
 mod ionic;
 mod ten_tusscher;
 mod tissue;
 
+pub use contraction::LandActiveTension;
 pub use diffusion::{ConductivityTensor, DiffusionTensor, tensor_diffusion_2d};
 pub use hodgkin_huxley::HodgkinHuxley;
 pub use ionic::IonicModel;
@@ -106,28 +108,62 @@ mod tests {
         assert!(hh.ionic_current().is_finite());
     }
 
-    #[test]
-    fn tt_resting_fires_action_potential() {
+    /// Stimulate a single TenTusscher cell with a 1 ms, -52 pA/pF pulse and
+    /// integrate for `duration_ms`. Returns the voltage trace sampled every 0.01 ms.
+    fn tt_trace(duration_ms: f64) -> Vec<f64> {
         let mut cell = TenTusscher::resting();
-        let v_rest = cell.v;
-        cell.v = 20.0; // depolarizing stimulus
-        let mut peak = cell.v;
-        // Single-node monodomain integration: dV/dt = -I_ion/Cm.
-        for _ in 0..600 {
-            cell.advance_reaction(cell.v, 0.01);
-            cell.v += 0.01 * (-cell.ionic_current() / cell.cm);
-            if !cell.v.is_finite() {
-                break;
-            }
-            peak = peak.max(cell.v);
+        let dt = 0.01;
+        let steps = (duration_ms / dt) as usize;
+        let mut trace = Vec::with_capacity(steps);
+        for i in 0..steps {
+            let stim = if (i as f64) * dt < 1.0 { -52.0 } else { 0.0 };
+            let v = cell.voltage();
+            cell.advance_reaction(v, dt);
+            cell.v = v + dt * -(cell.ionic_current() + stim) / cell.capacitance();
+            trace.push(cell.v);
         }
-        // A genuine AP must swing well above the resting potential.
+        trace
+    }
+
+    #[test]
+    fn tt_action_potential_has_plateau_and_repolarizes() {
+        let dt = 0.01;
+        let trace = tt_trace(500.0);
+        assert!(trace.iter().all(|v| v.is_finite()), "integration blew up");
+
+        let peak = trace.iter().copied().fold(f64::MIN, f64::max);
         assert!(
-            peak > v_rest + 10.0,
-            "TenTusscher should fire a depolarization"
+            (10.0..45.0).contains(&peak),
+            "AP peak {peak} mV out of range"
         );
-        assert!(cell.v.is_finite());
-        assert!(cell.cai.is_finite() && cell.cai > 0.0);
+
+        // Plateau: well after the upstroke, the epicardial cell stays depolarized.
+        let plateau = trace[(100.0 / dt) as usize];
+        assert!(
+            (-10.0..30.0).contains(&plateau),
+            "no plateau: V(100 ms) = {plateau} mV"
+        );
+
+        // APD: time above -40 mV. Epicardial APD is roughly 250 to 300 ms.
+        let up = trace.iter().position(|&v| v > -40.0).expect("no upstroke");
+        let down = up
+            + trace[up..]
+                .iter()
+                .position(|&v| v < -40.0)
+                .expect("no repolarization");
+        let apd = (down - up) as f64 * dt;
+        assert!((200.0..350.0).contains(&apd), "APD {apd} ms out of range");
+
+        // Back near rest by the end of the run.
+        let final_v = *trace.last().unwrap();
+        assert!(final_v < -80.0, "did not repolarize: V = {final_v} mV");
+    }
+
+    #[test]
+    fn tt_resting_currents_are_finite() {
+        let cell = TenTusscher::resting();
+        assert!(cell.ionic_current().is_finite());
+        assert!((cell.voltage() + 86.2).abs() < 1e-9);
     }
 
     #[test]
@@ -347,39 +383,5 @@ mod tests {
         for c in 0..n * n {
             assert_abs_diff_eq!(dt[c], ds[c], epsilon = 1e-9);
         }
-    }
-
-    #[test]
-    fn tt_single_cell_limit_cycle() {
-        // A single TenTusscher cell, stimulated, must produce a stable AP: a large
-        // depolarization, then repolarization back near the resting potential, and
-        // no blow-up over several seconds.
-        let mut cell = TenTusscher::resting();
-        let v_rest = cell.v;
-        assert!(v_rest < -70.0, "resting potential should be near -85 mV");
-        cell.v = 20.0; // depolarizing stimulus
-        let mut peak = cell.v;
-        for _ in 0..800 {
-            cell.advance_reaction(cell.v, 0.01);
-            cell.v += 0.01 * (-cell.ionic_current() / cell.cm);
-            if !cell.v.is_finite() {
-                break;
-            }
-            peak = peak.max(cell.v);
-        }
-        assert!(
-            cell.v.is_finite(),
-            "TenTusscher single-cell integration blew up"
-        );
-        let amplitude = peak - v_rest;
-        assert!(amplitude > 40.0, "AP amplitude too small: {amplitude}");
-        assert!(peak < 60.0, "AP peak unphysiologically high: {peak}");
-        // Repolarized close to rest after several seconds.
-        assert!(
-            (cell.v - v_rest).abs() < 30.0,
-            "cell failed to recover to rest: v = {}",
-            cell.v
-        );
-        assert!(cell.cai.is_finite() && cell.cai > 0.0);
     }
 }

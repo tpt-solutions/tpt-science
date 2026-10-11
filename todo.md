@@ -1074,7 +1074,7 @@ adoption). Items are untriaged; pull them into work in this order.
 - [x] Unit/dimension safety for SI constants shared by `astro`, `climate` and
       `kinetics`. (Not started in this pass.) (Done: `tpt-sci-units` with typed quantities. Kinetics, climate and astro constants come from it, and `ArrheniusRate::with_activation_energy` and `rate_constant_at` are typed companions to the f64 API.)
 - [x] Python (PyO3) and WASM bindings story; scope as a separate crate so
-      core crates stay dependency-light. (Not started: needs its own crate and a Python/WASM toolchain to verify.) (Done: `tpt-sci-wasm` (compile-checked for wasm32) and `tpt-sci-py` (excluded from the workspace; built and exercised from Python). The WASM playground page is still open.)
+      core crates stay dependency-light. (Not started: needs its own crate and a Python/WASM toolchain to verify.) (Done: `tpt-sci-wasm` (compile-checked for wasm32) and `tpt-sci-py` (excluded from the workspace; built and exercised from Python). The WASM playground page is done: `tpt-sci-wasm/www/index.html`, built with the wasm-bindgen glue.)
 
 ### 12e. Innovative additions
 
@@ -1082,11 +1082,11 @@ adoption). Items are untriaged; pull them into work in this order.
       it and writes CSV (builds on the reaction-network DSL and SBML reader). (Not started in this pass.) (Done: `tpt-sci-cli`, with the `tpt-sci run <spec.json>` command.)
 - [x] ODE-sensitivity-driven NUTS: feed `forward_sensitivities` gradients into
       `tpt-sci-ppl` for Bayesian parameter inference on ODE models. (Not started: the `ppl` likelihood is an autodiff closure, so the ODE sensitivities need a custom gradient hook first.) (Done: `ppl::gradient::fit_with_gradient`, which uses gradient injection. The posterior of an ODE decay rate is recovered in `tests/ode_fit.rs`. Two sampler bugs found on the way are fixed: U-turns were counted as divergences, and subtree sampling was biased.)
-- [ ] Coupled-physics scenarios in `sim-core`: cardiac electro-mechanics (Partial: done: ocean-atmosphere (`sim-core/examples/ocean_atmosphere.rs`), and a reacting cavity with a new `cfd-core` scalar transport module (`cfd-core/examples/reacting_cavity.rs`). Not done: cardiac electro-mechanics is blocked by a defect in `TenTusscher`. Its gates use 1–3 ms time constants, so it has no action-potential plateau, and fixing it needs the published parameter values. The reactor-with-CFD scenario is therefore done in its own form; the GCM and ocean-model coupling is open.)
+- [x] Coupled-physics scenarios in `sim-core`: cardiac electro-mechanics (Done: `sim-core/examples/cardiac_electromechanics.rs` couples the Ten Tusscher cell, with its published CellML parameters, to the Land et al. (2017) active-tension model (`tpt-sci-electrophys::LandActiveTension`, ported from the authors' release and cross-checked against an independent port). The AP plateau and APD are checked, and the tension lags the Ca²⁺ peak. Earlier: ocean-atmosphere (`sim-core/examples/ocean_atmosphere.rs`) and a reacting cavity with a new `cfd-core` scalar transport module (`cfd-core/examples/reacting_cavity.rs`). The GCM and ocean-model coupling is open.)
 - [x] Shared convergence-order test helper plus `proptest` property tests for
       integrators and PDE operators. (Done: `tests/convergence.rs` checks monotone error reduction with tolerance for all four methods; `tests/properties.rs` in `tpt-sci-ode` and `tpt-sci-grid` use `proptest`.)
 - [x] Jacobian sparsity detection for the `tpt-sci-ode` sparse path. (Done: the pattern is wired into the implicit sparse Newton paths via `OdeProblemBuilder::jacobian_pattern`, tested end to end.)
-- [ ] WASM playground for CT, cavity and EBM examples. (Not started: depends on the WASM bindings story above.)
+- [x] WASM playground for CT, cavity and EBM examples. (Done: `tpt-sci-wasm/www/` runs the CT reconstruction (naive and filtered back-projection), the lid-driven cavity speed field and the EBM, alongside the reaction-network spec runner. The exports were checked under Node.)
 
 ### 12f. Adoption (examples and templates)
 

@@ -32,6 +32,8 @@ serde_json = "1"
 criterion = { workspace = true }
 # For the multi-scale cookbook example (reaction network -> sim-core coupling).
 tpt-sci-reaction-network = { version = "0.1.0", path = "../tpt-sci-reaction-network" }
+# For the cardiac electro-mechanics example (ionic cell -> contraction coupling).
+tpt-sci-electrophys = { path = "../tpt-sci-electrophys" }
 approx = { workspace = true }
 
 [lints]

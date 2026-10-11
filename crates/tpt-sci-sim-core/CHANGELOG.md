@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org).
 
 ### Added
 
+- `cardiac_electromechanics` example: a Ten Tusscher ventricular cell
+  (`tpt-sci-electrophys`) coupled through its Ca²⁺ transient to the Land et al.
+  (2017) active-tension model (`LandActiveTension`, isometric). The two
+  sub-models are stepped by the orchestrator. The checks are the AP plateau and
+  APD, and the tension lagging the calcium peak.
+
 - Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
 - `OdeSubModel` wraps any `tpt-sci-ode` problem as a `SubModel` (used directly by

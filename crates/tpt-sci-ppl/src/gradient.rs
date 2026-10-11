@@ -16,7 +16,7 @@
 //!
 //! [`fit_with_gradient`] runs this for several dispersed chains. The typical
 //! source of `g` is forward sensitivity analysis:
-//! [`tpt_sci_ode::forward_sensitivities`] returns `∂y/∂p`, and the chain rule
+//! `tpt_sci_ode::forward_sensitivities` returns `∂y/∂p`, and the chain rule
 //! gives the likelihood gradient.
 
 use tpt_math_autodiff_rev::{GradientTape, Variable};
