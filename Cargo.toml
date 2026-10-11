@@ -19,6 +19,7 @@ members = [
     "crates/tpt-sci-climate",
     "crates/tpt-sci-ocean",
     "crates/tpt-sci-dft-electronic",
+    "crates/tpt-sci",
 ]
 exclude = []
 
@@ -54,6 +55,11 @@ feos-dft = { version = "0.10", default-features = false }
 # In-repo crate dependencies (referenced by `workspace = true`).
 tpt-sci-ode = { version = "0.1.0", path = "crates/tpt-sci-ode" }
 tpt-sci-grid = { version = "0.1.0", path = "crates/tpt-sci-grid" }
+tpt-sci-ppl = { version = "0.1.0", path = "crates/tpt-sci-ppl" }
+tpt-sci-image = { version = "0.1.0", path = "crates/tpt-sci-image" }
+tpt-sci-physics-rigid = { version = "0.1.0", path = "crates/tpt-sci-physics-rigid" }
+tpt-sci-quantum = { version = "0.1.0", path = "crates/tpt-sci-quantum" }
+tpt-sci-astro = { version = "0.1.0", path = "crates/tpt-sci-astro" }
 tpt-sci-sim-core = { version = "0.1.0", path = "crates/tpt-sci-sim-core" }
 tpt-sci-reaction-network = { version = "0.1.0", path = "crates/tpt-sci-reaction-network" }
 tpt-sci-md = { version = "0.1.0", path = "crates/tpt-sci-md" }
@@ -65,6 +71,7 @@ tpt-sci-electrophys = { version = "0.1.0", path = "crates/tpt-sci-electrophys" }
 tpt-sci-climate = { version = "0.1.0", path = "crates/tpt-sci-climate" }
 tpt-sci-ocean = { version = "0.1.0", path = "crates/tpt-sci-ocean" }
 tpt-sci-dft-electronic = { version = "0.1.0", path = "crates/tpt-sci-dft-electronic" }
+tpt-sci = { version = "0.1.0", path = "crates/tpt-sci" }
 
 # NOTE: `diffsol` is intentionally NOT a workspace dependency. `tpt-sci-ode`
 # implements its own ODE solvers from scratch (dual-licensed, no Apache-only

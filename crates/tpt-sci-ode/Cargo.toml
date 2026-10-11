@@ -19,6 +19,8 @@ bench = false
 [dependencies]
 tpt-math-numeric = { workspace = true }
 thiserror = { workspace = true }
+# Optional (de)serialization of result types (`Trajectory`, `EventSolution`, …).
+serde = { version = "1", features = ["derive"], optional = true }
 
 # Cranelift JIT compilation backend for DiffSL RHS codegen. Every cranelift
 # crate is optional and enabled only by the `cranelift-jit` feature, so the
@@ -38,12 +40,15 @@ target-lexicon = { version = "0.13", optional = true }
 diffsol = { version = "0.16.1", default-features = false, features = ["faer"], optional = true }
 
 [dev-dependencies]
+proptest = "1"
 approx = { workspace = true }
 criterion = { workspace = true }
 
 [features]
 default = ["cranelift-jit"]
 verify-diffsol = ["dep:diffsol"]
+# serde (de)serialization for result types. Off by default.
+serde = ["dep:serde"]
 # Cranelift JIT backend (`jit` module). Disable with `--no-default-features`
 # to build the closure-only solver with no cranelift or `unsafe` code.
 cranelift-jit = [

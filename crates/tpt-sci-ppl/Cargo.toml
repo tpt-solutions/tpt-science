@@ -23,6 +23,9 @@ tpt-math-prob-bayes = { workspace = true }
 tpt-math-prob-core = { workspace = true }
 thiserror = { workspace = true }
 
+# Optional (de)serialization of result types.
+serde = { version = "1", features = ["derive"], optional = true }
+
 [dev-dependencies]
 criterion = { workspace = true }
 approx = { workspace = true }
@@ -36,3 +39,7 @@ all-features = true
 [[bench]]
 name = "ppl"
 harness = false
+
+[features]
+# serde (de)serialization for result types. Off by default.
+serde = ["dep:serde"]

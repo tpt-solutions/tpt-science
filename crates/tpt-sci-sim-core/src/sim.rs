@@ -11,6 +11,7 @@ use crate::submodel::SubModel;
 /// internal time. It is intentionally plain data (no trait objects) so it can
 /// be serialized by downstream consumers.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Checkpoint {
     /// Global simulation time at snapshot.
     pub global_time: f64,

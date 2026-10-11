@@ -40,6 +40,8 @@
 //! ```
 
 pub mod error;
+
+pub mod events;
 #[cfg(feature = "cranelift-jit")]
 pub mod jit;
 pub mod linalg;
@@ -48,6 +50,8 @@ pub mod scalar;
 pub mod sensitivity;
 pub mod solver;
 pub mod sparse;
+/// Named, time-indexed output with CSV export.
+pub mod trajectory;
 
 pub use error::OdeError;
 #[cfg(feature = "cranelift-jit")]
@@ -55,6 +59,7 @@ pub use jit::{JitRhs, JitRhsBuilder, compile_rhs};
 pub use problem::{OdeProblem, OdeProblemBuilder, Rhs};
 pub use sensitivity::{SensitivityResult, forward_sensitivities};
 pub use solver::Method;
+pub use trajectory::Trajectory;
 
 /// A callable right-hand side for the ODE solvers.
 ///

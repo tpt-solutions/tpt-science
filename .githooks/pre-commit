@@ -1,0 +1,6 @@
+#!/bin/sh
+# Pre-commit gate: formatting and lint, the same checks CI runs first.
+# Enable once per clone with:  git config core.hooksPath .githooks
+set -e
+cargo fmt --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings

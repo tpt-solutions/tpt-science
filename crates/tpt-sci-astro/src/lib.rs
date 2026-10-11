@@ -48,66 +48,17 @@
 //!
 //! Licensed under either of MIT or Apache-2.0 at your option.
 
-use tpt_math_linalg::tpt_math_linalg_dense::{DMatrix, DVector};
+use tpt_math_linalg::tpt_math_linalg_dense::DVector;
 
+pub use constants::*;
+pub use environment::{atmospheric_density, in_earth_shadow, srp_acceleration};
 pub use error::AstroError;
+pub use frames::*;
 
+mod constants;
+mod environment;
 mod error;
-
-/// Gravitational parameter of the Earth, μ = GM, in km³·s⁻².
-///
-/// Useful as a default when working in Earth-Centered Inertial (ECI) frames
-/// with kilometre and second units.
-pub const EARTH_MU: f64 = 398_600.441_8;
-
-/// Earth's second zonal harmonic `J₂` (dimensionless), the leading oblateness
-/// term that drives nodal regression and apsidal precession.
-pub const EARTH_J2: f64 = 1.082_626_68e-3;
-
-/// Earth's equatorial radius `Rₑ` in km, the reference length for the `J₂`
-/// perturbation (the perturbation scales as `(Rₑ/p)²`).
-pub const EARTH_RADIUS_EQ: f64 = 6378.137;
-
-/// Earth's fourth zonal harmonic `J₄` (dimensionless), the next zonal
-/// oblateness term after `J₂`.
-pub const EARTH_J4: f64 = -1.620_836_15e-6;
-
-/// Reference atmospheric density (kg/m³) for the single-band exponential
-/// Earth atmosphere model, evaluated at [`EARTH_ATM_H0_KM`].
-///
-/// Coefficients are consistent with the ~400 km altitude band of the
-/// exponential atmospheric density model tabulated in Vallado,
-/// *Fundamentals of Astrodynamics and Applications*, 4th ed., Table 8-4
-/// ("Exponential Atmospheric Density Model"), which piecewise-fits Earth's
-/// atmosphere with `ρ(h) = ρ0 · exp(-(h - h0) / H)` in each altitude band.
-/// Adequate for order-of-magnitude drag work in the ~300-500 km LEO band;
-/// not a substitute for a full reference atmosphere (e.g. NRLMSISE-00) for
-/// precision work.
-pub const EARTH_ATM_RHO0_KG_M3: f64 = 5.428e-13;
-
-/// Reference altitude (km) for [`EARTH_ATM_RHO0_KG_M3`] /
-/// [`EARTH_ATM_SCALE_HEIGHT_KM`].
-pub const EARTH_ATM_H0_KM: f64 = 400.0;
-
-/// Atmospheric scale height (km) for the ~400 km exponential density band
-/// (see [`EARTH_ATM_RHO0_KG_M3`]).
-pub const EARTH_ATM_SCALE_HEIGHT_KM: f64 = 58.515;
-
-/// Solar radiation pressure at 1 AU, in N/m² (solar constant / speed of
-/// light, ≈ 1361 W/m² / 2.998e8 m/s).
-pub const SOLAR_PRESSURE_1AU: f64 = 4.56e-6;
-
-/// One astronomical unit, in km.
-pub const ASTRONOMICAL_UNIT_KM: f64 = 1.495_978_707e8;
-
-/// Gravitational parameter of the Sun, `μ☉ = GM☉`, in km³·s⁻².
-pub const SUN_MU: f64 = 1.327_124_400_18e11;
-
-/// Gravitational parameter of the Moon, `μ_Moon = GM_Moon`, in km³·s⁻².
-pub const MOON_MU: f64 = 4_902.800_66;
-
-/// Mean Earth-Moon distance, in km.
-pub const MOON_DISTANCE_KM: f64 = 384_400.0;
+mod frames;
 
 /// A classical (Keplerian) set of orbital elements describing an elliptical
 /// orbit in an Earth-Centered Inertial (ECI) frame.
@@ -629,150 +580,6 @@ impl OrbitalElements {
             mu: in_plane.mu,
         }
     }
-}
-
-/// Exponential atmospheric density model, `ρ(h) = ρ0 · exp(-(h - h0) / H)`.
-///
-/// A single-band exponential fit to Earth's atmosphere (see
-/// [`EARTH_ATM_RHO0_KG_M3`] for the reference and its limitations), adequate
-/// for order-of-magnitude drag estimates in the ~300-500 km LEO band.
-/// `altitude_km` is the geodetic altitude above the Earth's surface in km.
-/// Returns density in kg/m³.
-///
-/// # Examples
-///
-/// ```
-/// use tpt_sci_astro::{atmospheric_density, EARTH_ATM_H0_KM, EARTH_ATM_RHO0_KG_M3};
-/// let rho = atmospheric_density(EARTH_ATM_H0_KM);
-/// assert!((rho - EARTH_ATM_RHO0_KG_M3).abs() < 1e-20);
-/// assert!(atmospheric_density(500.0) < rho); // density falls off with altitude
-/// ```
-#[must_use]
-pub fn atmospheric_density(altitude_km: f64) -> f64 {
-    EARTH_ATM_RHO0_KG_M3 * (-(altitude_km - EARTH_ATM_H0_KM) / EARTH_ATM_SCALE_HEIGHT_KM).exp()
-}
-
-/// Cylindrical Earth-shadow (eclipse) test.
-///
-/// Returns `true` when `pos` (satellite position relative to the central
-/// body, km) lies within the infinite cylinder of radius `earth_radius`
-/// extending anti-sunward from the Earth, i.e. the satellite is
-/// geometrically eclipsed under the standard cylindrical-shadow
-/// approximation (ignoring the Sun's finite angular size / penumbra, which
-/// is adequate for cannonball SRP on/off modeling).
-///
-/// `sun_pos` is the Sun's position relative to the central body (same frame
-/// and units as `pos`, e.g. ECI km).
-#[must_use]
-pub fn in_earth_shadow(pos: &DVector<f64>, sun_pos: &DVector<f64>, earth_radius: f64) -> bool {
-    let sun_dist = sun_pos.norm();
-    if sun_dist <= 0.0 {
-        return false;
-    }
-    let sun_dir = sun_pos.clone() * (1.0 / sun_dist);
-    let along = pos.dot(&sun_dir);
-    if along >= 0.0 {
-        // Satellite is on the sunward side (or in the terminator plane): lit.
-        return false;
-    }
-    let perp = pos.clone() - sun_dir * along;
-    perp.norm() < earth_radius
-}
-
-/// Cannonball-model solar radiation pressure acceleration magnitude, in
-/// km/s².
-///
-/// `cr` is the dimensionless radiation-pressure coefficient (`1` for a
-/// perfectly absorbing surface, up to `2` for perfectly reflecting),
-/// `area_to_mass_m2_per_kg` is `A/m` in m²/kg, and `sun_distance_km` is the
-/// satellite-to-Sun distance. `P_srp` at 1 AU is [`SOLAR_PRESSURE_1AU`],
-/// scaled by the inverse-square law to the actual Sun distance:
-/// `F = P_srp · Cr · A/m`.
-#[must_use]
-pub fn srp_acceleration(cr: f64, area_to_mass_m2_per_kg: f64, sun_distance_km: f64) -> f64 {
-    let p_srp = SOLAR_PRESSURE_1AU * (ASTRONOMICAL_UNIT_KM / sun_distance_km).powi(2);
-    let accel_m_s2 = p_srp * cr * area_to_mass_m2_per_kg;
-    accel_m_s2 / 1000.0
-}
-
-/// The 3×3 rotation matrix `Q` that maps perifocal-frame coordinates to ECI.
-///
-/// `Q` is built from the right ascension of the ascending node `raan`, the
-/// inclination `i`, and the argument of periapsis `argp`.
-#[must_use]
-pub fn perifocal_to_eci(raan: f64, i: f64, argp: f64) -> DMatrix<f64> {
-    let c_o = raan.cos();
-    let s_o = raan.sin();
-    let ci = i.cos();
-    let si = i.sin();
-    let cw = argp.cos();
-    let sw = argp.sin();
-
-    DMatrix::from_fn(3, 3, |row, col| match (row, col) {
-        (0, 0) => c_o * cw - s_o * sw * ci,
-        (0, 1) => -c_o * sw - s_o * cw * ci,
-        (0, 2) => s_o * si,
-        (1, 0) => s_o * cw + c_o * sw * ci,
-        (1, 1) => -s_o * sw + c_o * cw * ci,
-        (1, 2) => -c_o * si,
-        (2, 0) => sw * si,
-        (2, 1) => cw * si,
-        (2, 2) => ci,
-        _ => 0.0,
-    })
-}
-
-/// Cross product of two 3-vectors, `a × b`.
-///
-/// The inputs are treated as 3-vectors; only the first three components are
-/// used. Returns a length-3 [`DVector`].
-#[must_use]
-pub fn cross3(a: &DVector<f64>, b: &DVector<f64>) -> DVector<f64> {
-    DVector::from_vec(vec![
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ])
-}
-
-/// Convert a true anomaly `nu` to an eccentric anomaly `E` for eccentricity `e`.
-#[must_use]
-pub fn true_to_eccentric(nu: f64, e: f64) -> f64 {
-    let s = (1.0 - e).sqrt() * (nu / 2.0).sin();
-    let c = (1.0 + e).sqrt() * (nu / 2.0).cos();
-    2.0 * s.atan2(c)
-}
-
-/// Convert an eccentric anomaly `E` to a true anomaly `nu` for eccentricity `e`.
-#[must_use]
-pub fn eccentric_to_true(ecc: f64, e: f64) -> f64 {
-    let s = (1.0 + e).sqrt() * (ecc / 2.0).sin();
-    let c = (1.0 - e).sqrt() * (ecc / 2.0).cos();
-    2.0 * s.atan2(c)
-}
-
-/// Solve Kepler's equation `M = E - e·sin(E)` for `E` via Newton iteration.
-///
-/// Converges quadratically for `0 ≤ e < 1`. The iteration is seeded with
-/// `E₀ = M + e·sin(M)`, a first-order series approximation of the solution
-/// (Danby 1992, ch. 6). Unlike a bare `E₀ = M` seed this stays close to the
-/// root for near-parabolic orbits (`e → 1`), where `E ≈ M + e` and a `M` seed
-/// degrades badly. A finite-difference step guards the derivative singularity
-/// as `e → 1` so the loop still terminates when `1 - e·cos(E)` approaches zero.
-#[must_use]
-pub fn solve_kepler(m: f64, e: f64) -> f64 {
-    debug_assert!((0.0..1.0).contains(&e), "solve_kepler requires 0 ≤ e < 1");
-    let mut ecc = m + e * m.sin();
-    for _ in 0..60 {
-        let f = ecc - e * ecc.sin() - m;
-        let fp = 1.0 - e * ecc.cos();
-        let delta = f / fp;
-        ecc -= delta;
-        if delta.abs() < 1e-12 {
-            break;
-        }
-    }
-    ecc
 }
 
 #[cfg(test)]

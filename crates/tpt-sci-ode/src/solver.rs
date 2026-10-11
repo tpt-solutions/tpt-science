@@ -5,7 +5,7 @@
 //!
 //! * [`Method::Tsit45`] — explicit Runge–Kutta 5(4) (Dormand–Prince),
 //!   non-stiff.
-//! * [`Method::TrBdf2`] — 2-stage SDIRK (TR-BDF2 family), A-/L-stable, stiff.
+//! * [`Method::TrBdf2`] — TR-BDF2 (3-stage ESDIRK form), A-/L-stable, stiff.
 //! * [`Method::Esdirk34`] — 4-stage ESDIRK order 3(4), A-/L-stable, stiff.
 //! * [`Method::Bdf`] — variable-order (1–5) backward differentiation, stiff.
 //!
@@ -13,7 +13,8 @@
 //! dense output via Hermite interpolation.
 
 use crate::error::OdeError;
-use crate::linalg::{DMat, NEWTON_TOL, Tol, eval, jacobian, sdirk_stage};
+use crate::events::{Direction, Event, EventHit, EventSolution, bisect_root};
+use crate::linalg::{DMat, NEWTON_TOL, RhsFn, Tol, eval, jacobian, sdirk_stage};
 use crate::problem::OdeProblem;
 
 /// Integration method selection for [`OdeProblem::solve`].
@@ -86,12 +87,25 @@ fn try_step(
 }
 
 /// Adaptive-step driver shared by `solve` and `solve_dense`.
+/// Result of one call to [`integrate`].
+struct Integration {
+    /// Recorded states at the `t_eval` points (empty when no `t_eval` was given).
+    outputs: Vec<Vec<f64>>,
+    /// Time where integration stopped.
+    t_end: f64,
+    /// State at `t_end`.
+    y_end: Vec<f64>,
+    /// Event crossings, in time order.
+    hits: Vec<EventHit>,
+}
+
 fn integrate(
     prob: &OdeProblem,
     method: Method,
     t_final: f64,
     t_eval: Option<&[f64]>,
-) -> Result<Vec<Vec<f64>>, OdeError> {
+    events: &[Event],
+) -> Result<Integration, OdeError> {
     let f = &*prob.rhs;
     let rtol = prob.rtol;
     let atol = prob.atol;
@@ -142,6 +156,7 @@ fn integrate(
         }
     }
 
+    let mut hits: Vec<EventHit> = Vec::new();
     let mut steps = 0usize;
     loop {
         let h_to_final = dir * (t_final - t);
@@ -226,6 +241,35 @@ fn integrate(
                 }
                 next = dir * next.abs().min(h_max);
 
+                // Locate event crossings inside this step. A terminal event
+                // ends the integration at its crossing time.
+                if let Some((te, y_te, f_te)) =
+                    detect_events(events, f, t, &y, &f_cur, &res, &mut hits)?
+                {
+                    let stop = StepResult {
+                        t: te,
+                        y: y_te.clone(),
+                        err: Vec::new(),
+                        f_new: f_te,
+                    };
+                    record_outputs(
+                        t,
+                        &y,
+                        &f_cur,
+                        &stop,
+                        t_eval,
+                        &mut eval_idx,
+                        dir,
+                        &mut outputs,
+                    );
+                    return Ok(Integration {
+                        outputs,
+                        t_end: te,
+                        y_end: y_te,
+                        hits,
+                    });
+                }
+
                 record_outputs(
                     t,
                     &y,
@@ -285,10 +329,63 @@ fn integrate(
         }
     }
 
-    if t_eval.is_none() {
-        return Ok(vec![y]);
+    Ok(Integration {
+        outputs,
+        t_end: t,
+        y_end: y,
+        hits,
+    })
+}
+
+/// A terminal stop: crossing time, state there, and derivative there.
+type StopState = (f64, Vec<f64>, Vec<f64>);
+
+/// Check every event for a sign change across the accepted step `t0 → res.t`.
+///
+/// Each crossing is located by bisection on the step's Hermite interpolant and
+/// appended to `hits` in time order. If a terminal event fires, returns the
+/// crossing time, state and derivative so the caller can stop there; later
+/// crossings in the same step are discarded.
+fn detect_events(
+    events: &[Event],
+    f: &RhsFn<'_>,
+    t0: f64,
+    y0: &[f64],
+    f0: &[f64],
+    res: &StepResult,
+    hits: &mut Vec<EventHit>,
+) -> Result<Option<StopState>, OdeError> {
+    if events.is_empty() {
+        return Ok(None);
     }
-    Ok(outputs)
+    let interp = |tau: f64| hermite(t0, y0, f0, res.t, &res.y, &res.f_new, tau);
+
+    let mut found: Vec<(f64, usize, Direction)> = Vec::new();
+    for (idx, ev) in events.iter().enumerate() {
+        let g0 = ev.eval(t0, y0);
+        let g1 = ev.eval(res.t, &res.y);
+        if let Some(dir) = ev.crossing(g0, g1) {
+            let te = bisect_root(t0, g0, res.t, |tau| ev.eval(tau, &interp(tau)));
+            found.push((te, idx, dir));
+        }
+    }
+    // Sort by distance travelled from t0, so simultaneous crossings keep time order.
+    found.sort_by(|a, b| (a.0 - t0).abs().total_cmp(&(b.0 - t0).abs()));
+
+    for (te, idx, dir) in found {
+        let y_te = interp(te);
+        hits.push(EventHit {
+            index: idx,
+            t: te,
+            y: y_te.clone(),
+            direction: dir,
+        });
+        if events[idx].is_terminal() {
+            let f_te = eval(f, te, &y_te)?;
+            return Ok(Some((te, y_te, f_te)));
+        }
+    }
+    Ok(None)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -465,13 +562,21 @@ fn step_dp54(
 }
 
 // ---------------------------------------------------------------------------
-// TR-BDF2 — 2-stage SDIRK, A-/L-stable, stiff.
-// Standard coefficients: γ = 2 - √2 ≈ 0.585786
+// TR-BDF2 — 3-stage ESDIRK form (explicit first row), A-/L-stable, stiff.
+// Bank et al. (1985). γ = 2 - √2 ≈ 0.585786 is the split point; d = γ/2.
+//
+// Stage 1 (trapezoid over [t, t+γh]): y_s = y + d·h·(k0 + k1), k1 = f(t+γh, y_s).
+// Stage 2 (BDF2 over [t, t+h]):       y₊ = y + h·(w0·k0 + w1·k1 + w2·k2),
+//                                     k2 = f(t+h, y₊).
+// Consistency: row sums equal the abscissae (γ and 1) and the weights satisfy
+// Σw = 1 and w·c = 1/2, so the scheme is second order.
 // ---------------------------------------------------------------------------
 
-const TRBDF2_GAMMA: f64 = 0.5857864376269049; // 2 - sqrt(2)
-const TRBDF2_B1: f64 = 0.8535533905932737; // 1/(2γ) = (2+√2)/4
-const TRBDF2_B2: f64 = 0.1464466094067263; // 1 - b1 = (2-√2)/4
+const TRBDF2_GAMMA: f64 = 0.585_786_437_626_904_9; // 2 - sqrt(2)
+const TRBDF2_D: f64 = TRBDF2_GAMMA / 2.0;
+const TRBDF2_W0: f64 = 0.353_553_390_593_273_73; // 1 / (2(2 - γ)) = 1/(2√2)
+const TRBDF2_W1: f64 = TRBDF2_W0;
+const TRBDF2_W2: f64 = 0.292_893_218_813_452_5; // (1 - γ) / (2 - γ)
 
 fn step_sdirk2(
     f: &dyn crate::RhsCallable,
@@ -482,33 +587,33 @@ fn step_sdirk2(
 ) -> Result<StepResult, OdeError> {
     let n = y.len();
     let g = TRBDF2_GAMMA;
+    let d = TRBDF2_D;
     let f_start = eval(f, t, y)?;
 
-    // Stage 1 (c = g): k1 = f(t + g·h, y + g·h·k1).
-    let k1 = sdirk_stage(f, t + g * h, y, g * h, &f_start, tol)?;
-
-    // Stage 2 (c = 1): k2 = f(t + h, y + h·g·k1 + h·g·k2).
-    let base2: Vec<f64> = y
+    // Stage 1: k1 = f(t + γh, y + d·h·k0 + d·h·k1) — an SDIRK solve with the
+    // explicit part of the trapezoid folded into the base state.
+    let base1: Vec<f64> = y
         .iter()
-        .zip(&k1)
-        .map(|(yi, k1i)| yi + h * g * k1i)
+        .zip(&f_start)
+        .map(|(yi, k0i)| yi + d * h * k0i)
         .collect();
-    let k2 = sdirk_stage(f, t + h, &base2, g * h, &k1, tol)?;
+    let k1 = sdirk_stage(f, t + g * h, &base1, d * h, &f_start, tol)?;
 
-    // Order-2 solution: b = [1/(2γ), 1 - 1/(2γ)].
-    let b1 = TRBDF2_B1;
-    let b2 = TRBDF2_B2;
-    let mut y_new = y.to_vec();
-    for i in 0..n {
-        y_new[i] += h * (b1 * k1[i] + b2 * k2[i]);
-    }
-    let f_new = eval(f, t + h, &y_new)?;
+    // Stage 2: y₊ = y + h(w0·k0 + w1·k1) + h·w2·k2, k2 = f(t + h, y₊).
+    let base2: Vec<f64> = (0..n)
+        .map(|i| y[i] + h * (TRBDF2_W0 * f_start[i] + TRBDF2_W1 * k1[i]))
+        .collect();
+    let k2 = sdirk_stage(f, t + h, &base2, TRBDF2_W2 * h, &k1, tol)?;
+
+    let y_new: Vec<f64> = (0..n).map(|i| base2[i] + TRBDF2_W2 * h * k2[i]).collect();
+    // k2 = f(t + h, y_new) by construction, so the derivative at the end of the
+    // step is already available without another RHS evaluation.
+    let f_new = k2;
 
     // Embedded error: the difference between the TR-BDF2 solution and the full-step
     // trapezoidal solution y + h/2·(f(t, y) + f(t + h, y_new)). Both are second
     // order, so their difference is O(h³) locally, which matches the controller
-    // exponent in `Method::error_order`. (The trapezoid built from the stage value
-    // k1 at t + γh would instead be off by O(h²).)
+    // exponent in `Method::error_order`.
     let err: Vec<f64> = (0..n)
         .map(|i| y_new[i] - (y[i] + 0.5 * h * (f_start[i] + f_new[i])))
         .collect();
@@ -530,11 +635,14 @@ const ESDIRK34_C2: f64 = 0.871_733_043_016_918; // 2·gamma
 const ESDIRK34_C3: f64 = 0.468_238_744_851_844_4;
 const ESDIRK34_A31: f64 = 0.140_737_774_724_706_2;
 const ESDIRK34_A32: f64 = -0.108_365_551_381_320_8;
-// B weights (order 3): normalized so sum = 1, with B[3] = gamma.
+// B weights (order 3, stiffly accurate: the last weight is γ, which equals the
+// final stage's diagonal, so y_{n+1} = Y_4). Solved from the order-1..3 conditions
+// Σb = 1, Σb·c = 1/2, Σb·c² = 1/3, Σ_i b_i Σ_j a_ij c_j = 1/6 with the A-row
+// coefficients above; the residual of every condition is ~1e-17.
 const ESDIRK34_B: [f64; 4] = [
-    0.100_960_408_728_323_61,  // b1 adjusted
-    -0.363_571_372_314_843_65, // b2 adjusted
-    0.826_710_463_078_075,     // b3 adjusted
+    0.102_399_400_616_089,
+    -0.376_878_452_267_324,
+    0.838_612_530_188_334,
     ESDIRK34_GAMMA,
 ];
 // Embedded weights (order 4): sum to 1.
@@ -903,8 +1011,60 @@ impl OdeProblem {
     /// Returns [`OdeError`] if the integration fails (non-convergent Newton
     /// step, collapsed step size, or step budget exceeded).
     pub fn solve(&self, method: Method, t_final: f64) -> Result<Vec<f64>, OdeError> {
-        let out = integrate(self, method, t_final, None)?;
-        Ok(out.into_iter().next().unwrap_or_else(|| self.y0.clone()))
+        Ok(integrate(self, method, t_final, None, &[])?.y_end)
+    }
+
+    /// Integrate to `t_final` while watching the given [`Event`]s.
+    ///
+    /// Every sign change of an event function is reported in
+    /// [`EventSolution::hits`]. Each crossing is bracketed by the accepted step
+    /// and located by bisection on that step's cubic-Hermite dense output, so its
+    /// accuracy is that of the interpolant (roughly `O(h⁴)` per step), not
+    /// round-off. If a terminal event fires, integration stops at its
+    /// crossing and [`EventSolution::t_end`] is that time; otherwise `t_end` is
+    /// `t_final`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OdeError`] if the integration fails (see [`OdeProblem::solve`]).
+    ///
+    /// # Examples
+    ///
+    /// A bouncing ball that hits the floor at `t = √(2h/g)`:
+    ///
+    /// ```
+    /// use tpt_sci_ode::{Method, OdeProblem};
+    /// use tpt_sci_ode::events::{Direction, Event};
+    ///
+    /// // State [height, velocity]; g = 9.81.
+    /// let prob = OdeProblem::new(
+    ///     |_t, y, dy| {
+    ///         dy[0] = y[1];
+    ///         dy[1] = -9.81;
+    ///     },
+    ///     vec![10.0, 0.0],
+    ///     0.0,
+    /// )
+    /// .unwrap();
+    /// let floor = Event::new(|_t, y| y[0])
+    ///     .direction(Direction::Falling)
+    ///     .terminal();
+    /// let sol = prob.solve_events(Method::Tsit45, 10.0, &[floor]).unwrap();
+    /// let expected = (2.0 * 10.0 / 9.81f64).sqrt();
+    /// assert!((sol.t_end - expected).abs() < 1e-6);
+    /// ```
+    pub fn solve_events(
+        &self,
+        method: Method,
+        t_final: f64,
+        events: &[Event],
+    ) -> Result<EventSolution, OdeError> {
+        let run = integrate(self, method, t_final, None, events)?;
+        Ok(EventSolution {
+            t_end: run.t_end,
+            y_end: run.y_end,
+            hits: run.hits,
+        })
     }
 
     /// Integrate at each time in `t_eval` (each strictly increasing and beyond
@@ -927,6 +1087,6 @@ impl OdeProblem {
         if t_eval.is_empty() {
             return Ok(Vec::new());
         }
-        integrate(self, method, *t_eval.last().unwrap(), Some(t_eval))
+        Ok(integrate(self, method, *t_eval.last().unwrap(), Some(t_eval), &[])?.outputs)
     }
 }

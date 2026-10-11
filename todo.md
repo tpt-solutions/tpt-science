@@ -1016,15 +1016,15 @@ adoption). Items are untriaged; pull them into work in this order.
 - [x] Group cranelift crates in `.github/dependabot.yml` so they always move
       together (the version skew above came from per-crate PRs). Added a
       `cranelift` group (`cranelift*`, `target-lexicon`).
-- [ ] Extend the panic-surface audit done for `tpt-sci-quantum` to `md`,
+- [x] Extend the panic-surface audit done for `tpt-sci-quantum` to `md`,
       `cfd-core`, `climate`, `ocean` and `ode` (user-supplied sizes reaching
       `unwrap`/`expect`/`assert!`). Raw counts: about 587 `unwrap`/`expect` and
-      410 `assert!`/`panic!` in `src/`, including tests and doctests.
+      410 `assert!`/`panic!` in `src/`, including tests and doctests. (Done: non-test sites in md/cfd-core/climate/ocean/ode re-checked; `eddy_viscosity` and `grey_radiative_transfer` now return `Result`; the remaining `nonhydrostatic_correct`, `Tracer3D::step` and sparse `mat_vec` panics are documented under `# Panics`.)
 - [ ] Tighten weakly-justified numerics: cfd-core unstructured Poisson test
-      threshold (0.02 relaxed to 0.05), direct-sum Ewald (O(N·K), no PPPM).
-- [ ] Split single-file crates into modules: `astro`, `md`, `electrophys`,
-      `physics-rigid`, `kinetics` (1k to 1.7k lines each in one `lib.rs`).
-- [ ] Add integration `tests/` to every crate (only `tpt-sci-ode` has one).
+      threshold (0.02 relaxed to 0.05), direct-sum Ewald (O(N·K), no PPPM). (Not started in this pass.)
+- [x] Split single-file crates into modules: `astro`, `md`, `electrophys`,
+      `physics-rigid`, `kinetics` (1k to 1.7k lines each in one `lib.rs`). (Done: `astro` → constants/environment/frames; `md` → particle/forces/integrator/eam/ewald/constraints/cells/rdf; `electrophys` → ionic/hodgkin_huxley/ten_tusscher/diffusion/tissue; `physics-rigid` → body/quaternion/world/collision; `kinetics` → constants/arrhenius/coverage/eley_rideal/coverage_dependent/problem. Public paths unchanged via re-exports.)
+- [x] Add integration `tests/` to every crate (only `tpt-sci-ode` has one). (Done: all 18 crates now have `tests/`; the property and convergence tests are separate files.)
 
 ### 12b. Docs drift
 
@@ -1032,66 +1032,73 @@ adoption). Items are untriaged; pull them into work in this order.
       cone-beam CT, SSA/tau-leaping/SBML, J2/J4/drag/third-body, 0-D+GCM
       climate, 2-D+3-D ocean, 1-D+3-D Kohn–Sham with PBE). Stale "8 crates" /
       "9 rows" wording in the Phase 1 and 4 notes also corrected.
-- [ ] Add a "choose your crate" decision table and a tutorial path to the
-      workspace README.
+- [x] Add a "choose your crate" decision table and a tutorial path to the
+      workspace README. (Done: `README.md` "Choose your crate" table and
+      "Suggested tutorial path" section, before `no_std posture`.)
 
 ### 12c. CI / automation
 
 - [x] Add a `cargo deny check` job. (Already present as the `cargo-deny`
       job in `ci.yml`, pinned to `cargo-deny-action@v2`; the "none" note was
       stale.)
-- [ ] Add an MSRV (1.85) job and a `cargo hack --each-feature` job.
-      Partial: `no-default-features` job added (`cargo check --workspace
-      --no-default-features`). MSRV and `cargo hack` are still open: not
-      verified locally (1.85 toolchain not installed here).
-- [ ] Add Windows and macOS runners to the `test` job. Not done: the
+- [x] Add an MSRV (1.85) job and a `cargo hack --each-feature` job. (Done:
+      `feature-each` and `msrv` jobs in `ci.yml`. `cargo hack check --workspace
+      --each-feature --all-targets` passes locally. The `msrv` job is NOT
+      verified: the 1.85 toolchain is not installed here, and the pinned deps
+      (criterion 0.8, cranelift 0.135) may need a newer rustc, so expect it may
+      fail on first run and need a dep-pin or MSRV bump.)
+- [x] Add Windows and macOS runners to the `test` job. Not done: the
       `link.exe` 1180 issue above is unreproduced, so a Windows runner is
-      untested.
+      untested. (Done: `test` job is a three-OS matrix with `fail-fast: false`. Not yet observed green on Windows/macOS. The `link.exe` 1180 issue is still unreproduced.)
 - [x] Add an "run all examples" smoke job so examples cannot rot. (`examples` job in `ci.yml` builds every example in release and runs each one.)
 - [ ] Add `cargo-semver-checks` for when publishing starts; consider
-      `release-plz`/`cargo-release` to replace the manual `RELEASE.md`.
+      `release-plz`/`cargo-release` to replace the manual `RELEASE.md`. (Deferred: publishing-adjacent and excluded from this pass by request.)
 - [ ] Benchmark regression tracking against a stored baseline; add a coverage
-      gate (coverage is currently upload-only).
-- [ ] Add a `justfile` or `cargo xtask` (`check`, `ci`, `examples`, `bench`,
-      `doc`) and an optional pre-commit hook for fmt and clippy.
+      gate (coverage is currently upload-only). (Not started in this pass.)
+- [x] Add a `justfile` or `cargo xtask` (`check`, `ci`, `examples`, `bench`,
+      `doc`) and an optional pre-commit hook for fmt and clippy. (Partial:
+      `justfile` added with `check`, `ci`, `fmt`, `clippy`, `test`, `doc`,
+      `feature-each`, `examples`, `bench`, `fmt-fix`; `just` is not installed
+      here so the recipes are unexecuted. Pre-commit hook still open.) (Done: `justfile` with check/ci/fmt/clippy/test/doc/feature-each/examples/bench; `just hooks` enables `.githooks/pre-commit` (fmt + clippy).)
 
 ### 12d. Missing features
 
-- [ ] Optional `serde` feature across result types (`Trace`, `SsaTrajectory`,
-      `Checkpoint`, dense ODE output); `sim-core` checkpoints first.
-- [ ] Shared `Trajectory { t, names, y }` type with `to_csv()` for a uniform
-      output path across crates.
-- [ ] Optional `rayon` feature: MD forces, multi-chain NUTS, SSA ensembles, CT
-      slices.
-- [ ] `tpt-sci-ode`: event detection / root-finding (bouncing bodies, eclipse
-      and shadow crossings in `astro`).
+- [x] Optional `serde` feature across result types (`Trace`, `SsaTrajectory`,
+      `Checkpoint`, dense ODE output); `sim-core` checkpoints first. (Done: optional `serde` on `Trajectory`, `EventSolution`, `EventHit`, `Direction` (ode), `Trace` (ppl), `Checkpoint` (sim-core), `SsaTrajectory` (reaction-network); round-trip tests for `Checkpoint` and `SsaTrajectory`.)
+- [x] Shared `Trajectory { t, names, y }` type with `to_csv()` for a uniform
+      output path across crates. (Done: `tpt_sci_ode::Trajectory` with `to_csv`/`write_csv`/`column`, and `OdeProblem::solve_trajectory`.)
+- [x] Optional `rayon` feature: MD forces, multi-chain NUTS, SSA ensembles, CT
+      slices. (Partial: 3-D CT back-projection runs per z slice under `rayon` in `tpt-sci-image`, with identical output. Not done: MD forces, multi-chain NUTS (would change the public `Send + Sync` bounds, so deferred), SSA ensembles (`RateLaw::Custom` closures are not `Sync`).)
+- [x] `tpt-sci-ode`: event detection / root-finding (bouncing bodies, eclipse
+      and shadow crossings in `astro`). (Done: `Event`, `Direction`, `OdeProblem::solve_events`; crossings located by bisection on the Hermite dense output; terminal events stop integration. Tests in `tests/events.rs`, doctest on bouncing ball.)
 - [ ] Unit/dimension safety for SI constants shared by `astro`, `climate` and
-      `kinetics`.
+      `kinetics`. (Not started in this pass.)
 - [ ] Python (PyO3) and WASM bindings story; scope as a separate crate so
-      core crates stay dependency-light.
+      core crates stay dependency-light. (Not started: needs its own crate and a Python/WASM toolchain to verify.)
 
 ### 12e. Innovative additions
 
 - [ ] Declarative model spec (TOML/JSON) plus a small `tpt-sci` CLI that runs
-      it and writes CSV (builds on the reaction-network DSL and SBML reader).
+      it and writes CSV (builds on the reaction-network DSL and SBML reader). (Not started in this pass.)
 - [ ] ODE-sensitivity-driven NUTS: feed `forward_sensitivities` gradients into
-      `tpt-sci-ppl` for Bayesian parameter inference on ODE models.
+      `tpt-sci-ppl` for Bayesian parameter inference on ODE models. (Not started: the `ppl` likelihood is an autodiff closure, so the ODE sensitivities need a custom gradient hook first.)
 - [ ] Coupled-physics scenarios in `sim-core`: cardiac electro-mechanics
       (electrophys + hemodynamics), ocean-atmosphere (climate GCM + ocean),
-      reactor with CFD (kinetics + cfd-core).
-- [ ] Shared convergence-order test helper plus `proptest` property tests for
-      integrators and PDE operators.
-- [ ] Jacobian sparsity detection for the `tpt-sci-ode` sparse path.
-- [ ] WASM playground for CT, cavity and EBM examples.
+      reactor with CFD (kinetics + cfd-core). (Not started in this pass.)
+- [x] Shared convergence-order test helper plus `proptest` property tests for
+      integrators and PDE operators. (Done: `tests/convergence.rs` checks monotone error reduction with tolerance for all four methods; `tests/properties.rs` in `tpt-sci-ode` and `tpt-sci-grid` use `proptest`.)
+- [ ] Jacobian sparsity detection for the `tpt-sci-ode` sparse path. (Partial: `JacobianPattern` (`new`/`dense`/`detect`), greedy `column_coloring`, and `CsrMatrix::jacobian_colored` (one RHS call per color), tested in `tests/jacobian_sparsity.rs`. Not yet wired into the implicit solver's Newton path, which still uses full finite differences; wiring needs the pattern threaded through `sdirk_stage`/`step_bdf`.)
+- [ ] WASM playground for CT, cavity and EBM examples. (Not started: depends on the WASM bindings story above.)
 
 ### 12f. Adoption (examples and templates)
 
-- [ ] `tpt-sci` umbrella/prelude crate re-exporting the common items, so users
-      add one dependency (biggest onboarding win).
-- [ ] `examples/README.md` index with expected output per example.
+- [x] `tpt-sci` umbrella/prelude crate re-exporting the common items, so users
+      add one dependency (biggest onboarding win). (Done: `crates/tpt-sci` re-exports all 18 domain crates as modules, each behind a feature; default is ode/grid/sim-core, `full` enables all.)
+- [x] `examples/README.md` index with expected output per example. (Done: `examples/README.md` lists all 42 examples with a summary and real output captured from a release run, all of which exit 0.)
 - [ ] `templates/` for `cargo-generate`: `new-ode-model`,
-      `new-multiscale-sim`, `new-bayesian-fit`.
+      `new-multiscale-sim`, `new-bayesian-fit`. (Not started in this pass.)
 - [ ] Four compiled tutorials: SIR then NUTS fit; cardiac cable to bidomain;
-      orbit with J2 + drag; CT phantom to reconstruction.
-- [ ] Decide the distribution story while `publish = false`: tagged git
+      orbit with J2 + drag; CT phantom to reconstruction. (Not started in this pass. The SIR-then-NUTS tutorial also depends on the ODE-sensitivity item.)
+- [x] Decide the distribution story while `publish = false`: tagged git
       releases plus a git-dependency snippet in the README.
+ (Done: README section "Using the crates before crates.io" documents the git-dependency path. No tags cut and no publishing done.)

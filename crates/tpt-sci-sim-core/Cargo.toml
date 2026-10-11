@@ -23,7 +23,11 @@ tpt-sci-grid = { workspace = true }
 tpt-math-linalg = { workspace = true }
 thiserror = { workspace = true }
 
+# Optional (de)serialization of result types.
+serde = { version = "1", features = ["derive"], optional = true }
+
 [dev-dependencies]
+serde_json = "1"
 criterion = { workspace = true }
 # For the multi-scale cookbook example (reaction network -> sim-core coupling).
 tpt-sci-reaction-network = { version = "0.1.0", path = "../tpt-sci-reaction-network" }
@@ -38,3 +42,11 @@ all-features = true
 [[bench]]
 name = "sim_core"
 harness = false
+
+[features]
+# serde (de)serialization for result types. Off by default.
+serde = ["dep:serde"]
+
+[[test]]
+name = "serde_roundtrip"
+required-features = ["serde"]

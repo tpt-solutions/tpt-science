@@ -28,6 +28,7 @@ thiserror = { workspace = true }
 sparse = []
 
 [dev-dependencies]
+proptest = "1"
 approx = { workspace = true }
 criterion = { workspace = true }
 
@@ -40,3 +41,7 @@ all-features = true
 [[bench]]
 name = "laplacian"
 harness = false
+
+[[test]]
+name = "properties"
+required-features = ["sparse"]

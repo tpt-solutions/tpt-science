@@ -489,6 +489,235 @@ pub(crate) fn sdirk_stage_sparse(
     })
 }
 
+/// Structural sparsity of a Jacobian: for each row, the columns that may be
+/// nonzero.
+///
+/// Supplying the pattern lets [`CsrMatrix::jacobian_colored`] differentiate
+/// several structurally independent columns with a single RHS call, so the cost
+/// of a Jacobian drops from `n` evaluations to the number of colors.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JacobianPattern {
+    n: usize,
+    /// `rows[i]` is the sorted list of columns that can be nonzero in row `i`.
+    rows: Vec<Vec<usize>>,
+}
+
+impl JacobianPattern {
+    /// Build a pattern from per-row column lists. Each list is sorted and
+    /// deduplicated.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OdeError::Invalid`] if any column index is out of range for
+    /// `rows.len()` states.
+    pub fn new(mut rows: Vec<Vec<usize>>) -> Result<Self, OdeError> {
+        let n = rows.len();
+        for row in &mut rows {
+            row.sort_unstable();
+            row.dedup();
+            if let Some(&bad) = row.iter().find(|&&c| c >= n) {
+                return Err(OdeError::invalid(format!(
+                    "pattern column {bad} out of range for {n} states"
+                )));
+            }
+        }
+        Ok(Self { n, rows })
+    }
+
+    /// The fully dense pattern (every entry may be nonzero) for `n` states.
+    #[must_use]
+    pub fn dense(n: usize) -> Self {
+        Self {
+            n,
+            rows: (0..n).map(|_| (0..n).collect()).collect(),
+        }
+    }
+
+    /// Detect the pattern by probing `f`: column `j` is perturbed and every row
+    /// whose value changes gets an entry. Costs `n + 1` RHS evaluations.
+    ///
+    /// Detection is exact for entries whose dependence is visible at `y`. An
+    /// entry that is zero at this particular point (for example the product
+    /// `x·y` when `x = 0`) is missed, so probe at a generic state when in doubt.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any error returned by the RHS `f`.
+    pub fn detect<F>(f: F, t: f64, y: &[f64]) -> Result<Self, OdeError>
+    where
+        F: Fn(f64, &[f64], &mut [f64]) -> Result<(), OdeError>,
+    {
+        let n = y.len();
+        let mut f0 = vec![0.0; n];
+        f(t, y, &mut f0)?;
+        let mut rows: Vec<Vec<usize>> = vec![Vec::new(); n];
+        let sqrt_eps = f64::sqrt(f64::EPSILON);
+        for col in 0..n {
+            let dy = sqrt_eps * y[col].abs().max(1.0);
+            let mut yp = y.to_vec();
+            yp[col] += dy;
+            let mut fp = vec![0.0; n];
+            f(t, &yp, &mut fp)?;
+            for (row, (a, b)) in fp.iter().zip(&f0).enumerate() {
+                if a != b {
+                    rows[row].push(col);
+                }
+            }
+        }
+        Self::new(rows)
+    }
+
+    /// Number of states.
+    #[must_use]
+    pub fn n(&self) -> usize {
+        self.n
+    }
+
+    /// Number of structurally nonzero entries.
+    #[must_use]
+    pub fn nnz(&self) -> usize {
+        self.rows.iter().map(Vec::len).sum()
+    }
+
+    /// Columns that may be nonzero in row `i`.
+    #[must_use]
+    pub fn row(&self, i: usize) -> &[usize] {
+        &self.rows[i]
+    }
+
+    /// Greedy column coloring: two columns get different colors whenever they
+    /// share a row, so each color class can be perturbed together without the
+    /// contributions colliding in any row.
+    ///
+    /// Returns `(colors, n_colors)`, where `colors[j]` is column `j`'s color.
+    #[must_use]
+    pub fn column_coloring(&self) -> (Vec<usize>, usize) {
+        let mut conflicts: Vec<Vec<usize>> = vec![Vec::new(); self.n];
+        for row in &self.rows {
+            for &a in row {
+                for &b in row {
+                    if a != b {
+                        conflicts[a].push(b);
+                    }
+                }
+            }
+        }
+        let mut colors = vec![usize::MAX; self.n];
+        let mut n_colors = 0usize;
+        for j in 0..self.n {
+            let mut used = vec![false; n_colors + 1];
+            for &k in &conflicts[j] {
+                if colors[k] != usize::MAX {
+                    used[colors[k]] = true;
+                }
+            }
+            let c = used.iter().position(|&u| !u).unwrap_or(n_colors);
+            colors[j] = c;
+            n_colors = n_colors.max(c + 1);
+        }
+        (colors, n_colors)
+    }
+}
+
+impl CsrMatrix {
+    /// Jacobian `J = df/dy` by forward differences, with one RHS call per color
+    /// instead of one per column.
+    ///
+    /// Columns are grouped with [`JacobianPattern::column_coloring`]. All columns
+    /// of a color are perturbed together, and each row's entry is recovered from
+    /// the single column of that color that the row's pattern contains. The
+    /// result equals [`CsrMatrix::jacobian`] when `pattern` covers the true
+    /// structure.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any error returned by the RHS `f`, or returns
+    /// [`OdeError::Invalid`] if the pattern size does not match `y`.
+    pub fn jacobian_colored<F>(
+        f: F,
+        t: f64,
+        y: &[f64],
+        f0: &[f64],
+        pattern: &JacobianPattern,
+    ) -> Result<CsrMatrix, OdeError>
+    where
+        F: Fn(f64, &[f64], &mut [f64]) -> Result<(), OdeError>,
+    {
+        let n = y.len();
+        if pattern.n() != n {
+            return Err(OdeError::invalid(format!(
+                "pattern is for {} states, state has {n}",
+                pattern.n()
+            )));
+        }
+        let sqrt_eps = f64::sqrt(f64::EPSILON);
+        let (colors, n_colors) = pattern.column_coloring();
+        let mut members: Vec<Vec<usize>> = vec![Vec::new(); n_colors];
+        for (j, &c) in colors.iter().enumerate() {
+            members[c].push(j);
+        }
+        let mut dy = vec![0.0; n];
+        let (mut rows, mut cols, mut vals) = (Vec::new(), Vec::new(), Vec::new());
+        for (color, group) in members.iter().enumerate() {
+            let mut yp = y.to_vec();
+            for &j in group {
+                dy[j] = sqrt_eps * y[j].abs().max(1.0);
+                yp[j] += dy[j];
+            }
+            let mut fp = vec![0.0; n];
+            f(t, &yp, &mut fp)?;
+            for row in 0..n {
+                // Conflict-freeness guarantees at most one column of this color
+                // in each row's pattern.
+                let hit = pattern
+                    .row(row)
+                    .iter()
+                    .copied()
+                    .find(|&j| colors[j] == color);
+                if let Some(j) = hit {
+                    let val = (fp[row] - f0[row]) / dy[j];
+                    if val != 0.0 {
+                        rows.push(row);
+                        cols.push(j);
+                        vals.push(val);
+                    }
+                }
+            }
+            for &j in group {
+                dy[j] = 0.0;
+            }
+        }
+        Ok(CsrMatrix::from_triplets(n, rows, cols, vals))
+    }
+
+    /// Compress `(row, col, value)` triplets into CSR, with each row's entries in
+    /// ascending column order.
+    fn from_triplets(n: usize, rows: Vec<usize>, cols: Vec<usize>, vals: Vec<f64>) -> CsrMatrix {
+        let mut order: Vec<usize> = (0..rows.len()).collect();
+        order.sort_by(|&a, &b| (rows[a], cols[a]).cmp(&(rows[b], cols[b])));
+        let mut indptr = vec![0usize; n + 1];
+        for &k in &order {
+            indptr[rows[k] + 1] += 1;
+        }
+        for r in 0..n {
+            indptr[r + 1] += indptr[r];
+        }
+        let mut indices = Vec::with_capacity(vals.len());
+        let mut data = Vec::with_capacity(vals.len());
+        for &k in &order {
+            indices.push(cols[k]);
+            data.push(vals[k]);
+        }
+        CsrMatrix {
+            nrows: n,
+            ncols: n,
+            indptr,
+            indices,
+            data,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

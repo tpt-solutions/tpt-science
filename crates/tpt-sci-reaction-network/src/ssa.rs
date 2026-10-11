@@ -15,6 +15,7 @@
 /// after a reaction firing, and the final entry is the state clamped at
 /// `t_max` (so `times.last() == t_max`).
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SsaTrajectory {
     /// Event times, starting at `0.0` and ending at `t_max`.
     pub times: Vec<f64>,
