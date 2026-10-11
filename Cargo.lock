@@ -685,9 +685,9 @@ checksum = "930c7171c8df9fb1782bdf9b918ed9ed2d33d1d22300abb754f9085bc48bf8e8"
 
 [[package]]
 name = "diffsol"
-version = "0.16.2"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b324c954a5178683516e35e06051f02e3e2471d22b8175d9a01b274bd81269d"
+checksum = "00b968c69464a2c74f97377038e4a017a2b48190086f55c95902a6d00238a25a"
 dependencies = [
  "diffsol-la",
  "diffsol-nl",
@@ -701,9 +701,9 @@ dependencies = [
 
 [[package]]
 name = "diffsol-la"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fd836b0b52b6459b1e16c4ebfe267599b39c07a2eb638426a4e72a279a4e384"
+checksum = "d43ceb38a6e0d7442e87c7b2ee97c7998355b8f15da51b2a054bdabf872fd24a"
 dependencies = [
  "faer",
  "faer-traits",
@@ -714,9 +714,9 @@ dependencies = [
 
 [[package]]
 name = "diffsol-nl"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b24ab3f56ff94c563ab85e7897ba57f884617d0dc83a081028d28ec800213a1"
+checksum = "f064c45030d3ddc765101ed7464c2e89ec08e838f88a5b657d1c584ba5c3ac32"
 dependencies = [
  "diffsol-la",
  "log",
