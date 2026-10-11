@@ -17,6 +17,7 @@ categories = ["science", "simulation"]
 bench = false
 
 [dependencies]
+tpt-sci-units = { workspace = true }
 tpt-sci-ode = { workspace = true }
 tpt-sci-grid = { workspace = true, features = ["sparse"] }
 tpt-math-linalg = { workspace = true }

@@ -1,0 +1,8 @@
+[template]
+cargo_generate_version = ">=0.10.0"
+description = "A reaction-diffusion model: grid discretisation plus an ODE integrator"
+
+[placeholders.tpt_sci_spec]
+type = "string"
+prompt = "Dependency spec for tpt-sci (the part after `tpt-sci = `)"
+default = 'git = "https://github.com/tpt-solutions/tpt-science", features = ["ode", "grid"]'

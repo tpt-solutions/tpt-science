@@ -5,7 +5,7 @@
 //!
 //! * [`Method::Tsit45`] — explicit Runge–Kutta 5(4) (Dormand–Prince),
 //!   non-stiff.
-//! * [`Method::TrBdf2`] — 2-stage SDIRK (TR-BDF2 family), A-/L-stable, stiff.
+//! * [`Method::TrBdf2`] — TR-BDF2 (3-stage ESDIRK form), A-/L-stable, stiff.
 //! * [`Method::Esdirk34`] — 4-stage ESDIRK order 3(4), A-/L-stable, stiff.
 //! * [`Method::Bdf`] — variable-order (1–5) backward differentiation, stiff.
 //!
@@ -13,8 +13,10 @@
 //! dense output via Hermite interpolation.
 
 use crate::error::OdeError;
-use crate::linalg::{DMat, eval, jacobian, sdirk_stage};
+use crate::events::{Direction, Event, EventHit, EventSolution, bisect_root};
+use crate::linalg::{DMat, NEWTON_TOL, RhsFn, Tol, eval, jacobian, sdirk_stage};
 use crate::problem::OdeProblem;
+use crate::sparse::JacobianPattern;
 
 /// Integration method selection for [`OdeProblem::solve`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,13 +34,14 @@ pub enum Method {
 }
 
 impl Method {
-    /// Local error order used by the step-size controller: the embedded
-    /// estimate is `O(h^{q+1})`, so the controller exponent is `1/(q+1)`.
+    /// Exponent `q` of the local error in the step-size controller: the local
+    /// error of one step is `O(h^q)`, so the controller scales `h` by
+    /// `(target / err)^(1/q)`.
     fn error_order(self, bdf_order: usize) -> f64 {
         match self {
-            Method::Tsit45 => 4.0,                 // 5(4): error ~ h^5
-            Method::TrBdf2 => 2.0,                 // TR-BDF2: two order-2 methods, difference ~ h^3
-            Method::Esdirk34 => 3.0,               // 3(4): error ~ h^4
+            Method::Tsit45 => 5.0,                 // 5(4): local error ~ h^5
+            Method::TrBdf2 => 3.0,                 // trapezoid vs TR-BDF2 difference ~ h^3
+            Method::Esdirk34 => 4.0,               // 3(4): local error ~ h^4
             Method::Bdf => bdf_order as f64 + 1.0, // BDF-k: LTE ~ h^{k+1}
         }
     }
@@ -60,54 +63,73 @@ struct StepResult {
 /// state and a local error estimate, or `Err` if the nonlinear solve could not
 /// converge (caller should shrink `h` and retry). `bdf_state`, if `Some`, is the
 /// BDF order/history; it is updated in place on success.
+#[allow(clippy::too_many_arguments)]
 fn try_step(
     method: Method,
     f: &dyn crate::RhsCallable,
     t: f64,
     y: &[f64],
     h: f64,
+    tol: Tol,
+    jac: Option<&JacobianPattern>,
     bdf_state: Option<&mut NordsieckState>,
 ) -> Result<StepResult, OdeError> {
     match method {
         Method::Tsit45 => step_dp54(f, t, y, h),
-        Method::TrBdf2 => step_sdirk2(f, t, y, h),
-        Method::Esdirk34 => step_esdirk34(f, t, y, h),
+        Method::TrBdf2 => step_sdirk2(f, t, y, h, tol, jac),
+        Method::Esdirk34 => step_esdirk34(f, t, y, h, tol, jac),
         Method::Bdf => step_bdf(
             f,
             t,
             y,
             h,
+            tol,
+            jac,
             bdf_state.expect("BDF requires a Nordsieck state"),
         ),
     }
 }
 
 /// Adaptive-step driver shared by `solve` and `solve_dense`.
+/// Result of one call to [`integrate`].
+struct Integration {
+    /// Recorded states at the `t_eval` points (empty when no `t_eval` was given).
+    outputs: Vec<Vec<f64>>,
+    /// Time where integration stopped.
+    t_end: f64,
+    /// State at `t_end`.
+    y_end: Vec<f64>,
+    /// Event crossings, in time order.
+    hits: Vec<EventHit>,
+}
+
 fn integrate(
     prob: &OdeProblem,
     method: Method,
     t_final: f64,
     t_eval: Option<&[f64]>,
-) -> Result<Vec<Vec<f64>>, OdeError> {
+    events: &[Event],
+) -> Result<Integration, OdeError> {
     let f = &*prob.rhs;
     let rtol = prob.rtol;
     let atol = prob.atol;
+    let tol = Tol { rtol, atol };
 
     let mut t = prob.t0;
     let mut y = prob.y0.clone();
-    let mut f_cur = eval(f, t, &y);
+    let mut f_cur = eval(f, t, &y)?;
     let dir = if t_final >= t { 1.0 } else { -1.0 };
     let span = (t_final - t).abs();
 
-    let h_min = 1e-14_f64.max(span * 1e-12);
+    let h_min = 1e-14_f64.max(span * 1e-15);
     let h_max = span; // never step past the whole interval at once
     let max_steps = 100_000usize;
     let safety = 0.9_f64;
 
-    let mut h = (span * 1e-2).max(1e-6).min(h_max);
-    if dir < 0.0 {
-        h = -h;
-    }
+    // Initial step: the caller's `h0` if given, otherwise a heuristic fraction of
+    // the interval. Either way it is clamped to the step limits.
+    let h_init = prob.h0.unwrap_or(span * 1e-2).abs().max(1e-6).min(h_max);
+    let mut h = if dir < 0.0 { -h_init } else { h_init };
 
     let mut bdf_state = if method == Method::Bdf {
         let mut ns = NordsieckState::new(prob.nstates());
@@ -124,29 +146,40 @@ fn integrate(
     let mut outputs: Vec<Vec<f64>> = Vec::new();
     let mut eval_idx = 0usize;
     if let Some(te) = t_eval {
+        // Every point must lie beyond t0 and each must follow the previous one in
+        // the direction of integration. `!(x > 0)` also rejects NaN.
+        let mut prev = t;
         for &tev in te {
-            if dir * (tev - t) <= 0.0 {
+            let step = dir * (tev - prev);
+            if step.is_nan() || step <= 0.0 {
                 return Err(OdeError::invalid(
-                    "t_eval entries must be strictly increasing and beyond t0",
+                    "t_eval entries must be finite, strictly increasing, and beyond t0",
                 ));
             }
+            prev = tev;
         }
     }
 
+    let mut hits: Vec<EventHit> = Vec::new();
     let mut steps = 0usize;
     loop {
         let h_to_final = dir * (t_final - t);
         if h_to_final <= 0.0 {
             break;
         }
+        // When a step is clamped onto a target time, remember the target so the
+        // accepted step can be snapped onto it exactly (see below).
+        let mut snap: Option<f64> = None;
         if h.abs() > h_to_final {
             h = dir * h_to_final;
+            snap = Some(t_final);
         }
         if let Some(te) = t_eval {
             if eval_idx < te.len() {
                 let h_to_eval = dir * (te[eval_idx] - t);
                 if h.abs() > h_to_eval {
                     h = dir * h_to_eval;
+                    snap = Some(te[eval_idx]);
                 }
             }
         }
@@ -159,17 +192,35 @@ fn integrate(
         // Nordsieck vector inside `step_bdf`) cannot corrupt the integration.
         // On rejection we restore this snapshot before retrying.
         let bdf_snapshot = bdf_state.clone();
-        match try_step(method, f, t, &y, h, bdf_state.as_mut()) {
-            Ok(res) => {
+        match try_step(
+            method,
+            f,
+            t,
+            &y,
+            h,
+            tol,
+            prob.jac_pattern.as_ref(),
+            bdf_state.as_mut(),
+        ) {
+            Ok(mut res) => {
+                // `t + h` can land an ulp short of the target, which would leave a
+                // sliver of remaining interval and a step below `h_min`. The step
+                // was sized to end exactly on the target, so take that time as-is.
+                if let Some(target) = snap {
+                    res.t = target;
+                }
                 let err_est = weighted_norm(&res.err, &res.y, rtol, atol);
-                let accept = err_est <= 1.0 || h.abs() <= h_min * 2.0;
+                // A step is accepted only if it meets the tolerance. When the step
+                // is already at its minimum, rejection leads to `StepTooSmall` below
+                // rather than a silently inaccurate result.
+                let accept = err_est <= 1.0;
                 if !accept {
                     // Reject: restore the snapshot, shrink h, and retry without
                     // advancing. This keeps the BDF history consistent across
                     // retries (the previous behaviour let rejected steps scramble
                     // the Nordsieck columns, which eventually produced garbage).
-                    if let (Some(ns), Some(snap)) = (bdf_state.as_mut(), &bdf_snapshot) {
-                        *ns = snap.clone();
+                    if let (Some(ns), Some(saved)) = (bdf_state.as_mut(), &bdf_snapshot) {
+                        *ns = saved.clone();
                     }
                     let mut next = h * safety * 0.2_f64.max(err_est.powf(-1.0 / q));
                     if dir < 0.0 {
@@ -202,6 +253,35 @@ fn integrate(
                     next = -next.abs();
                 }
                 next = dir * next.abs().min(h_max);
+
+                // Locate event crossings inside this step. A terminal event
+                // ends the integration at its crossing time.
+                if let Some((te, y_te, f_te)) =
+                    detect_events(events, f, t, &y, &f_cur, &res, &mut hits)?
+                {
+                    let stop = StepResult {
+                        t: te,
+                        y: y_te.clone(),
+                        err: Vec::new(),
+                        f_new: f_te,
+                    };
+                    record_outputs(
+                        t,
+                        &y,
+                        &f_cur,
+                        &stop,
+                        t_eval,
+                        &mut eval_idx,
+                        dir,
+                        &mut outputs,
+                    );
+                    return Ok(Integration {
+                        outputs,
+                        t_end: te,
+                        y_end: y_te,
+                        hits,
+                    });
+                }
 
                 record_outputs(
                     t,
@@ -243,13 +323,6 @@ fn integrate(
                 f_cur = res.f_new;
                 h = next;
                 steps += 1;
-                if std::env::var("ODE_DEBUG").is_ok() {
-                    let ord = bdf_state.as_ref().map(|s| s.order).unwrap_or(0);
-                    eprintln!(
-                        "step {steps} order {ord} t={t:.4} h={h:.3e} err={err_est:.3e} y0={:.6}",
-                        y[0]
-                    );
-                }
                 if steps > max_steps {
                     return Err(OdeError::MaxSteps { t_final, max_steps });
                 }
@@ -269,10 +342,63 @@ fn integrate(
         }
     }
 
-    if t_eval.is_none() {
-        return Ok(vec![y]);
+    Ok(Integration {
+        outputs,
+        t_end: t,
+        y_end: y,
+        hits,
+    })
+}
+
+/// A terminal stop: crossing time, state there, and derivative there.
+type StopState = (f64, Vec<f64>, Vec<f64>);
+
+/// Check every event for a sign change across the accepted step `t0 → res.t`.
+///
+/// Each crossing is located by bisection on the step's Hermite interpolant and
+/// appended to `hits` in time order. If a terminal event fires, returns the
+/// crossing time, state and derivative so the caller can stop there; later
+/// crossings in the same step are discarded.
+fn detect_events(
+    events: &[Event],
+    f: &RhsFn<'_>,
+    t0: f64,
+    y0: &[f64],
+    f0: &[f64],
+    res: &StepResult,
+    hits: &mut Vec<EventHit>,
+) -> Result<Option<StopState>, OdeError> {
+    if events.is_empty() {
+        return Ok(None);
     }
-    Ok(outputs)
+    let interp = |tau: f64| hermite(t0, y0, f0, res.t, &res.y, &res.f_new, tau);
+
+    let mut found: Vec<(f64, usize, Direction)> = Vec::new();
+    for (idx, ev) in events.iter().enumerate() {
+        let g0 = ev.eval(t0, y0);
+        let g1 = ev.eval(res.t, &res.y);
+        if let Some(dir) = ev.crossing(g0, g1) {
+            let te = bisect_root(t0, g0, res.t, |tau| ev.eval(tau, &interp(tau)));
+            found.push((te, idx, dir));
+        }
+    }
+    // Sort by distance travelled from t0, so simultaneous crossings keep time order.
+    found.sort_by(|a, b| (a.0 - t0).abs().total_cmp(&(b.0 - t0).abs()));
+
+    for (te, idx, dir) in found {
+        let y_te = interp(te);
+        hits.push(EventHit {
+            index: idx,
+            t: te,
+            y: y_te.clone(),
+            direction: dir,
+        });
+        if events[idx].is_terminal() {
+            let f_te = eval(f, te, &y_te)?;
+            return Ok(Some((te, y_te, f_te)));
+        }
+    }
+    Ok(None)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -407,7 +533,7 @@ fn step_dp54(
 ) -> Result<StepResult, OdeError> {
     let n = y.len();
     let mut k = vec![vec![0.0; n]; 7];
-    k[0] = eval(f, t, y);
+    k[0] = eval(f, t, y)?;
     for s in 1..7 {
         let mut stage = vec![0.0; n];
         for i in 0..n {
@@ -420,7 +546,7 @@ fn step_dp54(
             }
             stage[i] = acc;
         }
-        k[s] = eval(f, t + h * DP_C[s], &stage);
+        k[s] = eval(f, t + h * DP_C[s], &stage)?;
     }
     let mut y_new = vec![0.0; n];
     let mut y_hat = vec![0.0; n];
@@ -439,7 +565,7 @@ fn step_dp54(
         .zip(&y_hat)
         .map(|(a, b)| a - b)
         .collect::<Vec<_>>();
-    let f_new = eval(f, t + h, &y_new);
+    let f_new = eval(f, t + h, &y_new)?;
     Ok(StepResult {
         t: t + h,
         y: y_new,
@@ -449,63 +575,62 @@ fn step_dp54(
 }
 
 // ---------------------------------------------------------------------------
-// TR-BDF2 — 2-stage SDIRK, A-/L-stable, stiff.
-// Standard coefficients: γ = 2 - √2 ≈ 0.585786
+// TR-BDF2 — 3-stage ESDIRK form (explicit first row), A-/L-stable, stiff.
+// Bank et al. (1985). γ = 2 - √2 ≈ 0.585786 is the split point; d = γ/2.
+//
+// Stage 1 (trapezoid over [t, t+γh]): y_s = y + d·h·(k0 + k1), k1 = f(t+γh, y_s).
+// Stage 2 (BDF2 over [t, t+h]):       y₊ = y + h·(w0·k0 + w1·k1 + w2·k2),
+//                                     k2 = f(t+h, y₊).
+// Consistency: row sums equal the abscissae (γ and 1) and the weights satisfy
+// Σw = 1 and w·c = 1/2, so the scheme is second order.
 // ---------------------------------------------------------------------------
 
-const TRBDF2_GAMMA: f64 = 0.5857864376269049; // 2 - sqrt(2)
-const TRBDF2_B1: f64 = 0.8535533905932737; // 1/(2γ) = (2+√2)/4
-const TRBDF2_B2: f64 = 0.1464466094067263; // 1 - b1 = (2-√2)/4
+const TRBDF2_GAMMA: f64 = 0.585_786_437_626_904_9; // 2 - sqrt(2)
+const TRBDF2_D: f64 = TRBDF2_GAMMA / 2.0;
+const TRBDF2_W0: f64 = 0.353_553_390_593_273_73; // 1 / (2(2 - γ)) = 1/(2√2)
+const TRBDF2_W1: f64 = TRBDF2_W0;
+const TRBDF2_W2: f64 = 0.292_893_218_813_452_5; // (1 - γ) / (2 - γ)
 
 fn step_sdirk2(
     f: &dyn crate::RhsCallable,
     t: f64,
     y: &[f64],
     h: f64,
+    tol: Tol,
+    jac: Option<&JacobianPattern>,
 ) -> Result<StepResult, OdeError> {
     let n = y.len();
     let g = TRBDF2_GAMMA;
-    let f_start = eval(f, t, y);
+    let d = TRBDF2_D;
+    let f_start = eval(f, t, y)?;
 
-    // Stage 1 (c = g): k1 = f(t + g·h, y + g·h·k1).
-    let k1 = sdirk_stage(f, t + g * h, y, g * h, &f_start)?;
-
-    // Stage 2 (c = 1): k2 = f(t + h, y + h·g·k1 + h·g·k2).
-    let base2: Vec<f64> = y
+    // Stage 1: k1 = f(t + γh, y + d·h·k0 + d·h·k1) — an SDIRK solve with the
+    // explicit part of the trapezoid folded into the base state.
+    let base1: Vec<f64> = y
         .iter()
-        .zip(&k1)
-        .map(|(yi, k1i)| yi + h * g * k1i)
+        .zip(&f_start)
+        .map(|(yi, k0i)| yi + d * h * k0i)
         .collect();
-    let k2 = sdirk_stage(f, t + h, &base2, g * h, &k1)?;
+    let k1 = sdirk_stage(f, t + g * h, &base1, d * h, &f_start, tol, jac)?;
 
-    // Order-2 solution: b = [1/(2γ), 1 - 1/(2γ)].
-    let b1 = TRBDF2_B1;
-    let b2 = TRBDF2_B2;
-    let mut y_new = y.to_vec();
-    for i in 0..n {
-        y_new[i] += h * (b1 * k1[i] + b2 * k2[i]);
-    }
+    // Stage 2: y₊ = y + h(w0·k0 + w1·k1) + h·w2·k2, k2 = f(t + h, y₊).
+    let base2: Vec<f64> = (0..n)
+        .map(|i| y[i] + h * (TRBDF2_W0 * f_start[i] + TRBDF2_W1 * k1[i]))
+        .collect();
+    let k2 = sdirk_stage(f, t + h, &base2, TRBDF2_W2 * h, &k1, tol, jac)?;
 
-    // Embedded error: difference between the TR-BDF2 solution and the
-    // trapezoidal rule solution (stage 1 only, extrapolated to full step).
-    // The trapezoidal solution after stage 1 is y + h*γ*k1.
-    // But stage 1 only advances by γh, so we need to scale.
-    // Standard TR-BDF2 error estimate: difference between BDF2 and trapezoidal.
-    // In SDIRK formulation: err = h * (b1*k1 + b2*k2 - (k1 + k2)/2)?
-    // Actually, use the difference between the two stage solutions.
-    // Trapezoidal: y_trap = y + h/2*(f(t,y) + k1) = y + h/2*(f_start + k1)
-    // BDF2: y_new = y + h*(b1*k1 + b2*k2)
-    // err = y_new - y_trap
-    let mut y_trap = y.to_vec();
-    for i in 0..n {
-        y_trap[i] += h * 0.5 * (f_start[i] + k1[i]);
-    }
-    let err = y_new
-        .iter()
-        .zip(&y_trap)
-        .map(|(a, b)| a - b)
-        .collect::<Vec<_>>();
-    let f_new = eval(f, t + h, &y_new);
+    let y_new: Vec<f64> = (0..n).map(|i| base2[i] + TRBDF2_W2 * h * k2[i]).collect();
+    // k2 = f(t + h, y_new) by construction, so the derivative at the end of the
+    // step is already available without another RHS evaluation.
+    let f_new = k2;
+
+    // Embedded error: the difference between the TR-BDF2 solution and the full-step
+    // trapezoidal solution y + h/2·(f(t, y) + f(t + h, y_new)). Both are second
+    // order, so their difference is O(h³) locally, which matches the controller
+    // exponent in `Method::error_order`.
+    let err: Vec<f64> = (0..n)
+        .map(|i| y_new[i] - (y[i] + 0.5 * h * (f_start[i] + f_new[i])))
+        .collect();
     Ok(StepResult {
         t: t + h,
         y: y_new,
@@ -524,11 +649,14 @@ const ESDIRK34_C2: f64 = 0.871_733_043_016_918; // 2·gamma
 const ESDIRK34_C3: f64 = 0.468_238_744_851_844_4;
 const ESDIRK34_A31: f64 = 0.140_737_774_724_706_2;
 const ESDIRK34_A32: f64 = -0.108_365_551_381_320_8;
-// B weights (order 3): normalized so sum = 1, with B[3] = gamma.
+// B weights (order 3, stiffly accurate: the last weight is γ, which equals the
+// final stage's diagonal, so y_{n+1} = Y_4). Solved from the order-1..3 conditions
+// Σb = 1, Σb·c = 1/2, Σb·c² = 1/3, Σ_i b_i Σ_j a_ij c_j = 1/6 with the A-row
+// coefficients above; the residual of every condition is ~1e-17.
 const ESDIRK34_B: [f64; 4] = [
-    0.100_960_408_728_323_61,  // b1 adjusted
-    -0.363_571_372_314_843_65, // b2 adjusted
-    0.826_710_463_078_075,     // b3 adjusted
+    0.102_399_400_616_089,
+    -0.376_878_452_267_324,
+    0.838_612_530_188_334,
     ESDIRK34_GAMMA,
 ];
 // Embedded weights (order 4): sum to 1.
@@ -544,10 +672,12 @@ fn step_esdirk34(
     t: f64,
     y: &[f64],
     h: f64,
+    tol: Tol,
+    jac: Option<&JacobianPattern>,
 ) -> Result<StepResult, OdeError> {
     let n = y.len();
     let g = ESDIRK34_GAMMA;
-    let k0 = eval(f, t, y); // explicit first stage
+    let k0 = eval(f, t, y)?; // explicit first stage
 
     // Stage 1 (c = 2g): Y1 = y + h·(g·k0 + g·k1).
     let base1: Vec<f64> = y
@@ -555,7 +685,7 @@ fn step_esdirk34(
         .zip(&k0)
         .map(|(yi, k0i)| yi + h * g * k0i)
         .collect();
-    let k1 = sdirk_stage(f, t + ESDIRK34_C2 * h, &base1, g * h, &k0)?;
+    let k1 = sdirk_stage(f, t + ESDIRK34_C2 * h, &base1, g * h, &k0, tol, jac)?;
 
     // Stage 2 (c = c3): Y2 = y + h·(a31·k0 + a32·k1 + g·k2).
     let base2: Vec<f64> = y
@@ -564,7 +694,7 @@ fn step_esdirk34(
         .zip(&k1)
         .map(|((yi, k0i), k1i)| yi + h * (ESDIRK34_A31 * k0i + ESDIRK34_A32 * k1i))
         .collect();
-    let k2 = sdirk_stage(f, t + ESDIRK34_C3 * h, &base2, g * h, &k1)?;
+    let k2 = sdirk_stage(f, t + ESDIRK34_C3 * h, &base2, g * h, &k1, tol, jac)?;
 
     // Stage 3 (c = 1): Y3 = y + h·(b0·k0 + b1·k1 + b2·k2 + g·k3).
     let base3: Vec<f64> = y
@@ -576,7 +706,7 @@ fn step_esdirk34(
             yi + h * (ESDIRK34_B[0] * k0i + ESDIRK34_B[1] * k1i + ESDIRK34_B[2] * k2i)
         })
         .collect();
-    let k3 = sdirk_stage(f, t + h, &base3, g * h, &k2)?;
+    let k3 = sdirk_stage(f, t + h, &base3, g * h, &k2, tol, jac)?;
 
     let ks = [&k0, &k1, &k2, &k3];
     let mut y_new = y.to_vec();
@@ -596,7 +726,7 @@ fn step_esdirk34(
         .zip(&y_hat)
         .map(|(a, b)| a - b)
         .collect::<Vec<_>>();
-    let f_new = eval(f, t + h, &y_new);
+    let f_new = eval(f, t + h, &y_new)?;
     Ok(StepResult {
         t: t + h,
         y: y_new,
@@ -762,6 +892,8 @@ fn step_bdf(
     t: f64,
     _y: &[f64],
     h: f64,
+    tol: Tol,
+    jac: Option<&JacobianPattern>,
     state: &mut NordsieckState,
 ) -> Result<StepResult, OdeError> {
     let n = state.n();
@@ -786,43 +918,44 @@ fn step_bdf(
 
     // Newton corrector for the FLC-BDF equation
     //   y_c - y_p - γ·(f(t+h, y_c) - ẏ_p) = 0,  γ = h·β0.
+    // Convergence is tested on the weighted norm of the Newton correction, so
+    // the test scales with the tolerances rather than with absolute magnitudes.
     let mut y_cur = y_p.clone();
-    let mut fk = eval(f, t + h, &y_cur);
+    let mut fk = eval(f, t + h, &y_cur)?;
+    let mut corr = f64::INFINITY;
     let mut converged = false;
     for _iter in 0..30 {
-        let mut residual = vec![0.0; n];
-        let mut rnorm = 0.0;
-        for i in 0..n {
-            let r = y_cur[i] - y_p[i] - gamma * (fk[i] - ydot_p[i]);
-            residual[i] = r;
-            rnorm += r * r;
-        }
-        rnorm = rnorm.sqrt();
-        if rnorm < 1e-11 {
-            converged = true;
-            break;
-        }
+        let residual: Vec<f64> = (0..n)
+            .map(|i| y_cur[i] - y_p[i] - gamma * (fk[i] - ydot_p[i]))
+            .collect();
+        let rnorm = residual.iter().map(|r| r * r).sum::<f64>().sqrt();
         // Large systems route the Newton linear solve through the sparse
         // CSR/LU path (`sparse` module): the finite-difference Jacobian is
         // built directly in compressed storage and never materialised densely.
         let delta = if n >= crate::sparse::SPARSE_LU_MIN_N {
-            let jac = crate::sparse::CsrMatrix::jacobian(
-                |t, y, dydt| {
-                    f.call(t, y, dydt)
-                        .expect("RHS evaluation must not fail for a well-formed problem");
-                },
-                t + h,
-                &y_cur,
-                &fk,
-                None,
-            );
-            let a = jac.scaled_identity_minus_scaled(gamma);
+            let jmat = match jac {
+                Some(pattern) => crate::sparse::CsrMatrix::jacobian_colored(
+                    |t, y, dydt| f.call(t, y, dydt),
+                    t + h,
+                    &y_cur,
+                    &fk,
+                    pattern,
+                )?,
+                None => crate::sparse::CsrMatrix::jacobian(
+                    |t, y, dydt| f.call(t, y, dydt),
+                    t + h,
+                    &y_cur,
+                    &fk,
+                    None,
+                )?,
+            };
+            let a = jmat.scaled_identity_minus_scaled(gamma);
             a.sparse_solve(&residual).ok_or(OdeError::Newton {
                 t: t + h,
                 residual: rnorm,
             })?
         } else {
-            let jac = jacobian(f, t + h, &y_cur, &fk);
+            let jac = jacobian(f, t + h, &y_cur, &fk)?;
             let mut a = DMat::new(n, n);
             for i in 0..n {
                 for j in 0..n {
@@ -837,21 +970,18 @@ fn step_bdf(
         for i in 0..n {
             y_cur[i] -= delta[i];
         }
-        fk = eval(f, t + h, &y_cur);
+        corr = tol.wrms(&delta, &y_cur);
+        fk = eval(f, t + h, &y_cur)?;
+        if corr < NEWTON_TOL {
+            converged = true;
+            break;
+        }
     }
     if !converged {
-        let mut rnorm = 0.0;
-        for i in 0..n {
-            let r = y_cur[i] - y_p[i] - gamma * (fk[i] - ydot_p[i]);
-            rnorm += r * r;
-        }
-        let rnorm = rnorm.sqrt();
-        if rnorm >= 1e-11 {
-            return Err(OdeError::Newton {
-                t: t + h,
-                residual: rnorm,
-            });
-        }
+        return Err(OdeError::Newton {
+            t: t + h,
+            residual: corr,
+        });
     }
     let f_new = fk;
 
@@ -906,8 +1036,60 @@ impl OdeProblem {
     /// Returns [`OdeError`] if the integration fails (non-convergent Newton
     /// step, collapsed step size, or step budget exceeded).
     pub fn solve(&self, method: Method, t_final: f64) -> Result<Vec<f64>, OdeError> {
-        let out = integrate(self, method, t_final, None)?;
-        Ok(out.into_iter().next().unwrap_or_else(|| self.y0.clone()))
+        Ok(integrate(self, method, t_final, None, &[])?.y_end)
+    }
+
+    /// Integrate to `t_final` while watching the given [`Event`]s.
+    ///
+    /// Every sign change of an event function is reported in
+    /// [`EventSolution::hits`]. Each crossing is bracketed by the accepted step
+    /// and located by bisection on that step's cubic-Hermite dense output, so its
+    /// accuracy is that of the interpolant (roughly `O(h⁴)` per step), not
+    /// round-off. If a terminal event fires, integration stops at its
+    /// crossing and [`EventSolution::t_end`] is that time; otherwise `t_end` is
+    /// `t_final`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`OdeError`] if the integration fails (see [`OdeProblem::solve`]).
+    ///
+    /// # Examples
+    ///
+    /// A bouncing ball that hits the floor at `t = √(2h/g)`:
+    ///
+    /// ```
+    /// use tpt_sci_ode::{Method, OdeProblem};
+    /// use tpt_sci_ode::events::{Direction, Event};
+    ///
+    /// // State [height, velocity]; g = 9.81.
+    /// let prob = OdeProblem::new(
+    ///     |_t, y, dy| {
+    ///         dy[0] = y[1];
+    ///         dy[1] = -9.81;
+    ///     },
+    ///     vec![10.0, 0.0],
+    ///     0.0,
+    /// )
+    /// .unwrap();
+    /// let floor = Event::new(|_t, y| y[0])
+    ///     .direction(Direction::Falling)
+    ///     .terminal();
+    /// let sol = prob.solve_events(Method::Tsit45, 10.0, &[floor]).unwrap();
+    /// let expected = (2.0 * 10.0 / 9.81f64).sqrt();
+    /// assert!((sol.t_end - expected).abs() < 1e-6);
+    /// ```
+    pub fn solve_events(
+        &self,
+        method: Method,
+        t_final: f64,
+        events: &[Event],
+    ) -> Result<EventSolution, OdeError> {
+        let run = integrate(self, method, t_final, None, events)?;
+        Ok(EventSolution {
+            t_end: run.t_end,
+            y_end: run.y_end,
+            hits: run.hits,
+        })
     }
 
     /// Integrate at each time in `t_eval` (each strictly increasing and beyond
@@ -930,6 +1112,6 @@ impl OdeProblem {
         if t_eval.is_empty() {
             return Ok(Vec::new());
         }
-        integrate(self, method, *t_eval.last().unwrap(), Some(t_eval))
+        Ok(integrate(self, method, *t_eval.last().unwrap(), Some(t_eval), &[])?.outputs)
     }
 }

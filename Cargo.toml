@@ -19,8 +19,12 @@ members = [
     "crates/tpt-sci-climate",
     "crates/tpt-sci-ocean",
     "crates/tpt-sci-dft-electronic",
+    "crates/tpt-sci",
+    "crates/tpt-sci-cli",
+    "crates/tpt-sci-wasm",
+    "crates/tpt-sci-units",
 ]
-exclude = []
+exclude = ["crates/tpt-sci-py"]
 
 [workspace.package]
 version = "0.1.0"
@@ -52,8 +56,16 @@ feos = { version = "0.10", default-features = false, features = ["dft"] }
 feos-dft = { version = "0.10", default-features = false }
 
 # In-repo crate dependencies (referenced by `workspace = true`).
-tpt-sci-ode = { version = "0.1.0", path = "crates/tpt-sci-ode" }
+# Closure-only solver by default. The Cranelift JIT (`cranelift-jit`) is native-only
+# and is enabled explicitly by crates that need it, so downstream crates stay
+# buildable for wasm32.
+tpt-sci-ode = { version = "0.1.0", path = "crates/tpt-sci-ode", default-features = false }
 tpt-sci-grid = { version = "0.1.0", path = "crates/tpt-sci-grid" }
+tpt-sci-ppl = { version = "0.1.0", path = "crates/tpt-sci-ppl" }
+tpt-sci-image = { version = "0.1.0", path = "crates/tpt-sci-image" }
+tpt-sci-physics-rigid = { version = "0.1.0", path = "crates/tpt-sci-physics-rigid" }
+tpt-sci-quantum = { version = "0.1.0", path = "crates/tpt-sci-quantum" }
+tpt-sci-astro = { version = "0.1.0", path = "crates/tpt-sci-astro" }
 tpt-sci-sim-core = { version = "0.1.0", path = "crates/tpt-sci-sim-core" }
 tpt-sci-reaction-network = { version = "0.1.0", path = "crates/tpt-sci-reaction-network" }
 tpt-sci-md = { version = "0.1.0", path = "crates/tpt-sci-md" }
@@ -65,6 +77,8 @@ tpt-sci-electrophys = { version = "0.1.0", path = "crates/tpt-sci-electrophys" }
 tpt-sci-climate = { version = "0.1.0", path = "crates/tpt-sci-climate" }
 tpt-sci-ocean = { version = "0.1.0", path = "crates/tpt-sci-ocean" }
 tpt-sci-dft-electronic = { version = "0.1.0", path = "crates/tpt-sci-dft-electronic" }
+tpt-sci = { version = "0.1.0", path = "crates/tpt-sci" }
+tpt-sci-units = { version = "0.1.0", path = "crates/tpt-sci-units" }
 
 # NOTE: `diffsol` is intentionally NOT a workspace dependency. `tpt-sci-ode`
 # implements its own ODE solvers from scratch (dual-licensed, no Apache-only
@@ -80,7 +94,7 @@ approx = "0.5"
 # `[workspace.dev-dependencies]` table, which Cargo does not support for
 # `workspace = true` inheritance) so crates can pull it into their
 # `[dev-dependencies]` via `{ workspace = true }`.
-criterion = "0.5"
+criterion = "0.8"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"

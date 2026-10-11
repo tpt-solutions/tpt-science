@@ -29,8 +29,14 @@ jobs:
           components: clippy
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+  # Run the test suite on all three desktop platforms. `fail-fast: false` keeps
+  # one platform's failure from hiding the others.
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -82,9 +88,10 @@ jobs:
         with:
           tool: cargo-llvm-cov
       - name: Generate coverage (lcov)
-        run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+        # Gate: measured 94.3% line coverage; fail below 90% to leave margin.
+        run: cargo llvm-cov --workspace --lcov --output-path lcov.info --fail-under-lines 90
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lcov
           path: lcov.info
@@ -98,6 +105,42 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Run benchmarks
         run: cargo bench --workspace --benches -- --warm-up-time 0.5 --measurement-time 1 --sample-size 10
+      # Compare against benchmarks/baseline.json. Advisory until the baseline is
+      # recorded on the CI runner (timings differ between machines), so it does
+      # not block merges yet. Remove continue-on-error once the baseline is set.
+      - name: Check for benchmark regressions
+        continue-on-error: true
+        run: python3 scripts/bench_check.py
+
+  # Build with default features off so the feature-gated paths (e.g. the
+  # `cranelift-jit` backend in tpt-sci-ode) keep compiling when disabled.
+  no-default-features:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo check --workspace --no-default-features
+
+  # Check every feature in isolation (and with none) so a feature-gated path
+  # that stops compiling on its own is caught even though `--all-features`
+  # enables everything at once.
+  feature-each:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack
+      - run: cargo hack check --workspace --each-feature --all-targets
+
+  # Verify the declared MSRV (`rust-version` in the workspace Cargo.toml).
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.85
+      - run: cargo check --workspace --all-features --all-targets
 
   cargo-deny:
     runs-on: ubuntu-latest
@@ -109,3 +152,20 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check
+
+  # Build every example in release mode and run each one, failing on any
+  # non-zero exit. Examples carry self-checking assertions, so this keeps them
+  # from silently rotting as the library changes.
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release --workspace --examples --all-features
+      - name: Run every example
+        run: |
+          for f in crates/*/examples/*.rs; do
+            name=$(basename "$f" .rs)
+            echo "== $name"
+            "target/release/examples/$name" > /dev/null || { echo "FAILED: $name"; exit 1; }
+          done

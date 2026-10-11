@@ -10,6 +10,7 @@
 /// Layout is `chains[chain][draw][parameter]`. A single-chain [`crate::Model::fit`]
 /// produces one chain; [`crate::Model::fit_chains`] produces several so that
 /// [`Trace::rhat`] is well defined.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Trace {
     /// One vector of draws per chain.
     chains: Vec<Vec<Vec<f64>>>,

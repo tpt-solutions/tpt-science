@@ -217,7 +217,7 @@ fn main() {
         - cavity.v[g.idx(it, jt.saturating_sub(1))])
         / (2.0 * g.dy);
     let strain = strain_magnitude(dudx, dudy, dvdx, dvdy);
-    let nu_t = eddy_viscosity(nu, 0.1, g.dx, strain);
+    let nu_t = eddy_viscosity(nu, 0.1, g.dx, strain).expect("valid eddy-viscosity inputs");
     println!(
         "  strain |S| = {:.4e}, molecular ν = {:.3e}, effective ν_eff = {:.3e}",
         strain, nu, nu_t

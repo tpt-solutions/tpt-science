@@ -1,0 +1,21 @@
+[package]
+name = "tpt-sci-py"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+description = "Python bindings for tpt-science (PyO3). Built with maturin; excluded from the Cargo workspace."
+publish = false
+
+[lib]
+name = "tpt_sci"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module"] }
+tpt-sci-cli = { path = "../tpt-sci-cli" }
+tpt-sci-climate = { path = "../tpt-sci-climate" }
+
+# Its own workspace root keeps this crate out of the main workspace, so CI does not
+# need libpython to link it.
+[workspace]

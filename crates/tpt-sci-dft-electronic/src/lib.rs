@@ -145,31 +145,28 @@ impl KohnSham {
         })
     }
 
-    /// 1-D Hartree potential `V_H` solving `d²V_H/dx² = −2π·ρ` by a tridiagonal
-    /// Thomas algorithm (Neumann at the boundaries, zero reference).
+    /// 1-D Hartree potential `V_H(x) = π ∫ |x − x'| ρ(x') dx'`.
+    ///
+    /// This is the exact 1-D Coulomb kernel (`V_H'' = 2π·ρ`, repulsive). It is
+    /// evaluated by direct summation rather than a finite-difference Poisson
+    /// solve, because a Dirichlet `V = 0` boundary at the grid edges would not
+    /// match the potential of an isolated 1-D charge distribution (which grows
+    /// linearly with distance) and would push the electrons out to the walls.
+    /// The kernel has no free additive constant, so the Hartree energy is
+    /// consistent with the eigenvalue sum in [`Self::total_energy_from`].
     fn hartree_potential(&self, rho: &[f64]) -> Vec<f64> {
-        let n = self.grid.n;
         let dx = self.grid.dx;
-        let b: Vec<f64> = rho
-            .iter()
-            .map(|&r| -2.0 * std::f64::consts::PI * r * dx * dx)
-            .collect();
-        let mut c = vec![0.0; n];
-        let mut d = vec![0.0; n];
-        c[0] = 0.0;
-        d[0] = b[0];
-        for i in 1..n {
-            let m = 1.0;
-            let beta = 2.0 - m * c[i - 1];
-            c[i] = -1.0 / beta;
-            d[i] = (b[i] - m * d[i - 1]) / beta;
-        }
-        let mut vh = vec![0.0; n];
-        vh[n - 1] = d[n - 1];
-        for i in (0..n - 1).rev() {
-            vh[i] = d[i] - c[i] * vh[i + 1];
-        }
-        vh
+        let x = self.grid.x();
+        x.iter()
+            .map(|&xi| {
+                let sum: f64 = x
+                    .iter()
+                    .zip(rho)
+                    .map(|(&xj, &rj)| (xi - xj).abs() * rj)
+                    .sum();
+                std::f64::consts::PI * sum * dx
+            })
+            .collect()
     }
 
     /// XC potential `V_xc = d(ρ·e_xc)/dρ` via central finite difference.
@@ -248,10 +245,7 @@ impl KohnSham {
                     *r *= self.nelect as f64 / s;
                 }
             }
-            total_energy = e_kin
-                + self.external_energy(&rho)
-                + self.hartree_energy(&rho)
-                + self.xc_energy(&rho);
+            total_energy = self.total_energy_from(e_kin, &rho);
             self.rho = rho;
             // Keep the last set of occupied orbitals for the result.
             self.last_orbitals = orbitals;
@@ -263,24 +257,24 @@ impl KohnSham {
         }
     }
 
-    fn external_energy(&self, rho: &[f64]) -> f64 {
-        self.v_ext
-            .iter()
-            .zip(rho.iter())
-            .map(|(&v, &r)| v * r)
-            .sum::<f64>()
-            * self.grid.dx
-    }
-
-    fn hartree_energy(&self, rho: &[f64]) -> f64 {
-        let vh = self.hartree_potential(rho);
+    /// Total energy from the occupied-orbital eigenvalue sum `sum_eigen = Σ f_i ε_i`.
+    ///
+    /// The eigenvalues already contain `∫ρ(V_ext + V_H + V_xc)`, so the
+    /// double-counted Hartree and XC potential terms are removed:
+    /// `E = Σ f_i ε_i − E_H + ∫ρ (e_xc − v_xc) dx`.
+    fn total_energy_from(&self, sum_eigen: f64, rho: &[f64]) -> f64 {
         let dx = self.grid.dx;
-        // E_H = 0.5·∫ ρ·V_H.
-        0.5 * rho.iter().zip(vh.iter()).map(|(&r, &v)| r * v).sum::<f64>() * dx
-    }
-
-    fn xc_energy(&self, rho: &[f64]) -> f64 {
-        rho.iter().map(|&r| lda_xc(r) * r).sum::<f64>() * self.grid.dx
+        let vh = self.hartree_potential(rho);
+        let vxc = self.xc_potential(rho);
+        // E_H = ½·∫ ρ·V_H.
+        let e_hartree = 0.5 * rho.iter().zip(&vh).map(|(&r, &v)| r * v).sum::<f64>() * dx;
+        let e_xc_corr: f64 = rho
+            .iter()
+            .zip(&vxc)
+            .map(|(&r, &v)| (lda_xc(r) - v) * r)
+            .sum::<f64>()
+            * dx;
+        sum_eigen - e_hartree + e_xc_corr
     }
 }
 

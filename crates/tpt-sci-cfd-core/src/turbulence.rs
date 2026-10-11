@@ -4,21 +4,28 @@
 //! Smagorinsky-style), *not* a coupled `k`-`ε` two-equation solve. It is enough
 //! to let downstream solvers perturb the effective viscosity for high-Reynolds
 //! number flows without pulling in a full turbulence model.
+use crate::CfdError;
 
 /// Smagorinsky-style eddy viscosity `ν_t = (C_s·Δ)²·|S|`, where `|S|` is the
 /// strain-rate magnitude and `Δ` the filter width. Returns the effective
 /// (molecular + turbulent) viscosity.
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if `nu < 0`, `cs < 0`, `delta <= 0`, or `strain < 0`.
-#[must_use]
-pub fn eddy_viscosity(nu: f64, cs: f64, delta: f64, strain: f64) -> f64 {
-    assert!(nu >= 0.0, "nu must be >= 0");
-    assert!(cs >= 0.0, "cs must be >= 0");
-    assert!(delta > 0.0, "delta must be > 0");
-    assert!(strain >= 0.0, "strain must be >= 0");
-    nu + (cs * delta).powi(2) * strain
+/// Returns [`CfdError::InvalidParameter`] if `nu < 0`, `cs < 0`, `delta <= 0`,
+/// `strain < 0`, or any argument is NaN.
+pub fn eddy_viscosity(nu: f64, cs: f64, delta: f64, strain: f64) -> Result<f64, CfdError> {
+    // `!(x >= 0)`-style checks also reject NaN, which compares false.
+    let checks = [
+        (nu >= 0.0, "nu must be >= 0"),
+        (cs >= 0.0, "cs must be >= 0"),
+        (delta > 0.0, "delta must be > 0"),
+        (strain >= 0.0, "strain must be >= 0"),
+    ];
+    if let Some((_, msg)) = checks.iter().find(|(ok, _)| !ok) {
+        return Err(CfdError::InvalidParameter((*msg).into()));
+    }
+    Ok(nu + (cs * delta).powi(2) * strain)
 }
 
 /// Strain-rate magnitude `|S| = sqrt(2·S:S)` from velocity gradients.
@@ -46,7 +53,7 @@ mod tests {
     #[test]
     fn eddy_viscosity_dominates_at_high_strain() {
         let nu = 1e-3;
-        let nt = eddy_viscosity(nu, 0.1, 1.0, 100.0);
+        let nt = eddy_viscosity(nu, 0.1, 1.0, 100.0).unwrap();
         assert!(nt > nu);
     }
 

@@ -11,10 +11,14 @@ hand-rolled explicit-Euler membrane stepper.
   `I_ion = ḡNa·m³h·(V−E_Na) + ḡK·n⁴·(V−E_K) + ḡL·(V−E_L)`. Integrate the
   membrane ODE with `step(dt)`; inspect `state()` / `voltage()`.
 * `TenTusscher` — Ten Tusscher–Panfilov (2004) human-ventricular myocyte
-  (epicardial variant): a genuine ionic model with fast Na, `I_Kr`, `I_Ks`,
-  `I_K1`, `I_CaL`, `I_to`, the Na/Ca exchanger and a reduced calcium balance.
+  (epicardial variant, following the published CellML model): fast Na, `I_Kr`,
+  `I_Ks`, `I_K1`, `I_CaL`, `I_to`, the Na/K pumps, the Na/Ca exchanger, and the
+  Ca²⁺ balance with the sarcoplasmic reticulum.
   Both models implement the `IonicModel` trait, so the same tissue solver can
   drive either membrane.
+* `LandActiveTension` — Land et al. (2017) human active-tension model with length
+  and velocity dependence, driven by cytosolic Ca²⁺ (µM) and a prescribed length
+  ratio, output in kPa.
 * `Tissue` — 2-D **monodomain** sheet coupling a membrane model to a diffusion
   operator: `dVm/dt = −I_ion/Cm + ∇·(D∇Vm)`, so an action potential launched at
   one node propagates through the tissue.
@@ -59,8 +63,8 @@ full **bidomain** propagation with **anisotropic (tensor) diffusion** on a
 structured grid. The original v1 "out of scope" items (full bidomain, a second
 ionic model, and anisotropy) are all implemented. Remaining simplifications:
 hand-rolled explicit-Euler integration (not the `tpt-sci-ode` adaptive driver),
-structured 2-D grids only (no 3-D/unstructured), and a single-cation-reduced
-calcium balance in the Ten Tusscher cell.
+structured 2-D grids only (no 3-D/unstructured). The Ten Tusscher cell holds the
+external Na⁺, K⁺ and Ca²⁺ fixed, and uses the CellML's explicit-Euler integration.
 
 ## License
 

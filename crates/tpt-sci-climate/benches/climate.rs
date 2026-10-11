@@ -1,4 +1,5 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
+use std::hint::black_box;
 use tpt_sci_climate::{AtmosphereGcm, EnergyBalanceModel};
 
 fn bench_ebm_equilibrium(c: &mut Criterion) {

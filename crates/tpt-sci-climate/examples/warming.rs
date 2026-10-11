@@ -103,7 +103,8 @@ fn baseline() {
     // temperature must equal the EBM equilibrium for that eps_eff.
     let eps_layer = 2.0 * (1.0 - EMIS);
     println!("  grey layer eps = {eps_layer:.4}  ->  eps_eff = 1 - eps/2 = {EMIS}");
-    let t_grey = grey_radiative_transfer(ebm.solar_constant, ALBEDO, eps_layer);
+    let t_grey = grey_radiative_transfer(ebm.solar_constant, ALBEDO, eps_layer)
+        .expect("valid grey-atmosphere inputs");
     println!("  grey Ts = {t_grey:.3} K  vs EBM Teq = {t_eq:.3} K");
     assert!(
         (t_grey - t_eq).abs() < 1e-8,

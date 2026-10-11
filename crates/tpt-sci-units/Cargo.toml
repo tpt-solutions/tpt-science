@@ -1,0 +1,25 @@
+[package]
+name = "tpt-sci-units"
+description = "Typed SI quantities and the physical constants shared across tpt-science"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/tpt-sci-units"
+keywords = ["units", "si", "constants", "science"]
+categories = ["science", "value-formatting"]
+
+[lib]
+bench = false
+
+[dependencies]
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true

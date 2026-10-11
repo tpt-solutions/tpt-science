@@ -3,6 +3,53 @@
 All notable changes to `tpt-sci-ode` are documented here. This project adheres
 to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Fixed
+
+- The crate compiles again. The Cranelift crates (`cranelift-codegen`,
+  `-frontend`, `-module`, `-jit`) are all on 0.135.
+- `JitRhs` owns the Cranelift module that holds its machine code. Previously
+  `compile_rhs` dropped the module before returning, which left a dangling
+  function pointer.
+- `JitRhs::call` checks buffer lengths in release builds as well, and a panic
+  in the closure is re-raised on the caller's side instead of unwinding through
+  native frames.
+- RHS errors are returned as `OdeError` from every method. Previously they
+  panicked on the explicit, dense-implicit and sparse-implicit paths.
+- A Newton solve that exhausts its iteration budget is an error. Previously an
+  unconverged SDIRK stage was accepted silently.
+- Newton convergence is tested on the tolerance-weighted norm of the correction,
+  not on absolute thresholds, so large-magnitude states converge.
+- Steps are accepted only when they meet the error tolerance. At the minimum
+  step size the solver now returns `StepTooSmall` instead of accepting an
+  inaccurate step.
+- The step-size controller uses the local error order (`q`) consistently. The
+  table had the order `p` for three methods, which made the controller grow
+  steps too aggressively.
+- The TR-BDF2 error estimate compares against the full-step trapezoidal rule,
+  which is `O(h³)` locally. It previously used a stage value that was `O(h²)`.
+- `t_eval` must be finite and strictly increasing; out-of-order points are
+  rejected.
+- `OdeProblemBuilder::h0` is honoured. Previously the value was stored and
+  ignored.
+- The sparse Newton path uses a sparse left-looking LU (Gilbert–Peierls with
+  partial pivoting). Previously it allocated a dense `n × n` matrix per solve.
+- Singularity checks are relative to the matrix scale, not an absolute `1e-14`.
+- A step that ends on a target time takes that time exactly, which avoids a
+  roundoff sliver. This is defensive: no reproducing input was found.
+- The `ODE_DEBUG` environment lookup on every accepted step has been removed.
+- The benchmark uses `std::hint::black_box`.
+
+### Changed
+
+- `CsrMatrix::jacobian` takes an RHS that returns `Result` and returns
+  `Result<CsrMatrix, OdeError>`. This is a breaking change to a public method.
+- `JitRhs::call` panics on a length mismatch, as its docs now say. Use
+  `call_safe` for an error instead.
+- The JIT module docs state that the generated code is a call stub into the
+  Rust closure, not a compiled RHS.
+
 ## [0.1.0] — 2026-08-22
 
 Initial release of `tpt-sci-ode` to crates.io.

@@ -47,7 +47,7 @@ pub use gcm::AtmosphereGcm;
 pub use radiative_transfer::{Band, CorrelatedKBand, CorrelatedKRt, MultiBandRadiativeTransfer};
 
 /// Stefan–Boltzmann constant (W·m⁻²·K⁻⁴).
-pub const SIGMA: f64 = 5.670_374_419e-8;
+pub const SIGMA: f64 = tpt_sci_units::STEFAN_BOLTZMANN.value();
 /// Pre-industrial CO₂ reference (ppm).
 pub const CO2_PREINDUSTRIAL: f64 = 280.0;
 
@@ -128,9 +128,18 @@ impl EnergyBalanceModel {
         self.t
     }
 
-    /// Advance the EBM by `dt` seconds with explicit Euler.
+    /// Advance the EBM by `dt` seconds.
+    ///
+    /// Uses a linearised backward-Euler update: the radiative loss is
+    /// differentiated about the current `T`, which gives
+    /// `ΔT = dt·F(T) / (C + 4·dt·ε·σ·T³)`. This is unconditionally stable for the
+    /// radiative relaxation, so a large `dt` relative to `C / (4εσT³)` cannot
+    /// make the solution oscillate or diverge. For `dt` much smaller than that
+    /// time scale it agrees with explicit Euler to first order.
     pub fn step(&mut self, dt: f64) {
-        self.t += dt * self.net_flux() / self.heat_capacity;
+        let f = self.net_flux();
+        let damping = self.heat_capacity + 4.0 * dt * self.emissivity * SIGMA * self.t.powi(3);
+        self.t += dt * f / damping;
         if self.t < 0.0 {
             self.t = 0.0;
         }
@@ -155,15 +164,23 @@ impl EnergyBalanceModel {
 /// Single-layer grey-atmosphere radiative temperature: with a grey gas of
 /// emissivity `eps`, the surface temperature `Ts = (S·(1−α)/(4·σ·(1−eps/2)))^(1/4)`.
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if `eps` outside `[0,1)`, `alpha` outside `[0,1]`, or `s <= 0`.
-#[must_use]
-pub fn grey_radiative_transfer(s: f64, alpha: f64, eps: f64) -> f64 {
-    assert!(s > 0.0, "S must be > 0");
-    assert!((0.0..=1.0).contains(&alpha), "albedo in [0,1]");
-    assert!((0.0..1.0).contains(&eps), "eps in [0,1)");
-    ((s * (1.0 - alpha)) / (4.0 * SIGMA * (1.0 - eps / 2.0))).powf(0.25)
+/// Returns [`ClimateError::InvalidModel`] if `s <= 0`, `alpha` is outside
+/// `[0, 1]`, or `eps` is outside `[0, 1)`.
+pub fn grey_radiative_transfer(s: f64, alpha: f64, eps: f64) -> Result<f64, ClimateError> {
+    if s.is_nan() || s <= 0.0 {
+        return Err(ClimateError::InvalidModel("S must be > 0".into()));
+    }
+    if !(0.0..=1.0).contains(&alpha) {
+        return Err(ClimateError::InvalidModel(
+            "albedo must be in [0, 1]".into(),
+        ));
+    }
+    if !(0.0..1.0).contains(&eps) {
+        return Err(ClimateError::InvalidModel("eps must be in [0, 1)".into()));
+    }
+    Ok(((s * (1.0 - alpha)) / (4.0 * SIGMA * (1.0 - eps / 2.0))).powf(0.25))
 }
 
 /// A minimal atmospheric-chemistry box: `dC/dt = P − k·C` (constant production
@@ -240,8 +257,8 @@ mod tests {
 
     #[test]
     fn grey_transfer_monotonic_in_greenhouse() {
-        let clear = grey_radiative_transfer(1361.0, 0.3, 0.0);
-        let greenhouse = grey_radiative_transfer(1361.0, 0.3, 0.5);
+        let clear = grey_radiative_transfer(1361.0, 0.3, 0.0).unwrap();
+        let greenhouse = grey_radiative_transfer(1361.0, 0.3, 0.5).unwrap();
         assert!(greenhouse > clear);
     }
 

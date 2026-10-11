@@ -13,6 +13,8 @@
 //! * [`filtered_back_projection_3d`] — the ram-lak FBP inverse, returning a
 //!   reconstructed [`Volume`].
 
+#[cfg(feature = "rayon")]
+use rayon::prelude::*;
 use tpt_math_linalg::tpt_math_linalg_dense::DMatrix;
 
 use crate::error::ImageError;
@@ -274,22 +276,32 @@ pub fn filtered_back_projection_3d(
     }
 
     let mut rec = vec![0.0_f64; nx * ny * nz];
-    for (a, &theta) in angles.iter().enumerate() {
-        let cos = theta.cos();
-        let sin = theta.sin();
-        for iz in 0..nz {
+    let trig: Vec<(f64, f64)> = angles.iter().map(|&theta| theta.sin_cos()).collect();
+    let slice_len = nx * ny;
+    // Each z slice is a contiguous, disjoint chunk of `rec` and depends only on
+    // its own filtered rows, so slices are reconstructed independently. Under the
+    // `rayon` feature they run in parallel; the per-slice arithmetic is identical,
+    // so the output does not depend on the feature.
+    let fill_slice = |iz: usize, out: &mut [f64]| {
+        for (a, &(sin, cos)) in trig.iter().enumerate() {
             for iy in 0..ny {
                 let y = iy as f64 - cy;
                 for ix in 0..nx {
                     let x = ix as f64 - cx;
                     let t = -sin * x + cos * y;
-                    let bin = t + c;
-                    let val = sample_1d(&filtered[a][iz], bin);
-                    rec[ix + iy * nx + iz * nx * ny] += val;
+                    out[ix + iy * nx] += sample_1d(&filtered[a][iz], t + c);
                 }
             }
         }
-    }
+    };
+    #[cfg(feature = "rayon")]
+    rec.par_chunks_mut(slice_len)
+        .enumerate()
+        .for_each(|(iz, out)| fill_slice(iz, out));
+    #[cfg(not(feature = "rayon"))]
+    rec.chunks_mut(slice_len)
+        .enumerate()
+        .for_each(|(iz, out)| fill_slice(iz, out));
 
     // Same empirical FBP normalisation as the 2-D API: `4.0 / (nb · n_angles)`
     // matches the discrete ramp filter's DC gain to the continuous kernel and

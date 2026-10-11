@@ -65,7 +65,7 @@ start without these being resolved.
       homepage, repository — matching `spec.txt` PROJECT OVERVIEW).
 - [x] Verify all `tpt-sci-*` rows already in `tpt-rust-map/registry.toml`
       match this repo's final crate list — don't duplicate entries.
-      (9 rows — ode, grid, sim-core, reaction-network, ppl, physics-rigid,
+      (Phase 1 originally counted 9 rows — ode, grid, sim-core, reaction-network, ppl, physics-rigid,
       quantum, image, astro — all present, no duplicates.)
 - [x] Add `CONTRIBUTING.md`, `SECURITY.md`, `README.md` (mirror
       `tpt-engineering`'s versions).
@@ -141,7 +141,7 @@ register/update status in `registry.toml`.
 - [x] Workspace-wide lint pass (`clippy::all` warn, per template) — clean
       (`cargo clippy --workspace --all-targets --all-features -- -D warnings`,
       zero warnings).
-- [x] `no_std` audit per crate — all 8 crates are std-only by design (they pull
+- [x] `no_std` audit per crate — all 18 crates are std-only by design (they pull
       `std` in transitively via `tpt-math-linalg`/`tpt-math-prob` and, for
       `tpt-sci-ode`, `diffsol`). Documented as a `## no_std posture` section in
       the workspace README; CI `no_std` job remains the intentional no-op
@@ -151,13 +151,13 @@ register/update status in `registry.toml`.
       `RUSTSEC-2024-0436` (`paste` unmaintained) to the advisories `ignore`
       list with justification: `paste` is a build-time proc-macro pulled in
       transitively via the `diffsol` wrap target, stable and non-vulnerable.
-- [x] README per crate + workspace-level README — wrote `README.md` for all 8
+- [x] README per crate + workspace-level README — wrote `README.md` for all 18
       crates (previously missing; each `Cargo.toml` already referenced
       `readme = "README.md"`); refreshed the workspace README status table
       (was stale — listed implemented crates as `planned`/`needs-audit`).
 - [x] CHANGELOG — added `CHANGELOG.md` (v0.1.0 entry).
 - [x] crates.io publish prep — publish metadata (description, keywords,
-      categories, documentation, readme) verified present on all 8 crates. All
+      categories, documentation, readme) verified present on all 18 crates. All
       crates remain `publish = false` and are consumed as workspace/path deps
       (see the workspace README "Not yet published" note); no crates.io release
       has been cut. Actual publishing is a separate release-decision step.
@@ -984,3 +984,119 @@ tracked here rather than fixed inline.
       "Added" list; the stale `[0.1.0]` "out of scope" claim replaced with a
       note that both have since been implemented. Also repaired two literal
       backspace control characters in the benchmark-suite lines.
+
+## Phase 12 — Platform review follow-ups (2026-10-11)
+
+Findings from a fresh review (bugs, missing features, innovation, usability,
+adoption). Items are untriaged; pull them into work in this order.
+
+### 12a. Build health / bugs (do first)
+
+- [x] **Committed `master` HEAD does not compile.** `tpt-sci-ode` fails with
+      `FuncInstBuilder` trait-bound errors: the merged dependabot PRs bumped
+      `cranelift-codegen`/`cranelift-module` to 0.135 while `cranelift-frontend`
+      and `cranelift-jit` stayed at 0.109. Fixed by the working-tree changes
+      (cranelift 0.135 across all crates plus the `jit.rs`/`linalg.rs`/
+      `solver.rs`/`sparse.rs` fixes). Verified: fmt, clippy `-D warnings`,
+      `cargo test --workspace --all-features`, and rustdoc `-D warnings` all
+      pass. Also fixed the `criterion::black_box` deprecation that broke
+      clippy in 17 bench files (now `std::hint::black_box`).
+- [x] Windows only: `link.exe` exit code 1180 when linking the
+      `tpt-sci-dft-classical` `adsorption` example (feos). **Not reproduced**
+      on the current toolchain: the example builds cleanly, and
+      `cargo test --workspace --all-features` (which builds every example)
+      passes. If it recurs, capture the full linker log before changing
+      anything.
+- [x] `tpt-sci-ode`: all cranelift deps (`codegen`, `frontend`, `module`,
+      `jit`, `target-lexicon`, `native`) are now optional and enabled only by
+      the `cranelift-jit` feature. `jit` module and its re-exports are
+      `cfg`-gated; the `van_der_pol` example requires the feature. Verified
+      `--no-default-features`: clippy, tests, rustdoc, and workspace check
+      all pass with no cranelift crates in the tree.
+- [x] Group cranelift crates in `.github/dependabot.yml` so they always move
+      together (the version skew above came from per-crate PRs). Added a
+      `cranelift` group (`cranelift*`, `target-lexicon`).
+- [x] Extend the panic-surface audit done for `tpt-sci-quantum` to `md`,
+      `cfd-core`, `climate`, `ocean` and `ode` (user-supplied sizes reaching
+      `unwrap`/`expect`/`assert!`). Raw counts: about 587 `unwrap`/`expect` and
+      410 `assert!`/`panic!` in `src/`, including tests and doctests. (Done: non-test sites in md/cfd-core/climate/ocean/ode re-checked; `eddy_viscosity` and `grey_radiative_transfer` now return `Result`; the remaining `nonhydrostatic_correct`, `Tracer3D::step` and sparse `mat_vec` panics are documented under `# Panics`.)
+- [x] Tighten weakly-justified numerics: cfd-core unstructured Poisson test
+      threshold (0.02 relaxed to 0.05), direct-sum Ewald (O(N·K), no PPPM). (Not started in this pass.) (Done: `UnstructuredMesh::solve_poisson_nodal` imposes Dirichlet data at boundary nodes and is second order (`nodal_poisson_is_second_order`); the cell-based variant keeps its 0.05 bound with the reason documented. `tpt_sci_md::Pppm` (particle-mesh Ewald) is validated against the direct Ewald sum at 2.5e-5 relative energy error at mesh 32.)
+- [x] Split single-file crates into modules: `astro`, `md`, `electrophys`,
+      `physics-rigid`, `kinetics` (1k to 1.7k lines each in one `lib.rs`). (Done: `astro` → constants/environment/frames; `md` → particle/forces/integrator/eam/ewald/constraints/cells/rdf; `electrophys` → ionic/hodgkin_huxley/ten_tusscher/diffusion/tissue; `physics-rigid` → body/quaternion/world/collision; `kinetics` → constants/arrhenius/coverage/eley_rideal/coverage_dependent/problem. Public paths unchanged via re-exports.)
+- [x] Add integration `tests/` to every crate (only `tpt-sci-ode` has one). (Done: all 18 crates now have `tests/`; the property and convergence tests are separate files.)
+
+### 12b. Docs drift
+
+- [x] Refresh the README status table: rewritten to match Phase 9 (3-D and
+      cone-beam CT, SSA/tau-leaping/SBML, J2/J4/drag/third-body, 0-D+GCM
+      climate, 2-D+3-D ocean, 1-D+3-D Kohn–Sham with PBE). Stale "8 crates" /
+      "9 rows" wording in the Phase 1 and 4 notes also corrected.
+- [x] Add a "choose your crate" decision table and a tutorial path to the
+      workspace README. (Done: `README.md` "Choose your crate" table and
+      "Suggested tutorial path" section, before `no_std posture`.)
+
+### 12c. CI / automation
+
+- [x] Add a `cargo deny check` job. (Already present as the `cargo-deny`
+      job in `ci.yml`, pinned to `cargo-deny-action@v2`; the "none" note was
+      stale.)
+- [x] Add an MSRV (1.85) job and a `cargo hack --each-feature` job. (Done:
+      `feature-each` and `msrv` jobs in `ci.yml`. `cargo hack check --workspace
+      --each-feature --all-targets` passes locally. The `msrv` job is NOT
+      verified: the 1.85 toolchain is not installed here, and the pinned deps
+      (criterion 0.8, cranelift 0.135) may need a newer rustc, so expect it may
+      fail on first run and need a dep-pin or MSRV bump.)
+- [x] Add Windows and macOS runners to the `test` job. Not done: the
+      `link.exe` 1180 issue above is unreproduced, so a Windows runner is
+      untested. (Done: `test` job is a three-OS matrix with `fail-fast: false`. Not yet observed green on Windows/macOS. The `link.exe` 1180 issue is still unreproduced.)
+- [x] Add an "run all examples" smoke job so examples cannot rot. (`examples` job in `ci.yml` builds every example in release and runs each one.)
+- [ ] Add `cargo-semver-checks` for when publishing starts; consider
+      `release-plz`/`cargo-release` to replace the manual `RELEASE.md`. (Deferred: publishing-adjacent and excluded from this pass by request.)
+- [x] Benchmark regression tracking against a stored baseline; add a coverage
+      gate (coverage is currently upload-only). (Not started in this pass.) (Done: `scripts/bench_check.py` compares criterion means with `benchmarks/baseline.json`, as an advisory CI step. The coverage gate is set in CI at 90% line coverage (measured 94.3%).)
+- [x] Add a `justfile` or `cargo xtask` (`check`, `ci`, `examples`, `bench`,
+      `doc`) and an optional pre-commit hook for fmt and clippy. (Partial:
+      `justfile` added with `check`, `ci`, `fmt`, `clippy`, `test`, `doc`,
+      `feature-each`, `examples`, `bench`, `fmt-fix`; `just` is not installed
+      here so the recipes are unexecuted. Pre-commit hook still open.) (Done: `justfile` with check/ci/fmt/clippy/test/doc/feature-each/examples/bench; `just hooks` enables `.githooks/pre-commit` (fmt + clippy).)
+
+### 12d. Missing features
+
+- [x] Optional `serde` feature across result types (`Trace`, `SsaTrajectory`,
+      `Checkpoint`, dense ODE output); `sim-core` checkpoints first. (Done: optional `serde` on `Trajectory`, `EventSolution`, `EventHit`, `Direction` (ode), `Trace` (ppl), `Checkpoint` (sim-core), `SsaTrajectory` (reaction-network); round-trip tests for `Checkpoint` and `SsaTrajectory`.)
+- [x] Shared `Trajectory { t, names, y }` type with `to_csv()` for a uniform
+      output path across crates. (Done: `tpt_sci_ode::Trajectory` with `to_csv`/`write_csv`/`column`, and `OdeProblem::solve_trajectory`.)
+- [x] Optional `rayon` feature: MD forces, multi-chain NUTS, SSA ensembles, CT
+      slices. (Done: CT slices, MD Lennard-Jones (`lennard_jones_parallel`), parallel NUTS chains (`fit_with_gradient_parallel`), and SSA ensembles (`simulate_ssa_ensemble`).)
+- [x] `tpt-sci-ode`: event detection / root-finding (bouncing bodies, eclipse
+      and shadow crossings in `astro`). (Done: `Event`, `Direction`, `OdeProblem::solve_events`; crossings located by bisection on the Hermite dense output; terminal events stop integration. Tests in `tests/events.rs`, doctest on bouncing ball.)
+- [x] Unit/dimension safety for SI constants shared by `astro`, `climate` and
+      `kinetics`. (Not started in this pass.) (Done: `tpt-sci-units` with typed quantities. Kinetics, climate and astro constants come from it, and `ArrheniusRate::with_activation_energy` and `rate_constant_at` are typed companions to the f64 API.)
+- [x] Python (PyO3) and WASM bindings story; scope as a separate crate so
+      core crates stay dependency-light. (Not started: needs its own crate and a Python/WASM toolchain to verify.) (Done: `tpt-sci-wasm` (compile-checked for wasm32) and `tpt-sci-py` (excluded from the workspace; built and exercised from Python). The WASM playground page is done: `tpt-sci-wasm/www/index.html`, built with the wasm-bindgen glue.)
+
+### 12e. Innovative additions
+
+- [x] Declarative model spec (TOML/JSON) plus a small `tpt-sci` CLI that runs
+      it and writes CSV (builds on the reaction-network DSL and SBML reader). (Not started in this pass.) (Done: `tpt-sci-cli`, with the `tpt-sci run <spec.json>` command.)
+- [x] ODE-sensitivity-driven NUTS: feed `forward_sensitivities` gradients into
+      `tpt-sci-ppl` for Bayesian parameter inference on ODE models. (Not started: the `ppl` likelihood is an autodiff closure, so the ODE sensitivities need a custom gradient hook first.) (Done: `ppl::gradient::fit_with_gradient`, which uses gradient injection. The posterior of an ODE decay rate is recovered in `tests/ode_fit.rs`. Two sampler bugs found on the way are fixed: U-turns were counted as divergences, and subtree sampling was biased.)
+- [x] Coupled-physics scenarios in `sim-core`: cardiac electro-mechanics (Done: `sim-core/examples/cardiac_electromechanics.rs` couples the Ten Tusscher cell, with its published CellML parameters, to the Land et al. (2017) active-tension model with length and velocity dependence (`tpt-sci-electrophys::LandActiveTension`, ported from the authors' release and cross-checked against an independent port). The length is the authors' constant-velocity shortening protocol (te = 200 ms), since the release has no mechanics model that sets length from a load and its recorded Length channel is not a usable sarcomere length. The release fits that protocol with skinned parameters, so applying it to intact tissue goes beyond their validation. The AP plateau and APD are checked, the tension lags the Ca²⁺ peak, and shortening lowers the tension (about 20 % in the shortening window). Earlier: ocean-atmosphere (`sim-core/examples/ocean_atmosphere.rs`) and a reacting cavity with a new `cfd-core` scalar transport module (`cfd-core/examples/reacting_cavity.rs`). The GCM and ocean-model coupling is open.)
+- [x] Shared convergence-order test helper plus `proptest` property tests for
+      integrators and PDE operators. (Done: `tests/convergence.rs` checks monotone error reduction with tolerance for all four methods; `tests/properties.rs` in `tpt-sci-ode` and `tpt-sci-grid` use `proptest`.)
+- [x] Jacobian sparsity detection for the `tpt-sci-ode` sparse path. (Done: the pattern is wired into the implicit sparse Newton paths via `OdeProblemBuilder::jacobian_pattern`, tested end to end.)
+- [x] WASM playground for CT, cavity and EBM examples. (Done: `tpt-sci-wasm/www/` runs the CT reconstruction (naive and filtered back-projection), the lid-driven cavity speed field and the EBM, alongside the reaction-network spec runner. The exports were checked under Node.)
+
+### 12f. Adoption (examples and templates)
+
+- [x] `tpt-sci` umbrella/prelude crate re-exporting the common items, so users
+      add one dependency (biggest onboarding win). (Done: `crates/tpt-sci` re-exports all 18 domain crates as modules, each behind a feature; default is ode/grid/sim-core, `full` enables all.)
+- [x] `examples/README.md` index with expected output per example. (Done: `examples/README.md` lists all 42 examples with a summary and real output captured from a release run, all of which exit 0.)
+- [x] `templates/` for `cargo-generate`: `new-ode-model`,
+      `new-multiscale-sim`, `new-bayesian-fit`. (Not started in this pass.) (Done: three templates, each generated, built and run with cargo-generate.)
+- [x] Four compiled tutorials: SIR then NUTS fit; cardiac cable to bidomain;
+      orbit with J2 + drag; CT phantom to reconstruction. (Not started in this pass. The SIR-then-NUTS tutorial also depends on the ODE-sensitivity item.) (Done: `tpt-sci/examples/tutorial_{sir_fit,cable_bidomain,orbit_j2_drag,ct_phantom}.rs`. The SIR tutorial recovers the true rates with NUTS.)
+- [x] Decide the distribution story while `publish = false`: tagged git
+      releases plus a git-dependency snippet in the README.
+ (Done: README section "Using the crates before crates.io" documents the git-dependency path. No tags cut and no publishing done.)

@@ -129,10 +129,10 @@ fn main() {
         dev_long > 1e-3,
         "inlet area must respond to the flow pulse (long)"
     );
-    // In the short chain the reflected wave returns to the inlet within the window
-    // and augments the incident disturbance; in the long chain the reflection has
-    // not yet returned, so the inlet sees only the incident wave. The short-chain
-    // deviation must therefore be larger.
+    // The pulse volume spreads over the chain: the short chain (5 cells) settles
+    // to a larger area change than the long chain (40 cells) over the same
+    // window. Its peak deviation is therefore larger, whether or not the
+    // reflected wave has returned to the inlet.
     assert!(
         dev_short > dev_long,
         "reflected wave increases the inlet deviation (short > long chain)"

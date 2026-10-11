@@ -8,7 +8,21 @@ adheres to [Semantic Versioning](https://semver.org).
 Initial release of `tpt-sci-electrophys` to crates.io (spec2.txt expanded
 vision).
 
+### Fixed
+
+- `TenTusscher` now follows the published epicardial CellML model
+  (`tentusscher_noble_noble_panfilov_2004_epi`). The previous gate time constants
+  were 1–3 ms, which gave no action-potential plateau. The gating kinetics,
+  conductances, and Ca²⁺/Na⁺/K⁺ balance with the sarcoplasmic reticulum are now
+  the published ones. The single-cell AP has a resting potential of about −86 mV,
+  a peak of about +35 mV, a plateau, and an APD (−40 mV) of about 260 ms.
+
 ### Added
+
+- `LandActiveTension`: the Land et al. (2017) human-cardiomyocyte active-tension
+  model (intact, 37 °C), with length and velocity dependence, ported from the
+  authors' release (`Land2016.m`). The length ratio and its rate are inputs. The
+  output matches an independent port to six digits, including a shortening protocol.
 
 - Criterion benchmark suite (/benches/) covering the crate's core hot path.
 - Cardiac electrophysiology built on `tpt-sci-ode` (membrane kinetics) and

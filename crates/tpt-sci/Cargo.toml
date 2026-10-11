@@ -1,0 +1,108 @@
+[package]
+name = "tpt-sci"
+description = "Umbrella crate for the tpt-science pillar: one dependency, every domain crate re-exported behind a feature"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/tpt-sci"
+keywords = ["science", "simulation", "ode", "pde", "physics"]
+categories = ["science", "simulation"]
+
+[lib]
+bench = false
+
+[dependencies]
+tpt-sci-units = { workspace = true }
+tpt-sci-ode = { workspace = true, optional = true }
+tpt-sci-grid = { workspace = true, optional = true }
+tpt-sci-sim-core = { workspace = true, optional = true }
+tpt-sci-reaction-network = { workspace = true, optional = true }
+tpt-sci-ppl = { workspace = true, optional = true }
+tpt-sci-image = { workspace = true, optional = true }
+tpt-sci-physics-rigid = { workspace = true, optional = true }
+tpt-sci-quantum = { workspace = true, optional = true }
+tpt-sci-astro = { workspace = true, optional = true }
+tpt-sci-md = { workspace = true, optional = true }
+tpt-sci-dft-classical = { workspace = true, optional = true }
+tpt-sci-kinetics = { workspace = true, optional = true }
+tpt-sci-cfd-core = { workspace = true, optional = true }
+tpt-sci-hemodynamics = { workspace = true, optional = true }
+tpt-sci-electrophys = { workspace = true, optional = true }
+tpt-sci-climate = { workspace = true, optional = true }
+tpt-sci-ocean = { workspace = true, optional = true }
+tpt-sci-dft-electronic = { workspace = true, optional = true }
+
+[features]
+# Only the core solver stack is on by default; enable domains explicitly, or use
+# `full`, to avoid compiling heavy wrapped dependencies (e.g. `feos` for
+# `dft-classical`) you do not need.
+default = ["ode", "grid", "sim-core"]
+full = [
+"ode",
+"grid",
+"sim-core",
+"reaction-network",
+"ppl",
+"image",
+"physics-rigid",
+"quantum",
+"astro",
+"md",
+"dft-classical",
+"kinetics",
+"cfd-core",
+"hemodynamics",
+"electrophys",
+"climate",
+"ocean",
+"dft-electronic",
+]
+ode = ["dep:tpt-sci-ode"]
+grid = ["dep:tpt-sci-grid", "tpt-sci-grid/sparse"]
+sim-core = ["dep:tpt-sci-sim-core"]
+reaction-network = ["dep:tpt-sci-reaction-network"]
+ppl = ["dep:tpt-sci-ppl"]
+image = ["dep:tpt-sci-image"]
+physics-rigid = ["dep:tpt-sci-physics-rigid"]
+quantum = ["dep:tpt-sci-quantum"]
+astro = ["dep:tpt-sci-astro"]
+md = ["dep:tpt-sci-md"]
+dft-classical = ["dep:tpt-sci-dft-classical"]
+kinetics = ["dep:tpt-sci-kinetics"]
+cfd-core = ["dep:tpt-sci-cfd-core"]
+hemodynamics = ["dep:tpt-sci-hemodynamics"]
+electrophys = ["dep:tpt-sci-electrophys"]
+climate = ["dep:tpt-sci-climate"]
+ocean = ["dep:tpt-sci-ocean"]
+dft-electronic = ["dep:tpt-sci-dft-electronic"]
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dev-dependencies]
+tpt-math-linalg = { workspace = true }
+tpt-math-prob-core = { workspace = true }
+
+[[example]]
+name = "tutorial_sir_fit"
+required-features = ["ode", "ppl"]
+
+[[example]]
+name = "tutorial_cable_bidomain"
+required-features = ["electrophys"]
+
+[[example]]
+name = "tutorial_orbit_j2_drag"
+required-features = ["astro"]
+
+[[example]]
+name = "tutorial_ct_phantom"
+required-features = ["image"]

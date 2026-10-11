@@ -185,6 +185,9 @@ fn run_nuts<T: Target + ?Sized>(
                 iter_divergent = true;
                 break;
             }
+            if tree.uturn {
+                break;
+            }
             if v < 0.0 {
                 x_minus = tree.x_minus.clone();
                 r_minus = tree.r_minus.clone();
@@ -255,7 +258,11 @@ struct Tree {
     n: usize,
     sum_accept: f64,
     sum_log_alpha: f64,
+    /// Numerical divergence: the joint energy became non-finite.
     divergent: bool,
+    /// The trajectory doubled back on itself; the subtree is not used, but it
+    /// is not a numerical failure.
+    uturn: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -288,6 +295,7 @@ fn build_tree<T: Target + ?Sized>(
             n,
             sum_accept: accept,
             sum_log_alpha: joint - log_u,
+            uturn: false,
             // A non-finite joint (e.g. a leapfrog step that left the prior
             // support) must stop the trajectory: otherwise the doubling keeps
             // expanding a zero-length, never-accepted subtree and the sampler
@@ -296,9 +304,10 @@ fn build_tree<T: Target + ?Sized>(
         };
     }
 
-    // Expand one shallower subtree from (x, r).
+    // Expand one shallower subtree from (x, r). An invalid subtree (a numerical
+    // divergence or an internal U-turn) ends the expansion, so return it as-is.
     let t1 = build_tree(target, x, r, log_u, v, depth - 1, eps, rng);
-    if t1.divergent {
+    if t1.divergent || t1.uturn {
         return t1;
     }
     // Second subtree from the far endpoint of t1.
@@ -330,17 +339,20 @@ fn build_tree<T: Target + ?Sized>(
 
     let n = t1.n + t2.n;
     // Slice-sample a point uniformly from the merged set of valid leaves.
+    // Uniform over the merged leaves: draw from t2 with probability n2 / (n1 + n2).
     let x_sample = if t2.n == 0 {
         t1.x_sample.clone()
-    } else if t1.n == 0 || rng.next_f64() < t2.n as f64 / t1.n as f64 {
+    } else if t1.n == 0 || rng.next_f64() < t2.n as f64 / (t1.n + t2.n) as f64 {
         t2.x_sample.clone()
     } else {
         t1.x_sample.clone()
     };
 
+    // U-turn check across the combined trajectory (Hoffman & Gelman 2014, eq. 3).
+    // A U-turn is not a numerical divergence, so it is recorded separately.
     let d1 = dot(&sub(&x_plus, &x_minus), &r_minus);
     let d2 = dot(&sub(&x_plus, &x_minus), &r_plus);
-    let divergent = (d1 < 0.0) || (d2 < 0.0);
+    let uturn = t2.uturn || (d1 < 0.0) || (d2 < 0.0);
 
     Tree {
         x_minus,
@@ -351,7 +363,8 @@ fn build_tree<T: Target + ?Sized>(
         n,
         sum_accept: t1.sum_accept + t2.sum_accept,
         sum_log_alpha: t1.sum_log_alpha + t2.sum_log_alpha,
-        divergent,
+        divergent: t2.divergent,
+        uturn,
     }
 }
 

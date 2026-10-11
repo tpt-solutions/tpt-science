@@ -17,6 +17,7 @@ categories = ["science", "simulation"]
 bench = false
 
 [dependencies]
+tpt-sci-units = { workspace = true }
 tpt-math-linalg = { workspace = true }
 thiserror = { workspace = true }
 

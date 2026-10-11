@@ -22,6 +22,7 @@ tpt-sci-grid = { workspace = true, features = ["sparse"] }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+tpt-sci-kinetics = { workspace = true }
 criterion = { workspace = true }
 approx = { workspace = true }
 

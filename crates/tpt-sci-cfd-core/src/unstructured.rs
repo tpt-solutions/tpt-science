@@ -350,6 +350,18 @@ impl UnstructuredMesh {
                 fixed[n] = Some(dsum[n] / dcount[n] as f64);
             }
         }
+        self.assemble_fem_nodal(diffusivity, source, &fixed)
+    }
+
+    /// Assemble the P1 system for prescribed node values `fixed` (`Some` for a
+    /// Dirichlet node, `None` for a free one).
+    fn assemble_fem_nodal(
+        &self,
+        diffusivity: f64,
+        source: &[f64],
+        fixed: &[Option<f64>],
+    ) -> (Csr, Vec<f64>) {
+        let nn = self.nodes.len();
 
         // Element stiffness: S_ij = D·A·(∇λ_i · ∇λ_j) with the gradients of
         // the barycentric coordinate functions (signed-area formulation, so
@@ -446,8 +458,35 @@ impl UnstructuredMesh {
         dirichlet: &[Option<f64>],
     ) -> Vec<f64> {
         let (a, b) = self.assemble_fem(diffusivity, source, dirichlet);
+        self.cell_values(&a, &b)
+    }
+
+    /// Solve `-∇·(D∇φ) = source` with the Dirichlet value taken from
+    /// `boundary(x, y)` at each boundary **node**, and return cell-centre values.
+    ///
+    /// This is second-order accurate for smooth boundary data. The per-cell
+    /// variant [`UnstructuredMesh::solve_poisson`] samples the data at cell
+    /// centres, which is only first-order accurate at the boundary.
+    #[must_use]
+    pub fn solve_poisson_nodal<F>(&self, diffusivity: f64, source: &[f64], boundary: F) -> Vec<f64>
+    where
+        F: Fn(f64, f64) -> f64,
+    {
+        let is_bnode = self.boundary_nodes();
+        let fixed: Vec<Option<f64>> = self
+            .nodes
+            .iter()
+            .zip(&is_bnode)
+            .map(|(&[x, y], &on)| on.then(|| boundary(x, y)))
+            .collect();
+        let (a, b) = self.assemble_fem_nodal(diffusivity, source, &fixed);
+        self.cell_values(&a, &b)
+    }
+
+    /// Solve the assembled system and average the nodal solution per cell.
+    fn cell_values(&self, a: &Csr, b: &[f64]) -> Vec<f64> {
         let nn = self.nodes.len();
-        let node_phi = conjugate_gradient(&a, &b, &vec![0.0; nn], 1e-11, 4 * nn);
+        let node_phi = conjugate_gradient(a, b, &vec![0.0; nn], 1e-11, 4 * nn);
         self.cells
             .iter()
             .map(|c| (node_phi[c[0]] + node_phi[c[1]] + node_phi[c[2]]) / 3.0)
@@ -716,16 +755,44 @@ mod tests {
                 "error should decrease with refinement: {errors:?}"
             );
         }
-        // The per-cell Dirichlet data is sampled at boundary-cell centres
-        // (an O(h) offset from the true boundary nodes), so the cell-centre
-        // error is dominated by first-order boundary data rather than the
-        // second-order interior FEM error; 0.05 accommodates that at n = 32
-        // while still requiring convergence.
+        // This variant samples the Dirichlet data at boundary-cell centres (an
+        // O(h) offset from the boundary nodes), so the error is dominated by
+        // first-order boundary data. `nodal_poisson_is_second_order` checks the
+        // node-based solver, which avoids that.
         assert!(
             *errors.last().unwrap() < 0.05,
             "final error too large: {}",
             errors.last().unwrap()
         );
+    }
+
+    #[test]
+    fn nodal_poisson_is_second_order() {
+        let exact = |x: f64, y: f64| (PI * x).sin() * (PI * y).sin();
+        let mut errors = Vec::new();
+        for n in [4usize, 8, 16, 32] {
+            let mesh = UnstructuredMesh::from_unit_square(n, n).unwrap();
+            let source: Vec<f64> = (0..mesh.n_cells())
+                .map(|c| {
+                    let [x, y] = mesh.cell_center(c);
+                    2.0 * PI * PI * exact(x, y)
+                })
+                .collect();
+            let phi = mesh.solve_poisson_nodal(1.0, &source, exact);
+            let max_err = (0..mesh.n_cells())
+                .filter(|&c| !mesh.is_boundary_cell[c])
+                .map(|c| {
+                    let [x, y] = mesh.cell_center(c);
+                    (phi[c] - exact(x, y)).abs()
+                })
+                .fold(0.0_f64, f64::max);
+            errors.push(max_err);
+        }
+        // Halving h should cut the error by about 4 for a second-order scheme.
+        for w in errors.windows(2) {
+            assert!(w[1] < w[0] / 2.5, "not second order: {errors:?}");
+        }
+        assert!(*errors.last().unwrap() < 0.005, "final error {errors:?}");
     }
 
     #[test]

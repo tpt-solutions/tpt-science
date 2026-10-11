@@ -1,0 +1,27 @@
+[package]
+name = "tpt-sci-wasm"
+description = "WebAssembly bindings for tpt-science (run specs, climate queries) via wasm-bindgen"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+bench = false
+
+[dependencies]
+tpt-sci-cli = { path = "../tpt-sci-cli" }
+tpt-sci-climate = { workspace = true }
+tpt-sci-image = { workspace = true }
+tpt-sci-cfd-core = { workspace = true }
+tpt-math-linalg = { workspace = true }
+wasm-bindgen = "0.2"
+
+[lints]
+workspace = true

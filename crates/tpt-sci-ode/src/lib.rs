@@ -11,7 +11,7 @@
 //! numeric trait.
 //!
 //! Four methods are provided (see [`Method`]):
-//! * [`Method::Tsit45`] — explicit Runge–Kutta 4(5), non-stiff.
+//! * [`Method::Tsit45`] — explicit Runge–Kutta 5(4), non-stiff.
 //! * [`Method::TrBdf2`] — 2-stage SDIRK (TR-BDF2), A-stable, stiff.
 //! * [`Method::Esdirk34`] — 4-stage ESDIRK order 3(4), A-/L-stable, stiff.
 //! * [`Method::Bdf`] — variable-order (1–5) backward differentiation, stiff.
@@ -40,6 +40,9 @@
 //! ```
 
 pub mod error;
+
+pub mod events;
+#[cfg(feature = "cranelift-jit")]
 pub mod jit;
 pub mod linalg;
 pub mod problem;
@@ -47,19 +50,24 @@ pub mod scalar;
 pub mod sensitivity;
 pub mod solver;
 pub mod sparse;
+/// Named, time-indexed output with CSV export.
+pub mod trajectory;
 
 pub use error::OdeError;
+#[cfg(feature = "cranelift-jit")]
 pub use jit::{JitRhs, JitRhsBuilder, compile_rhs};
 pub use problem::{OdeProblem, OdeProblemBuilder, Rhs};
 pub use sensitivity::{SensitivityResult, forward_sensitivities};
 pub use solver::Method;
+pub use trajectory::Trajectory;
 
 /// A callable right-hand side for the ODE solvers.
 ///
 /// This is implemented automatically for any `Fn(f64, &[f64], &mut [f64])`
 /// closure (the common way to define a problem, e.g. `|t, y, dydt| { .. }`),
-/// and explicitly for [`JitRhs`] so a Cranelift JIT-compiled right-hand side
-/// can be used interchangeably with a plain closure.
+/// and explicitly for `JitRhs` (feature `cranelift-jit`) so a Cranelift
+/// JIT-compiled right-hand side can be used interchangeably with a plain
+/// closure.
 ///
 /// [`OdeProblem`] and the integrators store the RHS behind an `Rc<dyn
 /// RhsCallable>`, so both representations share the exact same solving

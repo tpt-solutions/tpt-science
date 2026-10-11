@@ -1,4 +1,5 @@
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
+use std::hint::black_box;
 use tpt_math_linalg::tpt_math_linalg_dense::DVector;
 use tpt_sci_md::{Forces, Integrator, Particle};
 
