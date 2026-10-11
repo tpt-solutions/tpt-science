@@ -583,7 +583,7 @@ dependencies = [
  "petgraph",
  "serde",
  "serde_json",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -596,7 +596,7 @@ dependencies = [
  "faer-traits",
  "nalgebra",
  "num-traits",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -608,7 +608,7 @@ dependencies = [
  "diffsol-la",
  "log",
  "num-traits",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -793,7 +793,7 @@ dependencies = [
  "quantity",
  "serde",
  "serde_json",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -811,7 +811,7 @@ dependencies = [
  "quantity",
  "serde",
  "serde_json",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -2253,11 +2253,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.20"
+version = "2.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec86235f5fcc2a73650310756d2ac5b138a5780bbbdfae3eeccec992c435ba4f"
+checksum = "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e"
 dependencies = [
- "thiserror-impl 2.0.20",
+ "thiserror-impl 2.0.21",
 ]
 
 [[package]]
@@ -2273,9 +2273,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.20"
+version = "2.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
+checksum = "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2449,7 +2449,7 @@ version = "0.1.0"
 dependencies = [
  "approx",
  "criterion",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-linalg",
  "tpt-sci-units",
 ]
@@ -2460,7 +2460,7 @@ version = "0.1.0"
 dependencies = [
  "approx",
  "criterion",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-linalg",
  "tpt-sci-grid",
  "tpt-sci-kinetics",
@@ -2483,7 +2483,7 @@ version = "0.1.0"
 dependencies = [
  "approx",
  "criterion",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-linalg",
  "tpt-sci-grid",
  "tpt-sci-ode",
@@ -2499,7 +2499,7 @@ dependencies = [
  "feos",
  "feos-core",
  "feos-dft",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-sci-grid",
 ]
 
@@ -2509,7 +2509,7 @@ version = "0.1.0"
 dependencies = [
  "approx",
  "criterion",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-linalg",
  "tpt-sci-grid",
 ]
@@ -2520,7 +2520,7 @@ version = "0.1.0"
 dependencies = [
  "approx",
  "criterion",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-linalg",
  "tpt-sci-grid",
  "tpt-sci-ode",
@@ -2533,7 +2533,7 @@ dependencies = [
  "approx",
  "criterion",
  "proptest",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-linalg",
  "tpt-math-numeric",
 ]
@@ -2545,7 +2545,7 @@ dependencies = [
  "approx",
  "criterion",
  "num-complex",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-linalg",
  "tpt-sci-cfd-core",
  "tpt-sci-ode",
@@ -2558,7 +2558,7 @@ dependencies = [
  "approx",
  "criterion",
  "rayon",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-linalg",
  "tpt-math-signal-fft",
 ]
@@ -2569,7 +2569,7 @@ version = "0.1.0"
 dependencies = [
  "approx",
  "criterion",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-sci-ode",
  "tpt-sci-reaction-network",
  "tpt-sci-units",
@@ -2583,7 +2583,7 @@ dependencies = [
  "criterion",
  "num-complex",
  "rayon",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-linalg",
  "tpt-math-signal-fft",
 ]
@@ -2594,7 +2594,7 @@ version = "0.1.0"
 dependencies = [
  "approx",
  "criterion",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-linalg",
  "tpt-sci-cfd-core",
  "tpt-sci-grid",
@@ -2615,7 +2615,7 @@ dependencies = [
  "proptest",
  "serde",
  "target-lexicon",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-numeric",
 ]
 
@@ -2625,7 +2625,7 @@ version = "0.1.0"
 dependencies = [
  "approx",
  "criterion",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-linalg",
 ]
 
@@ -2637,7 +2637,7 @@ dependencies = [
  "criterion",
  "rayon",
  "serde",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-autodiff-rev",
  "tpt-math-linalg",
  "tpt-math-prob-bayes",
@@ -2652,7 +2652,7 @@ dependencies = [
  "approx",
  "criterion",
  "num-complex",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-linalg",
  "tpt-math-prob-core",
 ]
@@ -2666,7 +2666,7 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-prob-core",
  "tpt-sci-ode",
 ]
@@ -2679,7 +2679,7 @@ dependencies = [
  "criterion",
  "serde",
  "serde_json",
- "thiserror 2.0.20",
+ "thiserror 2.0.21",
  "tpt-math-linalg",
  "tpt-sci-climate",
  "tpt-sci-electrophys",
