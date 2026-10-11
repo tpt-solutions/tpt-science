@@ -16,8 +16,9 @@ hand-rolled explicit-Euler membrane stepper.
   Ca²⁺ balance with the sarcoplasmic reticulum.
   Both models implement the `IonicModel` trait, so the same tissue solver can
   drive either membrane.
-* `LandActiveTension` — Land et al. (2017) human active-tension model at fixed
-  length, driven by cytosolic Ca²⁺ (µM), output in kPa.
+* `LandActiveTension` — Land et al. (2017) human active-tension model with length
+  and velocity dependence, driven by cytosolic Ca²⁺ (µM) and a prescribed length
+  ratio, output in kPa.
 * `Tissue` — 2-D **monodomain** sheet coupling a membrane model to a diffusion
   operator: `dVm/dt = −I_ion/Cm + ∇·(D∇Vm)`, so an action potential launched at
   one node propagates through the tissue.

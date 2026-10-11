@@ -9,9 +9,10 @@ adheres to [Semantic Versioning](https://semver.org).
 
 - `cardiac_electromechanics` example: a Ten Tusscher ventricular cell
   (`tpt-sci-electrophys`) coupled through its Ca²⁺ transient to the Land et al.
-  (2017) active-tension model (`LandActiveTension`, isometric). The two
-  sub-models are stepped by the orchestrator. The checks are the AP plateau and
-  APD, and the tension lagging the calcium peak.
+  (2017) active-tension model (`LandActiveTension`), with the authors' constant-
+  velocity shortening protocol as the prescribed length. The two sub-models are
+  stepped by the orchestrator. The checks are the AP plateau and APD, the tension
+  lagging the calcium peak, and shortening lowering the tension.
 
 - Criterion benchmark suite (/benches/) covering the crate's core hot path.
 
