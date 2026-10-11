@@ -17,6 +17,10 @@ categories = ["science", "simulation"]
 bench = false
 
 [dependencies]
+num-complex = { workspace = true }
+tpt-math-signal-fft = { workspace = true }
+# Optional data parallelism over particles.
+rayon = { version = "1", optional = true }
 tpt-math-linalg = { workspace = true }
 thiserror = { workspace = true }
 
@@ -33,3 +37,11 @@ all-features = true
 [[bench]]
 name = "md"
 harness = false
+
+[features]
+# Parallel Lennard-Jones forces (`Forces::lennard_jones_parallel`).
+rayon = ["dep:rayon"]
+
+[[test]]
+name = "parallel_forces"
+required-features = ["rayon"]

@@ -1,0 +1,8 @@
+[template]
+cargo_generate_version = ">=0.10.0"
+description = "An ODE model solved with tpt-sci-ode, written out as CSV"
+
+[placeholders.tpt_sci_spec]
+type = "string"
+prompt = "Dependency spec for tpt-sci (the part after `tpt-sci = `)"
+default = 'git = "https://github.com/tpt-solutions/tpt-science", features = ["ode"]'

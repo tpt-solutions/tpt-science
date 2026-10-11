@@ -16,3 +16,23 @@ fn resting_cell_is_stable_without_stimulus() {
         hh.voltage()
     );
 }
+
+#[test]
+fn one_row_bidomain_cable_solves_without_panicking() {
+    use tpt_sci_electrophys::{Diffusivity, Tissue};
+    let mut cable =
+        Tissue::with_model(30, 1, Diffusivity::Scalar(1.0), HodgkinHuxley::resting()).unwrap();
+    cable.enable_bidomain(1.0);
+    for i in 0..4 {
+        cable.stimulate(i, 0, 40.0);
+    }
+    for _ in 0..200 {
+        cable.bidomain_step(0.01).unwrap();
+    }
+    let phi = cable.extracellular_potential();
+    assert_eq!(phi.len(), 30);
+    assert!(phi.iter().all(|v| v.is_finite()));
+    // The Neumann-problem solution is zero-mean.
+    let mean = phi.iter().sum::<f64>() / phi.len() as f64;
+    assert!(mean.abs() < 1e-6, "mean {mean}");
+}

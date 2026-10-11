@@ -22,3 +22,14 @@ fn coverages_are_bounded_and_grow_with_pressure() {
     assert!(high[0] > low[0]);
     assert!(high.iter().sum::<f64>() <= 1.0 + 1e-9);
 }
+
+#[test]
+fn typed_arrhenius_api_matches_raw_api() {
+    use tpt_sci_units::{JoulePerMole, Kelvin};
+    let raw = ArrheniusRate::new(1.0e13, 80_000.0).unwrap();
+    let typed = ArrheniusRate::with_activation_energy(1.0e13, JoulePerMole::new(80_000.0)).unwrap();
+    assert_eq!(
+        raw.rate_constant(800.0),
+        typed.rate_constant_at(Kelvin::new(800.0))
+    );
+}

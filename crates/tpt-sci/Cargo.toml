@@ -17,6 +17,7 @@ categories = ["science", "simulation"]
 bench = false
 
 [dependencies]
+tpt-sci-units = { workspace = true }
 tpt-sci-ode = { workspace = true, optional = true }
 tpt-sci-grid = { workspace = true, optional = true }
 tpt-sci-sim-core = { workspace = true, optional = true }
@@ -62,7 +63,7 @@ full = [
 "dft-electronic",
 ]
 ode = ["dep:tpt-sci-ode"]
-grid = ["dep:tpt-sci-grid"]
+grid = ["dep:tpt-sci-grid", "tpt-sci-grid/sparse"]
 sim-core = ["dep:tpt-sci-sim-core"]
 reaction-network = ["dep:tpt-sci-reaction-network"]
 ppl = ["dep:tpt-sci-ppl"]
@@ -85,3 +86,23 @@ workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
+
+[dev-dependencies]
+tpt-math-linalg = { workspace = true }
+tpt-math-prob-core = { workspace = true }
+
+[[example]]
+name = "tutorial_sir_fit"
+required-features = ["ode", "ppl"]
+
+[[example]]
+name = "tutorial_cable_bidomain"
+required-features = ["electrophys"]
+
+[[example]]
+name = "tutorial_orbit_j2_drag"
+required-features = ["astro"]
+
+[[example]]
+name = "tutorial_ct_phantom"
+required-features = ["image"]

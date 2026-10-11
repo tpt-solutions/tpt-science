@@ -22,11 +22,14 @@ tpt-math-autodiff-rev = { workspace = true }
 tpt-math-prob-bayes = { workspace = true }
 tpt-math-prob-core = { workspace = true }
 thiserror = { workspace = true }
+# Optional parallel chains (`gradient::fit_with_gradient_parallel`).
+rayon = { version = "1", optional = true }
 
 # Optional (de)serialization of result types.
 serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
+tpt-sci-ode = { workspace = true }
 criterion = { workspace = true }
 approx = { workspace = true }
 
@@ -41,5 +44,11 @@ name = "ppl"
 harness = false
 
 [features]
+# Run NUTS chains in parallel (`gradient::fit_with_gradient_parallel`).
+rayon = ["dep:rayon"]
 # serde (de)serialization for result types. Off by default.
 serde = ["dep:serde"]
+
+[[test]]
+name = "parallel_chains"
+required-features = ["rayon"]

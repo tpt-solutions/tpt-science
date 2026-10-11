@@ -44,12 +44,14 @@
 
 mod error;
 pub mod komega_sst;
+pub mod scalar;
 pub mod simple;
 pub mod turbulence;
 pub mod unstructured;
 
 pub use error::CfdError;
 pub use komega_sst::KOmegaSst;
+pub use scalar::ScalarTransport;
 pub use simple::SimpleSolver;
 pub use unstructured::{Face, UnstructuredMesh};
 

@@ -2,6 +2,7 @@
 //! finite-difference Jacobian.
 
 use std::cell::Cell;
+use std::rc::Rc;
 
 use tpt_sci_ode::OdeError;
 use tpt_sci_ode::sparse::{CsrMatrix, JacobianPattern};
@@ -106,4 +107,59 @@ fn colored_jacobian_rejects_mismatched_pattern() {
         &pat,
     );
     assert!(r.is_err());
+}
+
+/// Stiff tridiagonal diffusion, 80 states (above the sparse-LU threshold):
+/// `y_i' = -500·(2y_i − y_{i−1} − y_{i+1}) + sin(y_i)`.
+fn stiff_chain(counter: Rc<Cell<usize>>) -> impl Fn(f64, &[f64], &mut [f64]) {
+    move |_t, y, out| {
+        counter.set(counter.get() + 1);
+        let n = y.len();
+        for i in 0..n {
+            let left = if i > 0 { y[i - 1] } else { 0.0 };
+            let right = if i + 1 < n { y[i + 1] } else { 0.0 };
+            out[i] = -500.0 * (2.0 * y[i] - left - right) + y[i].sin();
+        }
+    }
+}
+
+#[test]
+fn implicit_solve_with_pattern_matches_and_uses_fewer_rhs_calls() {
+    use tpt_sci_ode::{Method, OdeProblemBuilder};
+
+    let n = 80;
+    let y0: Vec<f64> = (0..n).map(|i| (i as f64 * 0.1).cos()).collect();
+    let pattern = JacobianPattern::new(
+        (0..n)
+            .map(|i: usize| (i.saturating_sub(1)..=(i + 1).min(n - 1)).collect())
+            .collect(),
+    )
+    .unwrap();
+
+    let plain_counter = Rc::new(Cell::new(0));
+    let plain = OdeProblemBuilder::new(stiff_chain(plain_counter.clone()), y0.clone(), 0.0)
+        .rtol(1e-6)
+        .atol(1e-8)
+        .build()
+        .unwrap();
+    let y_plain = plain.solve(Method::TrBdf2, 0.5).unwrap();
+
+    let pattern_counter = Rc::new(Cell::new(0));
+    let with_pattern = OdeProblemBuilder::new(stiff_chain(pattern_counter.clone()), y0, 0.0)
+        .rtol(1e-6)
+        .atol(1e-8)
+        .jacobian_pattern(pattern)
+        .build()
+        .unwrap();
+    let y_pattern = with_pattern.solve(Method::TrBdf2, 0.5).unwrap();
+
+    for (a, b) in y_plain.iter().zip(&y_pattern) {
+        assert!((a - b).abs() < 1e-4, "{a} vs {b}");
+    }
+    assert!(
+        pattern_counter.get() < plain_counter.get(),
+        "pattern used {} RHS calls, plain used {}",
+        pattern_counter.get(),
+        plain_counter.get()
+    );
 }

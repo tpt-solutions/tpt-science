@@ -69,6 +69,7 @@
 //! ```
 
 pub mod error;
+pub mod gradient;
 pub mod model;
 pub mod nuts;
 pub mod trace;

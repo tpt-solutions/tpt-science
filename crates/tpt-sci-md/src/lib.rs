@@ -54,6 +54,7 @@ mod ewald;
 mod forces;
 mod integrator;
 mod particle;
+mod pppm;
 mod rdf;
 
 pub use cells::{CellList, neighbor_pairs_brute_force};
@@ -64,6 +65,7 @@ pub use ewald::Ewald;
 pub use forces::{Forces, lennard_jones};
 pub use integrator::Integrator;
 pub use particle::Particle;
+pub use pppm::Pppm;
 pub use rdf::rdf;
 
 #[cfg(test)]

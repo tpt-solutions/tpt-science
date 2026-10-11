@@ -5,7 +5,7 @@
 ///
 /// Useful as a default when working in Earth-Centered Inertial (ECI) frames
 /// with kilometre and second units.
-pub const EARTH_MU: f64 = 398_600.441_8;
+pub const EARTH_MU: f64 = tpt_sci_units::EARTH_MU.value();
 
 /// Earth's second zonal harmonic `J₂` (dimensionless), the leading oblateness
 /// term that drives nodal regression and apsidal precession.
@@ -13,7 +13,7 @@ pub const EARTH_J2: f64 = 1.082_626_68e-3;
 
 /// Earth's equatorial radius `Rₑ` in km, the reference length for the `J₂`
 /// perturbation (the perturbation scales as `(Rₑ/p)²`).
-pub const EARTH_RADIUS_EQ: f64 = 6378.137;
+pub const EARTH_RADIUS_EQ: f64 = tpt_sci_units::EARTH_RADIUS_EQ.value();
 
 /// Earth's fourth zonal harmonic `J₄` (dimensionless), the next zonal
 /// oblateness term after `J₂`.

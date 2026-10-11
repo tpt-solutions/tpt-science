@@ -223,13 +223,14 @@ pub(crate) fn sdirk_stage(
     diag: f64,
     k_guess: &[f64],
     tol: Tol,
+    jac: Option<&crate::sparse::JacobianPattern>,
 ) -> Result<Vec<f64>, OdeError> {
     let n = y_base.len();
     // Large systems route their Newton linear solves through the sparse
     // CSR/LU path (`sparse` module): the finite-difference Jacobian is built
     // directly in compressed storage and never materialised densely.
     if n >= crate::sparse::SPARSE_LU_MIN_N {
-        return crate::sparse::sdirk_stage_sparse(f, t_stage, y_base, diag, k_guess, tol);
+        return crate::sparse::sdirk_stage_sparse(f, t_stage, y_base, diag, k_guess, tol, jac);
     }
     let mut k = k_guess.to_vec();
     let mut corr = f64::INFINITY;
@@ -324,7 +325,7 @@ mod tests {
         // (the discriminant of the quadratic in k is negative), so Newton
         // cannot converge and the stage must report failure.
         let f = |_t: f64, y: &[f64], dydt: &mut [f64]| dydt[0] = y[0] * y[0] + 1.0;
-        assert!(sdirk_stage(&f, 0.0, &[0.0], 1.0, &[0.0], TOL).is_err());
+        assert!(sdirk_stage(&f, 0.0, &[0.0], 1.0, &[0.0], TOL, None).is_err());
     }
 
     #[test]
@@ -337,7 +338,7 @@ mod tests {
             dydt[0] = -2.0 * y[0];
             dydt[1] = -2.0 * y[1];
         };
-        let k = sdirk_stage(&f, 0.0, &y, diag, &[0.0, 0.0], TOL).unwrap();
+        let k = sdirk_stage(&f, 0.0, &y, diag, &[0.0, 0.0], TOL, None).unwrap();
         let expected0 = -2.0 * y[0] / (1.0 + 2.0 * diag);
         let expected1 = -2.0 * y[1] / (1.0 + 2.0 * diag);
         assert!((k[0] - expected0).abs() < 1e-10);

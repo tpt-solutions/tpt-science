@@ -1,0 +1,8 @@
+{
+  "network": "beta, S + I --> 2 I\ngamma, I --> R",
+  "parameters": { "beta": 0.0004, "gamma": 0.2 },
+  "initial": { "S": 990, "I": 10, "R": 0 },
+  "t_final": 60,
+  "points": 60,
+  "method": "bdf"
+}

@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use crate::RhsCallable;
 use crate::error::OdeError;
+use crate::sparse::JacobianPattern;
 
 /// Right-hand-side closure shape accepted by [`OdeProblemBuilder`].
 ///
@@ -19,6 +20,7 @@ pub struct OdeProblemBuilder {
     rtol: f64,
     atol: f64,
     h0: Option<f64>,
+    jac_pattern: Option<JacobianPattern>,
 }
 
 impl OdeProblemBuilder {
@@ -36,6 +38,7 @@ impl OdeProblemBuilder {
             rtol: 1e-6,
             atol: 1e-6,
             h0: None,
+            jac_pattern: None,
         }
     }
 
@@ -50,6 +53,7 @@ impl OdeProblemBuilder {
             rtol: 1e-6,
             atol: 1e-6,
             h0: None,
+            jac_pattern: None,
         }
     }
 
@@ -62,6 +66,20 @@ impl OdeProblemBuilder {
     /// Absolute tolerance passed to the solver's adaptive error control.
     pub fn atol(mut self, atol: f64) -> Self {
         self.atol = atol;
+        self
+    }
+
+    /// Declare the Jacobian's sparsity pattern for the implicit sparse path.
+    ///
+    /// With a pattern, sparse Newton solves (state size at least
+    /// [`SPARSE_LU_MIN_N`](crate::sparse::SPARSE_LU_MIN_N)) build the Jacobian
+    /// with one RHS call per color (see
+    /// [`CsrMatrix::jacobian_colored`](crate::sparse::CsrMatrix::jacobian_colored))
+    /// rather than one per state. The pattern must cover every structural
+    /// nonzero, or the Newton iteration uses an incomplete Jacobian.
+    #[must_use]
+    pub fn jacobian_pattern(mut self, pattern: JacobianPattern) -> Self {
+        self.jac_pattern = Some(pattern);
         self
     }
 
@@ -97,6 +115,7 @@ impl OdeProblemBuilder {
             rtol: self.rtol,
             atol: self.atol,
             h0: self.h0,
+            jac_pattern: self.jac_pattern,
             nstates: n,
         })
     }
@@ -112,6 +131,7 @@ pub struct OdeProblem {
     pub(crate) rtol: f64,
     pub(crate) atol: f64,
     pub(crate) h0: Option<f64>,
+    pub(crate) jac_pattern: Option<JacobianPattern>,
     pub(crate) nstates: usize,
 }
 
@@ -180,6 +200,7 @@ impl OdeProblem {
             rtol: self.rtol,
             atol: self.atol,
             h0: self.h0,
+            jac_pattern: self.jac_pattern.clone(),
             nstates: self.nstates,
         })
     }

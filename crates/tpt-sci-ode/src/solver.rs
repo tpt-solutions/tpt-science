@@ -16,6 +16,7 @@ use crate::error::OdeError;
 use crate::events::{Direction, Event, EventHit, EventSolution, bisect_root};
 use crate::linalg::{DMat, NEWTON_TOL, RhsFn, Tol, eval, jacobian, sdirk_stage};
 use crate::problem::OdeProblem;
+use crate::sparse::JacobianPattern;
 
 /// Integration method selection for [`OdeProblem::solve`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,6 +63,7 @@ struct StepResult {
 /// state and a local error estimate, or `Err` if the nonlinear solve could not
 /// converge (caller should shrink `h` and retry). `bdf_state`, if `Some`, is the
 /// BDF order/history; it is updated in place on success.
+#[allow(clippy::too_many_arguments)]
 fn try_step(
     method: Method,
     f: &dyn crate::RhsCallable,
@@ -69,18 +71,20 @@ fn try_step(
     y: &[f64],
     h: f64,
     tol: Tol,
+    jac: Option<&JacobianPattern>,
     bdf_state: Option<&mut NordsieckState>,
 ) -> Result<StepResult, OdeError> {
     match method {
         Method::Tsit45 => step_dp54(f, t, y, h),
-        Method::TrBdf2 => step_sdirk2(f, t, y, h, tol),
-        Method::Esdirk34 => step_esdirk34(f, t, y, h, tol),
+        Method::TrBdf2 => step_sdirk2(f, t, y, h, tol, jac),
+        Method::Esdirk34 => step_esdirk34(f, t, y, h, tol, jac),
         Method::Bdf => step_bdf(
             f,
             t,
             y,
             h,
             tol,
+            jac,
             bdf_state.expect("BDF requires a Nordsieck state"),
         ),
     }
@@ -188,7 +192,16 @@ fn integrate(
         // Nordsieck vector inside `step_bdf`) cannot corrupt the integration.
         // On rejection we restore this snapshot before retrying.
         let bdf_snapshot = bdf_state.clone();
-        match try_step(method, f, t, &y, h, tol, bdf_state.as_mut()) {
+        match try_step(
+            method,
+            f,
+            t,
+            &y,
+            h,
+            tol,
+            prob.jac_pattern.as_ref(),
+            bdf_state.as_mut(),
+        ) {
             Ok(mut res) => {
                 // `t + h` can land an ulp short of the target, which would leave a
                 // sliver of remaining interval and a step below `h_min`. The step
@@ -584,6 +597,7 @@ fn step_sdirk2(
     y: &[f64],
     h: f64,
     tol: Tol,
+    jac: Option<&JacobianPattern>,
 ) -> Result<StepResult, OdeError> {
     let n = y.len();
     let g = TRBDF2_GAMMA;
@@ -597,13 +611,13 @@ fn step_sdirk2(
         .zip(&f_start)
         .map(|(yi, k0i)| yi + d * h * k0i)
         .collect();
-    let k1 = sdirk_stage(f, t + g * h, &base1, d * h, &f_start, tol)?;
+    let k1 = sdirk_stage(f, t + g * h, &base1, d * h, &f_start, tol, jac)?;
 
     // Stage 2: y₊ = y + h(w0·k0 + w1·k1) + h·w2·k2, k2 = f(t + h, y₊).
     let base2: Vec<f64> = (0..n)
         .map(|i| y[i] + h * (TRBDF2_W0 * f_start[i] + TRBDF2_W1 * k1[i]))
         .collect();
-    let k2 = sdirk_stage(f, t + h, &base2, TRBDF2_W2 * h, &k1, tol)?;
+    let k2 = sdirk_stage(f, t + h, &base2, TRBDF2_W2 * h, &k1, tol, jac)?;
 
     let y_new: Vec<f64> = (0..n).map(|i| base2[i] + TRBDF2_W2 * h * k2[i]).collect();
     // k2 = f(t + h, y_new) by construction, so the derivative at the end of the
@@ -659,6 +673,7 @@ fn step_esdirk34(
     y: &[f64],
     h: f64,
     tol: Tol,
+    jac: Option<&JacobianPattern>,
 ) -> Result<StepResult, OdeError> {
     let n = y.len();
     let g = ESDIRK34_GAMMA;
@@ -670,7 +685,7 @@ fn step_esdirk34(
         .zip(&k0)
         .map(|(yi, k0i)| yi + h * g * k0i)
         .collect();
-    let k1 = sdirk_stage(f, t + ESDIRK34_C2 * h, &base1, g * h, &k0, tol)?;
+    let k1 = sdirk_stage(f, t + ESDIRK34_C2 * h, &base1, g * h, &k0, tol, jac)?;
 
     // Stage 2 (c = c3): Y2 = y + h·(a31·k0 + a32·k1 + g·k2).
     let base2: Vec<f64> = y
@@ -679,7 +694,7 @@ fn step_esdirk34(
         .zip(&k1)
         .map(|((yi, k0i), k1i)| yi + h * (ESDIRK34_A31 * k0i + ESDIRK34_A32 * k1i))
         .collect();
-    let k2 = sdirk_stage(f, t + ESDIRK34_C3 * h, &base2, g * h, &k1, tol)?;
+    let k2 = sdirk_stage(f, t + ESDIRK34_C3 * h, &base2, g * h, &k1, tol, jac)?;
 
     // Stage 3 (c = 1): Y3 = y + h·(b0·k0 + b1·k1 + b2·k2 + g·k3).
     let base3: Vec<f64> = y
@@ -691,7 +706,7 @@ fn step_esdirk34(
             yi + h * (ESDIRK34_B[0] * k0i + ESDIRK34_B[1] * k1i + ESDIRK34_B[2] * k2i)
         })
         .collect();
-    let k3 = sdirk_stage(f, t + h, &base3, g * h, &k2, tol)?;
+    let k3 = sdirk_stage(f, t + h, &base3, g * h, &k2, tol, jac)?;
 
     let ks = [&k0, &k1, &k2, &k3];
     let mut y_new = y.to_vec();
@@ -878,6 +893,7 @@ fn step_bdf(
     _y: &[f64],
     h: f64,
     tol: Tol,
+    jac: Option<&JacobianPattern>,
     state: &mut NordsieckState,
 ) -> Result<StepResult, OdeError> {
     let n = state.n();
@@ -917,14 +933,23 @@ fn step_bdf(
         // CSR/LU path (`sparse` module): the finite-difference Jacobian is
         // built directly in compressed storage and never materialised densely.
         let delta = if n >= crate::sparse::SPARSE_LU_MIN_N {
-            let jac = crate::sparse::CsrMatrix::jacobian(
-                |t, y, dydt| f.call(t, y, dydt),
-                t + h,
-                &y_cur,
-                &fk,
-                None,
-            )?;
-            let a = jac.scaled_identity_minus_scaled(gamma);
+            let jmat = match jac {
+                Some(pattern) => crate::sparse::CsrMatrix::jacobian_colored(
+                    |t, y, dydt| f.call(t, y, dydt),
+                    t + h,
+                    &y_cur,
+                    &fk,
+                    pattern,
+                )?,
+                None => crate::sparse::CsrMatrix::jacobian(
+                    |t, y, dydt| f.call(t, y, dydt),
+                    t + h,
+                    &y_cur,
+                    &fk,
+                    None,
+                )?,
+            };
+            let a = jmat.scaled_identity_minus_scaled(gamma);
             a.sparse_solve(&residual).ok_or(OdeError::Newton {
                 t: t + h,
                 residual: rnorm,

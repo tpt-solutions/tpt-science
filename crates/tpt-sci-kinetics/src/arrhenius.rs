@@ -40,3 +40,24 @@ impl ArrheniusRate {
         self.a * (-self.ea / (R_GAS * t)).exp()
     }
 }
+
+impl ArrheniusRate {
+    /// Typed constructor: pre-exponential factor `a` and activation energy `ea`.
+    ///
+    /// # Errors
+    ///
+    /// As [`ArrheniusRate::new`].
+    pub fn with_activation_energy(
+        a: f64,
+        ea: tpt_sci_units::JoulePerMole,
+    ) -> Result<Self, KineticsError> {
+        Self::new(a, ea.value())
+    }
+
+    /// Rate constant at a typed temperature. Equivalent to
+    /// [`ArrheniusRate::rate_constant`] with the unit carried in the type.
+    #[must_use]
+    pub fn rate_constant_at(&self, t: tpt_sci_units::Kelvin) -> f64 {
+        self.rate_constant(t.value())
+    }
+}

@@ -1,0 +1,30 @@
+name: Semver checks
+
+# Dormant until crates are published. Runs only on demand. It compares the
+# public API of the workspace with a git baseline and fails on breaking changes
+# that are not reflected in the version bump. Before the first crates.io release
+# there is no published baseline to compare against, so it reports nothing useful
+# and should not be relied on until then (see RELEASE.md).
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_rev:
+        description: "Git revision to compare against (e.g. a release tag)"
+        required: true
+        type: string
+
+jobs:
+  semver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-semver-checks
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-semver-checks
+      - name: Check the public API against the baseline
+        run: cargo semver-checks check-release --workspace --baseline-rev "${{ github.event.inputs.baseline_rev }}"

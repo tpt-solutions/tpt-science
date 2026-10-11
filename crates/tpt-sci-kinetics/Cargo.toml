@@ -18,6 +18,7 @@ publish = false
 bench = false
 
 [dependencies]
+tpt-sci-units = { workspace = true }
 tpt-sci-reaction-network = { workspace = true }
 tpt-sci-ode = { workspace = true }
 thiserror = { workspace = true }

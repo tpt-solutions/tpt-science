@@ -20,6 +20,9 @@ bench = false
 [dependencies]
 tpt-sci-ode = { workspace = true }
 thiserror = { workspace = true }
+tpt-math-prob-core = { workspace = true }
+# Optional data parallelism over SSA ensemble members.
+rayon = { version = "1", optional = true }
 
 # Optional (de)serialization of result types.
 serde = { version = "1", features = ["derive"], optional = true }
@@ -40,6 +43,8 @@ name = "reaction_network"
 harness = false
 
 [features]
+# Parallel SSA ensembles. Results are identical with or without it.
+rayon = ["dep:rayon"]
 # serde (de)serialization for result types. Off by default.
 serde = ["dep:serde"]
 

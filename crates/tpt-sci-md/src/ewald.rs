@@ -5,7 +5,7 @@ use super::*;
 /// Complementary error function via the Abramowitz & Stegun 7.1.26 rational
 /// approximation (max absolute error ~1.5e-7) — enough precision for MD forces
 /// and energies without pulling in a special-functions dependency.
-fn erfc(x: f64) -> f64 {
+pub(crate) fn erfc(x: f64) -> f64 {
     if x < 0.0 {
         return 2.0 - erfc(-x);
     }

@@ -40,8 +40,8 @@ mod error;
 
 pub use error::ElectrophysError;
 
-use tpt_sci_grid::sparse::{conjugate_gradient, laplacian_2d_sparse};
-use tpt_sci_grid::{Boundary, UniformGrid2D};
+use tpt_sci_grid::sparse::{conjugate_gradient, laplacian_1d_sparse, laplacian_2d_sparse};
+use tpt_sci_grid::{Boundary, UniformGrid1D, UniformGrid2D};
 
 mod diffusion;
 mod hodgkin_huxley;

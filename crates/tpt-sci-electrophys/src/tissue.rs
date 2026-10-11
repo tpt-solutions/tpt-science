@@ -142,20 +142,41 @@ impl Tissue {
     /// and the SPD system is solved each call with
     /// [`tpt_sci_grid::sparse::conjugate_gradient`] (Neumann boundaries give a
     /// singular-but-consistent system whose unique zero-mean solution CG
-    /// recovers). In monodomain mode this returns a zero vector.
-    ///
-    /// # Panics
-    ///
-    /// Panics only if the internal grid cannot be constructed, which cannot
-    /// happen for a [`Tissue`] built through [`Tissue::new`] or
-    /// [`Tissue::with_model`] (those guarantee `nx, ny > 0`).
+    /// recovers). In monodomain mode this returns a zero vector. A one-row tissue
+    /// (a cable) is solved with the 1-D Laplacian, and a single cell has no
+    /// extracellular domain, so it also returns zeros.
     #[must_use]
     pub fn extracellular_potential(&self) -> Vec<f64> {
-        if !self.bidomain {
+        // Both grids need at least two points along x, and the 2-D grid needs two
+        // along y as well. Anything smaller has no extracellular problem to solve.
+        if !self.bidomain || self.nx < 2 {
             return vec![0.0; self.nx * self.ny];
         }
-        let grid = UniformGrid2D::new(self.nx, 0.0, 1.0, self.ny, 0.0, 1.0).expect("grid");
-        let lap = laplacian_2d_sparse(&grid, Boundary::Neumann);
+        // A one-row tissue is a cable: solve the 1-D problem. Otherwise use the 2-D
+        // operator. Both use the same unit-domain spacing along x.
+        let lap = if self.ny == 1 {
+            let Ok(grid) = UniformGrid1D::new(self.nx, 0.0, 1.0) else {
+                return vec![0.0; self.nx * self.ny];
+            };
+            let mut lap = laplacian_1d_sparse(&grid, Boundary::Neumann);
+            // The Neumann rows are half-cell finite-volume rows, so the raw operator
+            // is not symmetric. Scaling each row by its cell weight (½ at the ends)
+            // gives a symmetric operator with the same solutions, which the
+            // conjugate-gradient solve below requires.
+            let n = self.nx;
+            for i in 0..n {
+                let w = if i == 0 || i == n - 1 { 0.5 } else { 1.0 };
+                for k in lap.row_ptr[i]..lap.row_ptr[i + 1] {
+                    lap.values[k] *= w;
+                }
+            }
+            lap
+        } else {
+            let Ok(grid) = UniformGrid2D::new(self.nx, 0.0, 1.0, self.ny, 0.0, 1.0) else {
+                return vec![0.0; self.nx * self.ny];
+            };
+            laplacian_2d_sparse(&grid, Boundary::Neumann)
+        };
         let di = self.diff;
         let de = self.sigma_e;
         // b = −σ_i · L · Vm  (use the unscaled Laplacian first).

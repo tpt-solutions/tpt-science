@@ -47,7 +47,7 @@ pub use gcm::AtmosphereGcm;
 pub use radiative_transfer::{Band, CorrelatedKBand, CorrelatedKRt, MultiBandRadiativeTransfer};
 
 /// Stefan–Boltzmann constant (W·m⁻²·K⁻⁴).
-pub const SIGMA: f64 = 5.670_374_419e-8;
+pub const SIGMA: f64 = tpt_sci_units::STEFAN_BOLTZMANN.value();
 /// Pre-industrial CO₂ reference (ppm).
 pub const CO2_PREINDUSTRIAL: f64 = 280.0;
 

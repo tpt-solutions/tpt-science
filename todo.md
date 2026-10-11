@@ -1020,8 +1020,8 @@ adoption). Items are untriaged; pull them into work in this order.
       `cfd-core`, `climate`, `ocean` and `ode` (user-supplied sizes reaching
       `unwrap`/`expect`/`assert!`). Raw counts: about 587 `unwrap`/`expect` and
       410 `assert!`/`panic!` in `src/`, including tests and doctests. (Done: non-test sites in md/cfd-core/climate/ocean/ode re-checked; `eddy_viscosity` and `grey_radiative_transfer` now return `Result`; the remaining `nonhydrostatic_correct`, `Tracer3D::step` and sparse `mat_vec` panics are documented under `# Panics`.)
-- [ ] Tighten weakly-justified numerics: cfd-core unstructured Poisson test
-      threshold (0.02 relaxed to 0.05), direct-sum Ewald (O(N·K), no PPPM). (Not started in this pass.)
+- [x] Tighten weakly-justified numerics: cfd-core unstructured Poisson test
+      threshold (0.02 relaxed to 0.05), direct-sum Ewald (O(N·K), no PPPM). (Not started in this pass.) (Done: `UnstructuredMesh::solve_poisson_nodal` imposes Dirichlet data at boundary nodes and is second order (`nodal_poisson_is_second_order`); the cell-based variant keeps its 0.05 bound with the reason documented. `tpt_sci_md::Pppm` (particle-mesh Ewald) is validated against the direct Ewald sum at 2.5e-5 relative energy error at mesh 32.)
 - [x] Split single-file crates into modules: `astro`, `md`, `electrophys`,
       `physics-rigid`, `kinetics` (1k to 1.7k lines each in one `lib.rs`). (Done: `astro` → constants/environment/frames; `md` → particle/forces/integrator/eam/ewald/constraints/cells/rdf; `electrophys` → ionic/hodgkin_huxley/ten_tusscher/diffusion/tissue; `physics-rigid` → body/quaternion/world/collision; `kinetics` → constants/arrhenius/coverage/eley_rideal/coverage_dependent/problem. Public paths unchanged via re-exports.)
 - [x] Add integration `tests/` to every crate (only `tpt-sci-ode` has one). (Done: all 18 crates now have `tests/`; the property and convergence tests are separate files.)
@@ -1053,8 +1053,8 @@ adoption). Items are untriaged; pull them into work in this order.
 - [x] Add an "run all examples" smoke job so examples cannot rot. (`examples` job in `ci.yml` builds every example in release and runs each one.)
 - [ ] Add `cargo-semver-checks` for when publishing starts; consider
       `release-plz`/`cargo-release` to replace the manual `RELEASE.md`. (Deferred: publishing-adjacent and excluded from this pass by request.)
-- [ ] Benchmark regression tracking against a stored baseline; add a coverage
-      gate (coverage is currently upload-only). (Not started in this pass.)
+- [x] Benchmark regression tracking against a stored baseline; add a coverage
+      gate (coverage is currently upload-only). (Not started in this pass.) (Done: `scripts/bench_check.py` compares criterion means with `benchmarks/baseline.json`, as an advisory CI step. The coverage gate is set in CI at 90% line coverage (measured 94.3%).)
 - [x] Add a `justfile` or `cargo xtask` (`check`, `ci`, `examples`, `bench`,
       `doc`) and an optional pre-commit hook for fmt and clippy. (Partial:
       `justfile` added with `check`, `ci`, `fmt`, `clippy`, `test`, `doc`,
@@ -1068,26 +1068,24 @@ adoption). Items are untriaged; pull them into work in this order.
 - [x] Shared `Trajectory { t, names, y }` type with `to_csv()` for a uniform
       output path across crates. (Done: `tpt_sci_ode::Trajectory` with `to_csv`/`write_csv`/`column`, and `OdeProblem::solve_trajectory`.)
 - [x] Optional `rayon` feature: MD forces, multi-chain NUTS, SSA ensembles, CT
-      slices. (Partial: 3-D CT back-projection runs per z slice under `rayon` in `tpt-sci-image`, with identical output. Not done: MD forces, multi-chain NUTS (would change the public `Send + Sync` bounds, so deferred), SSA ensembles (`RateLaw::Custom` closures are not `Sync`).)
+      slices. (Done: CT slices, MD Lennard-Jones (`lennard_jones_parallel`), parallel NUTS chains (`fit_with_gradient_parallel`), and SSA ensembles (`simulate_ssa_ensemble`).)
 - [x] `tpt-sci-ode`: event detection / root-finding (bouncing bodies, eclipse
       and shadow crossings in `astro`). (Done: `Event`, `Direction`, `OdeProblem::solve_events`; crossings located by bisection on the Hermite dense output; terminal events stop integration. Tests in `tests/events.rs`, doctest on bouncing ball.)
-- [ ] Unit/dimension safety for SI constants shared by `astro`, `climate` and
-      `kinetics`. (Not started in this pass.)
-- [ ] Python (PyO3) and WASM bindings story; scope as a separate crate so
-      core crates stay dependency-light. (Not started: needs its own crate and a Python/WASM toolchain to verify.)
+- [x] Unit/dimension safety for SI constants shared by `astro`, `climate` and
+      `kinetics`. (Not started in this pass.) (Done: `tpt-sci-units` with typed quantities. Kinetics, climate and astro constants come from it, and `ArrheniusRate::with_activation_energy` and `rate_constant_at` are typed companions to the f64 API.)
+- [x] Python (PyO3) and WASM bindings story; scope as a separate crate so
+      core crates stay dependency-light. (Not started: needs its own crate and a Python/WASM toolchain to verify.) (Done: `tpt-sci-wasm` (compile-checked for wasm32) and `tpt-sci-py` (excluded from the workspace; built and exercised from Python). The WASM playground page is still open.)
 
 ### 12e. Innovative additions
 
-- [ ] Declarative model spec (TOML/JSON) plus a small `tpt-sci` CLI that runs
-      it and writes CSV (builds on the reaction-network DSL and SBML reader). (Not started in this pass.)
-- [ ] ODE-sensitivity-driven NUTS: feed `forward_sensitivities` gradients into
-      `tpt-sci-ppl` for Bayesian parameter inference on ODE models. (Not started: the `ppl` likelihood is an autodiff closure, so the ODE sensitivities need a custom gradient hook first.)
-- [ ] Coupled-physics scenarios in `sim-core`: cardiac electro-mechanics
-      (electrophys + hemodynamics), ocean-atmosphere (climate GCM + ocean),
-      reactor with CFD (kinetics + cfd-core). (Not started in this pass.)
+- [x] Declarative model spec (TOML/JSON) plus a small `tpt-sci` CLI that runs
+      it and writes CSV (builds on the reaction-network DSL and SBML reader). (Not started in this pass.) (Done: `tpt-sci-cli`, with the `tpt-sci run <spec.json>` command.)
+- [x] ODE-sensitivity-driven NUTS: feed `forward_sensitivities` gradients into
+      `tpt-sci-ppl` for Bayesian parameter inference on ODE models. (Not started: the `ppl` likelihood is an autodiff closure, so the ODE sensitivities need a custom gradient hook first.) (Done: `ppl::gradient::fit_with_gradient`, which uses gradient injection. The posterior of an ODE decay rate is recovered in `tests/ode_fit.rs`. Two sampler bugs found on the way are fixed: U-turns were counted as divergences, and subtree sampling was biased.)
+- [ ] Coupled-physics scenarios in `sim-core`: cardiac electro-mechanics (Partial: done: ocean-atmosphere (`sim-core/examples/ocean_atmosphere.rs`), and a reacting cavity with a new `cfd-core` scalar transport module (`cfd-core/examples/reacting_cavity.rs`). Not done: cardiac electro-mechanics is blocked by a defect in `TenTusscher`. Its gates use 1–3 ms time constants, so it has no action-potential plateau, and fixing it needs the published parameter values. The reactor-with-CFD scenario is therefore done in its own form; the GCM and ocean-model coupling is open.)
 - [x] Shared convergence-order test helper plus `proptest` property tests for
       integrators and PDE operators. (Done: `tests/convergence.rs` checks monotone error reduction with tolerance for all four methods; `tests/properties.rs` in `tpt-sci-ode` and `tpt-sci-grid` use `proptest`.)
-- [ ] Jacobian sparsity detection for the `tpt-sci-ode` sparse path. (Partial: `JacobianPattern` (`new`/`dense`/`detect`), greedy `column_coloring`, and `CsrMatrix::jacobian_colored` (one RHS call per color), tested in `tests/jacobian_sparsity.rs`. Not yet wired into the implicit solver's Newton path, which still uses full finite differences; wiring needs the pattern threaded through `sdirk_stage`/`step_bdf`.)
+- [x] Jacobian sparsity detection for the `tpt-sci-ode` sparse path. (Done: the pattern is wired into the implicit sparse Newton paths via `OdeProblemBuilder::jacobian_pattern`, tested end to end.)
 - [ ] WASM playground for CT, cavity and EBM examples. (Not started: depends on the WASM bindings story above.)
 
 ### 12f. Adoption (examples and templates)
@@ -1095,10 +1093,10 @@ adoption). Items are untriaged; pull them into work in this order.
 - [x] `tpt-sci` umbrella/prelude crate re-exporting the common items, so users
       add one dependency (biggest onboarding win). (Done: `crates/tpt-sci` re-exports all 18 domain crates as modules, each behind a feature; default is ode/grid/sim-core, `full` enables all.)
 - [x] `examples/README.md` index with expected output per example. (Done: `examples/README.md` lists all 42 examples with a summary and real output captured from a release run, all of which exit 0.)
-- [ ] `templates/` for `cargo-generate`: `new-ode-model`,
-      `new-multiscale-sim`, `new-bayesian-fit`. (Not started in this pass.)
-- [ ] Four compiled tutorials: SIR then NUTS fit; cardiac cable to bidomain;
-      orbit with J2 + drag; CT phantom to reconstruction. (Not started in this pass. The SIR-then-NUTS tutorial also depends on the ODE-sensitivity item.)
+- [x] `templates/` for `cargo-generate`: `new-ode-model`,
+      `new-multiscale-sim`, `new-bayesian-fit`. (Not started in this pass.) (Done: three templates, each generated, built and run with cargo-generate.)
+- [x] Four compiled tutorials: SIR then NUTS fit; cardiac cable to bidomain;
+      orbit with J2 + drag; CT phantom to reconstruction. (Not started in this pass. The SIR-then-NUTS tutorial also depends on the ODE-sensitivity item.) (Done: `tpt-sci/examples/tutorial_{sir_fit,cable_bidomain,orbit_j2_drag,ct_phantom}.rs`. The SIR tutorial recovers the true rates with NUTS.)
 - [x] Decide the distribution story while `publish = false`: tagged git
       releases plus a git-dependency snippet in the README.
  (Done: README section "Using the crates before crates.io" documents the git-dependency path. No tags cut and no publishing done.)

@@ -169,3 +169,69 @@ mod tests {
         assert_eq!(traj.final_state()[0], 5.0);
     }
 }
+
+use crate::{ReactionNetworkError, ReactionSystem};
+use tpt_math_prob_core::{Rng, SplitMix64};
+
+impl ReactionSystem {
+    /// Run `n_runs` independent SSA trajectories from `y0` to `t_max`.
+    ///
+    /// Each run has its own generator, seeded from a stream derived from
+    /// `base_seed`, so the ensemble is reproducible and does not depend on how
+    /// the runs are scheduled. With the `rayon` feature the runs execute in
+    /// parallel; the output is the same either way.
+    ///
+    /// # Errors
+    ///
+    /// Returns the first error from [`ReactionSystem::simulate_ssa`] (an invalid
+    /// initial state, for example).
+    pub fn simulate_ssa_ensemble(
+        &self,
+        y0: &[f64],
+        t_max: f64,
+        n_runs: usize,
+        base_seed: u64,
+    ) -> Result<Vec<SsaTrajectory>, ReactionNetworkError> {
+        let mut seeder = SplitMix64::seed_from_u64(base_seed);
+        let seeds: Vec<u64> = (0..n_runs).map(|_| seeder.next_u64()).collect();
+        let run = |seed: &u64| {
+            let mut rng = SplitMix64::seed_from_u64(*seed);
+            self.simulate_ssa(y0, t_max, &mut || rng.next_f64())
+        };
+        #[cfg(feature = "rayon")]
+        {
+            use rayon::prelude::*;
+            seeds.par_iter().map(run).collect()
+        }
+        #[cfg(not(feature = "rayon"))]
+        {
+            seeds.iter().map(run).collect()
+        }
+    }
+}
+
+#[cfg(test)]
+mod ensemble_tests {
+    use crate::{RateLaw, ReactionNetwork};
+
+    #[test]
+    fn ensemble_is_reproducible_and_seed_dependent() {
+        // ∅ → X at rate k = 1: a pure production process.
+        let mut net = ReactionNetwork::new();
+        let x = net.species("X");
+        let k = net.parameter("k", 1.0);
+        let _ = k;
+        net.reaction(&[], &[(x, 1.0)], RateLaw::MassAction { k: "k".into() });
+        let sys = net.build().unwrap();
+        let a = sys.simulate_ssa_ensemble(&[0.0], 5.0, 8, 42).unwrap();
+        let b = sys.simulate_ssa_ensemble(&[0.0], 5.0, 8, 42).unwrap();
+        let c = sys.simulate_ssa_ensemble(&[0.0], 5.0, 8, 43).unwrap();
+        assert_eq!(a.len(), 8);
+        assert!(
+            a.iter()
+                .zip(&b)
+                .all(|(x, y)| x.states == y.states && x.times == y.times)
+        );
+        assert!(a.iter().zip(&c).any(|(x, y)| x.states != y.states));
+    }
+}

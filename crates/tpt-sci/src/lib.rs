@@ -91,3 +91,6 @@ pub use tpt_sci_reaction_network as reaction_network;
 /// Re-export of [`tpt-sci-sim-core`](https://docs.rs/tpt-sci-sim-core).
 #[cfg(feature = "sim-core")]
 pub use tpt_sci_sim_core as sim_core;
+
+/// Typed SI quantities and the physical constants shared across the crates.
+pub use tpt_sci_units as units;

@@ -448,6 +448,7 @@ pub(crate) fn sdirk_stage_sparse(
     diag: f64,
     k_guess: &[f64],
     tol: Tol,
+    jac: Option<&JacobianPattern>,
 ) -> Result<Vec<f64>, OdeError> {
     let n = y_base.len();
     let mut k = k_guess.to_vec();
@@ -458,15 +459,24 @@ pub(crate) fn sdirk_stage_sparse(
         f.call(t_stage, &y_stage, &mut fk)?;
         let r: Vec<f64> = k.iter().zip(&fk).map(|(kk, fv)| kk - fv).collect();
         let rnorm = r.iter().map(|x| x * x).sum::<f64>().sqrt();
-        let jac = CsrMatrix::jacobian(
-            |t, y, dydt| f.call(t, y, dydt),
-            t_stage,
-            &y_stage,
-            &fk,
-            None,
-        )?;
+        let jmat = match jac {
+            Some(pattern) => CsrMatrix::jacobian_colored(
+                |t, y, dydt| f.call(t, y, dydt),
+                t_stage,
+                &y_stage,
+                &fk,
+                pattern,
+            )?,
+            None => CsrMatrix::jacobian(
+                |t, y, dydt| f.call(t, y, dydt),
+                t_stage,
+                &y_stage,
+                &fk,
+                None,
+            )?,
+        };
         // Newton matrix A = I - diag·J (sparse, since J is sparse).
-        let a = jac.scaled_identity_minus_scaled(diag);
+        let a = jmat.scaled_identity_minus_scaled(diag);
         let delta = a.sparse_solve(&r).ok_or(OdeError::Newton {
             t: t_stage,
             residual: rnorm,
@@ -906,7 +916,7 @@ mod tests {
         };
         let y: Vec<f64> = (0..N).map(|i| 0.1 * (i as f64).sin() + 0.2).collect();
         let diag = 0.05;
-        let k = sdirk_stage_sparse(&f, 0.0, &y, diag, &vec![0.0; N], TOL).unwrap();
+        let k = sdirk_stage_sparse(&f, 0.0, &y, diag, &vec![0.0; N], TOL, None).unwrap();
         // Dense oracle.
         let mut am = crate::linalg::DMat::new(N, N);
         for i in 0..N {
