@@ -43,14 +43,14 @@ additions and fixes bump the patch (`0.1.0` → `0.1.1`).
 | `tpt-sci-md` | `0.1.0` | `0.1.1` | Adds EAM, Ewald, PPPM, SHAKE/RATTLE, cell lists, `step_with`. |
 | `tpt-sci-ppl` | `0.1.0` | `0.1.1` | Fixes NUTS U-turn handling and subtree sampling bias. Adds `gradient` module, `serde` derive. |
 
-- [ ] `tpt-sci-units`      `0.1.0`
-- [ ] `tpt-sci-ode`        `0.2.0`
-- [ ] `tpt-sci-cfd-core`   `0.2.0`
-- [ ] `tpt-sci-dft-electronic` `0.1.1`
-- [ ] `tpt-sci-image`      `0.1.1`
-- [ ] `tpt-sci-physics-rigid` `0.1.1`
-- [ ] `tpt-sci-md`         `0.1.1`
-- [ ] `tpt-sci-ppl`        `0.1.1`
+- [x] `tpt-sci-units`      `0.1.0`
+- [x] `tpt-sci-ode`        `0.2.0`
+- [x] `tpt-sci-cfd-core`   `0.2.0`
+- [x] `tpt-sci-dft-electronic` `0.1.1`
+- [x] `tpt-sci-image`      `0.1.1`
+- [x] `tpt-sci-physics-rigid` `0.1.1`
+- [x] `tpt-sci-md`         `0.1.1`
+- [x] `tpt-sci-ppl`        `0.1.1`
 
 ### Batch B — needs Batch A
 
@@ -62,11 +62,11 @@ additions and fixes bump the patch (`0.1.0` → `0.1.1`).
 | `tpt-sci-ocean` | `0.1.0` | `0.1.1` | cfd-core `0.2.0` | Fixes y-momentum advection and forward-Euler instability. |
 | `tpt-sci-hemodynamics` | `0.1.0` | `0.1.1` | cfd-core `0.2.0`, ode `0.2.0` | Fixes spatial coupling and implicit friction. |
 
-- [ ] `tpt-sci-astro`             `0.1.1`
-- [ ] `tpt-sci-reaction-network`  `0.1.1`
-- [ ] `tpt-sci-climate`           `0.2.0`
-- [ ] `tpt-sci-ocean`             `0.1.1`
-- [ ] `tpt-sci-hemodynamics`      `0.1.1`
+- [x] `tpt-sci-astro`             `0.1.1`
+- [x] `tpt-sci-reaction-network`  `0.1.1`
+- [x] `tpt-sci-climate`           `0.2.0`
+- [x] `tpt-sci-ocean`             `0.1.1`
+- [x] `tpt-sci-hemodynamics`      `0.1.1`
 
 ### Batch C — needs Batch B
 
@@ -74,7 +74,7 @@ additions and fixes bump the patch (`0.1.0` → `0.1.1`).
 | --- | --- | --- | --- | --- |
 | `tpt-sci-kinetics` | `0.1.0` | `0.1.1` | units, reaction-network `0.1.1`, ode `0.2.0` | Module split (paths unchanged). `R_GAS` re-exported from units. Adds `rate_constant_at`. |
 
-- [ ] `tpt-sci-kinetics`          `0.1.1`
+- [x] `tpt-sci-kinetics`          `0.1.1`
 
 ### Unchanged — no release needed
 
