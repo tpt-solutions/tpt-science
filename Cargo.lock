@@ -2446,7 +2446,7 @@ dependencies = [
 
 [[package]]
 name = "tpt-sci-astro"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "approx",
  "criterion",
@@ -2457,7 +2457,7 @@ dependencies = [
 
 [[package]]
 name = "tpt-sci-cfd-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "approx",
  "criterion",
@@ -2480,7 +2480,7 @@ dependencies = [
 
 [[package]]
 name = "tpt-sci-climate"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "approx",
  "criterion",
@@ -2506,7 +2506,7 @@ dependencies = [
 
 [[package]]
 name = "tpt-sci-dft-electronic"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "approx",
  "criterion",
@@ -2541,7 +2541,7 @@ dependencies = [
 
 [[package]]
 name = "tpt-sci-hemodynamics"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "approx",
  "criterion",
@@ -2554,7 +2554,7 @@ dependencies = [
 
 [[package]]
 name = "tpt-sci-image"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "approx",
  "criterion",
@@ -2566,7 +2566,7 @@ dependencies = [
 
 [[package]]
 name = "tpt-sci-kinetics"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "approx",
  "criterion",
@@ -2578,7 +2578,7 @@ dependencies = [
 
 [[package]]
 name = "tpt-sci-md"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "approx",
  "criterion",
@@ -2591,7 +2591,7 @@ dependencies = [
 
 [[package]]
 name = "tpt-sci-ocean"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "approx",
  "criterion",
@@ -2603,7 +2603,7 @@ dependencies = [
 
 [[package]]
 name = "tpt-sci-ode"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "approx",
  "cranelift-codegen",
@@ -2622,7 +2622,7 @@ dependencies = [
 
 [[package]]
 name = "tpt-sci-physics-rigid"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "approx",
  "criterion",
@@ -2632,7 +2632,7 @@ dependencies = [
 
 [[package]]
 name = "tpt-sci-ppl"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "approx",
  "criterion",
@@ -2660,7 +2660,7 @@ dependencies = [
 
 [[package]]
 name = "tpt-sci-reaction-network"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "approx",
  "criterion",

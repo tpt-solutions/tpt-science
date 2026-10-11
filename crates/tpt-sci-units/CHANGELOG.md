@@ -5,6 +5,8 @@ to [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-10-11
+
 ### Added
 
 - Initial release: typed quantities (`Kelvin`, `JoulePerMole`, `JoulePerMoleKelvin`,
@@ -14,7 +16,3 @@ to [Semantic Versioning](https://semver.org).
   `arrhenius_factor` and `radiative_exitance`.
 - `tpt-sci-kinetics`, `tpt-sci-climate` and `tpt-sci-astro` take their constants from
   this crate.
-
-## [0.1.0]
-
-- Not released (`publish = false`).

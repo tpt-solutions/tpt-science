@@ -5,7 +5,7 @@ All notable changes to `tpt-sci-md` are documented here. This project adheres to
 
 ## [Unreleased]
 
-## [Unreleased]
+## [0.1.1] — 2026-10-11
 
 ### Added
 

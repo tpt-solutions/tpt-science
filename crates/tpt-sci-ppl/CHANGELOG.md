@@ -5,7 +5,7 @@ to [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
-## [Unreleased]
+## [0.1.1] — 2026-10-11
 
 ### Added
 

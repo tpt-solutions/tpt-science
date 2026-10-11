@@ -1,7 +1,7 @@
 [package]
 name = "tpt-sci-ode"
 description = "ODE/DAE solving for the tpt-science pillar (from-scratch, no diffsol)"
-version.workspace = true
+version = "0.2.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

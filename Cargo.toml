@@ -59,7 +59,7 @@ feos-dft = { version = "0.10", default-features = false }
 # Closure-only solver by default. The Cranelift JIT (`cranelift-jit`) is native-only
 # and is enabled explicitly by crates that need it, so downstream crates stay
 # buildable for wasm32.
-tpt-sci-ode = { version = "0.1.0", path = "crates/tpt-sci-ode", default-features = false }
+tpt-sci-ode = { version = "0.2.0", path = "crates/tpt-sci-ode", default-features = false }
 tpt-sci-grid = { version = "0.1.0", path = "crates/tpt-sci-grid" }
 tpt-sci-ppl = { version = "0.1.0", path = "crates/tpt-sci-ppl" }
 tpt-sci-image = { version = "0.1.0", path = "crates/tpt-sci-image" }
@@ -71,10 +71,10 @@ tpt-sci-reaction-network = { version = "0.1.0", path = "crates/tpt-sci-reaction-
 tpt-sci-md = { version = "0.1.0", path = "crates/tpt-sci-md" }
 tpt-sci-dft-classical = { version = "0.1.0", path = "crates/tpt-sci-dft-classical" }
 tpt-sci-kinetics = { version = "0.1.0", path = "crates/tpt-sci-kinetics" }
-tpt-sci-cfd-core = { version = "0.1.0", path = "crates/tpt-sci-cfd-core" }
+tpt-sci-cfd-core = { version = "0.2.0", path = "crates/tpt-sci-cfd-core" }
 tpt-sci-hemodynamics = { version = "0.1.0", path = "crates/tpt-sci-hemodynamics" }
 tpt-sci-electrophys = { version = "0.1.0", path = "crates/tpt-sci-electrophys" }
-tpt-sci-climate = { version = "0.1.0", path = "crates/tpt-sci-climate" }
+tpt-sci-climate = { version = "0.2.0", path = "crates/tpt-sci-climate" }
 tpt-sci-ocean = { version = "0.1.0", path = "crates/tpt-sci-ocean" }
 tpt-sci-dft-electronic = { version = "0.1.0", path = "crates/tpt-sci-dft-electronic" }
 tpt-sci = { version = "0.1.0", path = "crates/tpt-sci" }
