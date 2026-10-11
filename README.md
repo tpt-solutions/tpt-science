@@ -10,9 +10,11 @@ quantum simulation, tomographic imaging, and astrodynamics.
 
 Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE).
 
-> **Not yet published to [crates.io](https://crates.io).** These crates are
-> consumed as workspace/path dependencies (`publish = false`); there is no
-> `v0.1.0` tag yet. APIs are unstable until the first tagged release.
+> **Partially published to [crates.io](https://crates.io).** The 18 simulation
+> crates are on crates.io at `0.1.0`. The umbrella `tpt-sci`, `tpt-sci-units`,
+> and the tooling/binding crates (`tpt-sci-cli`, `tpt-sci-wasm`, `tpt-sci-py`)
+> are not yet published and are consumed as git or path dependencies. There is
+> no `v0.1.0` git tag yet. APIs are unstable until the first tagged release.
 
 ## Status
 
@@ -41,6 +43,11 @@ crate is implemented — Phase 1 (scaffolding) does not require those audits.
 | `tpt-sci-climate` | earth-science | **implemented** | build from scratch | depends on `tpt-sci-ode`, `tpt-math-linalg`; 0-D EBM, multi-band and correlated-k radiative transfer, 3-D tracer transport, primitive-equation GCM |
 | `tpt-sci-ocean` | earth-science | **implemented** | build from scratch | depends on `tpt-sci-cfd-core`; 2-D shallow water, 3-D z-level ocean with non-hydrostatic projection, nudging, EnKF, 3D-Var-lite |
 | `tpt-sci-dft-electronic` | materials | **implemented** | build from scratch | Kohn–Sham in 1-D and 3-D real space; LDA and PBE; norm-conserving local pseudopotentials; periodic k-point band structure (1-D) |
+| `tpt-sci` | umbrella | **implemented** | re-export | one dependency; every domain crate behind a feature (`default`: `ode`, `grid`, `sim-core`; `full`: all) |
+| `tpt-sci-units` | shared | **implemented** | build from scratch | typed SI quantities and physical constants (gas constant, Stefan–Boltzmann, Earth's μ) used by kinetics, climate and astro |
+| `tpt-sci-cli` | tooling | **implemented** | build from scratch | `tpt-sci` command: runs reaction-network JSON specs and writes CSV |
+| `tpt-sci-wasm` | bindings | **implemented** | wasm-bindgen | WebAssembly exports (`run_spec`, EBM, CT, lid-driven cavity) plus a browser playground |
+| `tpt-sci-py` | bindings | **implemented** | PyO3 / maturin | Python bindings; excluded from the Cargo workspace so CI does not link libpython |
 
 ## Choose your crate
 
@@ -91,23 +98,27 @@ CI `no_std` job is an intentional no-op until a crate is explicitly confirmed
 `no_std` and built with `-p <crate>` against `thumbv6m-none-eabi`. See
 `CHANGELOG.md` for the per-crate audit table.
 
-## Using the crates before crates.io
+## Depending on the crates
 
-While `publish = false` is set, the crates are not on crates.io. Two supported
-ways to depend on them, both pinned to a git revision or tag:
+The 18 simulation crates are on crates.io at `0.1.0`, so add them directly:
 
 ```toml
-# Single entry point (recommended): the umbrella crate re-exports every domain.
 [dependencies]
-tpt-sci = { git = "https://github.com/tpt-solutions/tpt-science", tag = "v0.1.0", features = ["full"] }
-
-# Or individual crates, e.g. only the ODE solver:
-tpt-sci-ode = { git = "https://github.com/tpt-solutions/tpt-science", tag = "v0.1.0" }
+tpt-sci-ode = "0.1"
+tpt-sci-grid = "0.1"
 ```
 
-Tags are cut from `master` with the steps in `RELEASE.md`. Until a tag exists,
-use `rev = "<commit>"` instead of `tag`. The `tpt-math-*` substrate is resolved
-from crates.io, so no sibling checkout is needed.
+The umbrella crate `tpt-sci` is not on crates.io yet. Depend on it through git,
+pinned to a commit (no release tag exists yet):
+
+```toml
+[dependencies]
+tpt-sci = { git = "https://github.com/tpt-solutions/tpt-science", rev = "<commit>", features = ["full"] }
+```
+
+Once `v0.1.0` is cut from `master` (steps in `RELEASE.md`), `tag = "v0.1.0"`
+can replace `rev`. The `tpt-math-*` substrate is resolved from crates.io, so no
+sibling checkout is needed.
 
 ## Building
 
@@ -159,8 +170,8 @@ See the crate READMEs for the full API:
 
 ## Examples
 
-Every crate ships a runnable `examples/` program that is meatier than the
-README snippet — a good first place to see the API in action:
+Every simulation crate ships a runnable `examples/` program that is meatier than
+the README snippet — a good first place to see the API in action:
 
 | Crate | Example | Demonstrates |
 |-------|---------|--------------|
@@ -194,8 +205,8 @@ cargo run --example van_der_pol -p tpt-sci-ode
 
 - **Benchmarks.** `criterion` benches live in `crates/*/benches/`:
   `tpt-sci-ode` (`solve`), `tpt-sci-grid` (`laplacian`), `tpt-sci-quantum`
-  (`apply_gate`), and `tpt-sci-image` (`radon`) — every crate now ships a
-  representative Criterion suite. Run a single crate with
+  (`apply_gate`), and `tpt-sci-image` (`radon`) — each of the 18 simulation
+  crates ships a representative Criterion suite. Run a single crate with
   `cargo bench -p <crate>`, or the whole workspace with `cargo bench
   --workspace`. The CI `benches` job runs a shortened measurement so the suite
   stays fast:

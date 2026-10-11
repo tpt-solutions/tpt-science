@@ -82,7 +82,11 @@ impl CellList {
             }
             y
         };
-        let mut pairs = std::collections::BTreeSet::new();
+        let pos: Vec<[f64; 3]> = particles
+            .iter()
+            .map(|p| [p.position[0], p.position[1], p.position[2]])
+            .collect();
+        let mut pairs = Vec::new();
         for cx in 0..n {
             for cy in 0..n {
                 for cz in 0..n {
@@ -102,12 +106,11 @@ impl CellList {
                                         if i >= j {
                                             continue;
                                         }
-                                        let raw = particles[j].position.clone()
-                                            - particles[i].position.clone();
-                                        let dr = DVector::from_fn(3, |k| wrap(raw[k]));
-                                        let r2 = dr.dot(&dr);
+                                        let r2: f64 = (0..3)
+                                            .map(|k| wrap(pos[j][k] - pos[i][k]).powi(2))
+                                            .sum();
                                         if r2 < rcut2 && r2 > 0.0 {
-                                            pairs.insert((i, j));
+                                            pairs.push((i, j));
                                         }
                                     }
                                 }
@@ -117,7 +120,10 @@ impl CellList {
                 }
             }
         }
-        pairs.into_iter().collect()
+        // With fewer than 3 cells per side the 27-cell stencil revisits cells, so dedup.
+        pairs.sort_unstable();
+        pairs.dedup();
+        pairs
     }
 }
 

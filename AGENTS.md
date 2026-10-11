@@ -29,7 +29,10 @@ so warnings, rustdoc warnings, and broken intra-doc links fail the build.
 - Cross-pillar `tpt-math-*` deps come from **crates.io** (workspace deps in
   `Cargo.toml`), NOT a sibling checkout. `feos` (`0.10`, `default-features = false`,
   feature `dft`) is the only wrap target (classical DFT, `tpt-sci-dft-classical`).
-- All crates are `publish = false`; consumed as path deps. Not on crates.io yet.
+- The 18 simulation crates are published on crates.io at `0.1.0`. The umbrella
+  `tpt-sci`, `tpt-sci-units`, and `tpt-sci-cli`/`-wasm`/`-py` are not yet
+  published (the last three set `publish = false`). Unpublished crates are
+  consumed as path or git deps.
 
 ## Hard constraints (easy to violate, costly to fix)
 

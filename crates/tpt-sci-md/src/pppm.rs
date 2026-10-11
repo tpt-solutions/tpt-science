@@ -21,7 +21,6 @@ use tpt_math_linalg::tpt_math_linalg_dense::DVector;
 use tpt_math_signal_fft::Fft;
 
 use crate::MdError;
-use crate::ewald::erfc;
 use crate::particle::Particle;
 
 /// PME electrostatics on a cubic periodic box.
@@ -142,43 +141,13 @@ impl Pppm {
                 "PME requires 3-dimensional positions".into(),
             ));
         }
-        let mut forces = vec![DVector::zeros(3); n];
+        let mut forces = vec![0.0_f64; 3 * n];
         let l = self.box_len;
         let alpha = self.alpha;
         let volume = l.powi(3);
 
         // --- Real space, as in the direct Ewald sum. ---
-        let wrap = |x: f64| -> f64 {
-            let half = l * 0.5;
-            let mut y = x - l * (x / l).floor();
-            if y > half {
-                y -= l;
-            }
-            y
-        };
-        let rcut2 = self.rcut * self.rcut;
-        let mut e_real = 0.0;
-        for i in 0..n {
-            for j in (i + 1)..n {
-                let raw = particles[j].position.clone() - particles[i].position.clone();
-                let dr = DVector::from_fn(3, |k| wrap(raw[k]));
-                let r2 = dr.dot(&dr);
-                if r2 >= rcut2 || r2 <= 0.0 {
-                    continue;
-                }
-                let r = r2.sqrt();
-                let qq = charges[i] * charges[j];
-                let erfc_ar = erfc(alpha * r);
-                e_real += qq * erfc_ar / r;
-                let dudr = qq
-                    * (-2.0 * alpha / std::f64::consts::PI.sqrt() * (-(alpha * r).powi(2)).exp()
-                        / r
-                        - erfc_ar / r2);
-                let fvec = dr * (dudr / r);
-                forces[i] = forces[i].clone() + fvec.clone();
-                forces[j] = forces[j].clone() - fvec;
-            }
-        }
+        let e_real = crate::ewald::real_space(particles, charges, l, alpha, self.rcut, &mut forces);
 
         // --- Self energy and neutralising background (position independent). ---
         let q2sum: f64 = charges.iter().map(|q| q * q).sum();
@@ -273,12 +242,16 @@ impl Pppm {
                     }
                 }
             }
-            let delta =
-                DVector::from_row_slice(&[-q * scale * f[0], -q * scale * f[1], -q * scale * f[2]]);
-            forces[i] = forces[i].clone() + delta;
+            for k in 0..3 {
+                forces[3 * i + k] -= q * scale * f[k];
+            }
         }
 
         let total = e_real + e_recip + e_background - e_self;
+        let forces = forces
+            .chunks_exact(3)
+            .map(DVector::from_row_slice)
+            .collect();
         Ok((total, forces))
     }
 }

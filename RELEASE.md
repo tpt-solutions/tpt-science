@@ -1,11 +1,13 @@
 # Release & Publish
 
 This document scopes the release/publish automation for `tpt-science`. It is a
-**pre-publish checklist**, not a committed release process: at the time of
-writing every crate sets `publish = false` and is consumed as a workspace/path
-dependency, so no crate has been cut to [crates.io](https://crates.io).
+**pre-publish checklist**, not a committed release process. The 18 simulation
+crates are already on [crates.io](https://crates.io) at `0.1.0`. The umbrella
+`tpt-sci`, `tpt-sci-units`, and the tooling/binding crates (`tpt-sci-cli`,
+`tpt-sci-wasm`, `tpt-sci-py`) are not yet published; `tpt-sci-cli`,
+`tpt-sci-wasm` and `tpt-sci-py` set `publish = false`.
 
-Publishing only begins once a deliberate release decision flips `publish =
+Further publishing follows a deliberate release decision that flips `publish =
 true` in the relevant `crates/*/Cargo.toml`. When that happens, the workflow in
 `.github/workflows/publish.yml` (manual `workflow_dispatch`) enforces the
 gates below and runs `cargo publish --dry-run` before any real publish.
@@ -40,5 +42,6 @@ crate per run precisely so this ordering can be honoured manually.
 ## Out of scope today
 
 - Automated version bumps / tag creation / GitHub Release drafting.
-- Continuous publishing on `main` (intentionally absent: `publish = false`).
+- Continuous publishing on `main` (intentionally absent; publishing stays
+  manual via `workflow_dispatch`).
 - docs.rs custom build features beyond `all-features = true`.

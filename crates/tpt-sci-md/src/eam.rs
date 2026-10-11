@@ -139,9 +139,8 @@ pub(crate) fn eam_forces_energy(
 ) -> (Vec<DVector<f64>>, f64) {
     let n = particles.len();
     let dim = particles.first().map_or(3, |p| p.position.len());
-    let mut forces = vec![DVector::zeros(dim); n];
     if n < 2 {
-        return (forces, 0.0);
+        return (vec![DVector::zeros(dim); n], 0.0);
     }
     let rcut = params.cutoff_phi.max(params.cutoff_rho);
     let rcut2 = rcut * rcut;
@@ -158,21 +157,37 @@ pub(crate) fn eam_forces_energy(
         y
     };
 
-    // Pass 1: pairwise distances and local densities ρ_i.
+    let mut pos = Vec::with_capacity(n * dim);
+    for p in particles {
+        pos.extend(p.position.iter().copied());
+    }
+
+    // Pass 1: pairwise distances and local densities ρ_i. Pair data is kept in
+    // flat buffers (`pair_ij`, `pair_r`, and `pair_dr` with `dim` entries per pair).
     let mut rho = vec![0.0_f64; n];
-    let mut pairs: Vec<(usize, usize, DVector<f64>, f64)> = Vec::new();
+    let mut pair_ij: Vec<(usize, usize)> = Vec::new();
+    let mut pair_r: Vec<f64> = Vec::new();
+    let mut pair_dr: Vec<f64> = Vec::new();
+    let mut dr = vec![0.0; dim];
     for i in 0..n {
+        let pi = &pos[i * dim..(i + 1) * dim];
         for j in (i + 1)..n {
-            let raw = particles[j].position.clone() - particles[i].position.clone();
-            let dr = DVector::from_fn(dim, |k| wrap(raw[k]));
-            let r2 = dr.dot(&dr);
+            let pj = &pos[j * dim..(j + 1) * dim];
+            let mut r2 = 0.0;
+            for k in 0..dim {
+                dr[k] = wrap(pj[k] - pi[k]);
+                r2 += dr[k] * dr[k];
+            }
             if r2 >= rcut2 || r2 <= 0.0 {
                 continue;
             }
             let r = r2.sqrt();
-            rho[i] += params.f_rho(r);
-            rho[j] += params.f_rho(r);
-            pairs.push((i, j, dr, r));
+            let f = params.f_rho(r);
+            rho[i] += f;
+            rho[j] += f;
+            pair_ij.push((i, j));
+            pair_r.push(r);
+            pair_dr.extend_from_slice(&dr);
         }
     }
 
@@ -181,15 +196,22 @@ pub(crate) fn eam_forces_energy(
 
     // Pass 2: pairwise force, including the embedding chain-rule term
     // (F'(ρ_i) + F'(ρ_j))·f'(r_ij), the standard EAM force expression.
-    for (i, j, dr, r) in pairs {
+    let mut forces = vec![0.0_f64; n * dim];
+    for (p, (&(i, j), &r)) in pair_ij.iter().zip(&pair_r).enumerate() {
         energy += params.phi(r);
         let dudr = params.dphi_dr(r) + (fprime[i] + fprime[j]) * params.df_dr(r);
         let f_mag = dudr / r;
-        let fvec = dr * f_mag;
-        forces[i] = forces[i].clone() + fvec.clone();
-        forces[j] = forces[j].clone() - fvec;
+        for k in 0..dim {
+            let f = pair_dr[p * dim + k] * f_mag;
+            forces[i * dim + k] += f;
+            forces[j * dim + k] -= f;
+        }
     }
 
+    let forces = forces
+        .chunks_exact(dim)
+        .map(DVector::from_row_slice)
+        .collect();
     (forces, energy)
 }
 
