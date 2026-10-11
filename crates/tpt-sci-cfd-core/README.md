@@ -16,6 +16,8 @@ GPL-3.0-only).
   conditions. `Step::apply_walls` currently enforces `Top`/`Bottom`; `Left`/
   `Right` values are accepted by the API but not yet applied.
 * `turbulence::eddy_viscosity` — algebraic Smagorinsky eddy-viscosity estimate.
+  Returns `Result<f64, CfdError>`.
+* `scalar::ScalarTransport` — scalar transport on the collocated grid.
 * `SimpleSolver` — SIMPLE/PISO-style **implicit** pressure-correction on the
   same structured grid. [`SimpleSolver::predict`] does an explicit momentum
   step, [`SimpleSolver::solve_pressure`] builds the pressure Poisson equation

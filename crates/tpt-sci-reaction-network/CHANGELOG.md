@@ -3,6 +3,16 @@
 All notable changes to `tpt-sci-reaction-network` are documented here. This
 project adheres to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+## [Unreleased]
+
+### Added
+
+- `simulate_ssa_ensemble`: runs independent SSA trajectories, each seeded from a
+  stream derived from a base seed. Runs execute in parallel under the `rayon`
+  feature. The output is the same either way.
+
 ## [0.1.0] — 2026-08-22
 
 Initial release of `tpt-sci-reaction-network` to crates.io. Promoted from

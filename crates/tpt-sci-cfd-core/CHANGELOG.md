@@ -3,6 +3,22 @@
 All notable changes to `tpt-sci-cfd-core` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+## [Unreleased]
+
+### Added
+
+- `scalar::ScalarTransport`: scalar transport on the collocated grid, with
+  `new`, `max_stable_dt`, `step` and `total`.
+- `solve_poisson_nodal`: a second-order nodal Poisson solver for the unstructured
+  mesh.
+
+### Changed
+
+- **Breaking:** `turbulence::eddy_viscosity` returns `Result<f64, CfdError>`
+  instead of `f64`.
+
 ## [0.1.0] — 2026-08-22
 
 Initial release of `tpt-sci-cfd-core` to crates.io (spec2.txt expanded vision).

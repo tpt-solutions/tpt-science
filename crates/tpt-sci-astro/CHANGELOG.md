@@ -3,6 +3,24 @@
 All notable changes to `tpt-sci-astro` are documented here. This project adheres
 to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+## [Unreleased]
+
+### Added
+
+- `environment` module: `atmospheric_density`, `in_earth_shadow` and
+  `srp_acceleration`.
+- `frames` module: `perifocal_to_eci`, `cross3`, the anomaly conversions
+  `true_to_eccentric` and `eccentric_to_true`, and `solve_kepler`.
+- Constants `SUN_MU`, `MOON_MU`, `MOON_DISTANCE_KM`, `ASTRONOMICAL_UNIT_KM` and
+  `SOLAR_PRESSURE_1AU`.
+
+### Changed
+
+- Constants moved into a `constants` module (re-exported). `EARTH_MU` and
+  `EARTH_RADIUS_EQ` are read from `tpt-sci-units`.
+
 ## [0.1.0] — 2026-08-22
 
 Initial release of `tpt-sci-astro` to crates.io.

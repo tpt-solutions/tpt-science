@@ -3,6 +3,19 @@
 All notable changes to `tpt-sci-physics-rigid` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+## [Unreleased]
+
+### Changed
+
+- `Body`, `World` and the quaternion helpers moved into `body`, `world` and
+  `quaternion` modules. Public paths are unchanged.
+
+### Added
+
+- Integration tests and property tests (proptest).
+
 ## [0.1.0] — 2026-08-22
 
 Initial release of `tpt-sci-physics-rigid` to crates.io.

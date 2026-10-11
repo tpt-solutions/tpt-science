@@ -30,6 +30,10 @@ Depends on `tpt-math-numeric` (published, `tpt-math` repo).
 * Stiff and non-stiff methods behind one `Method` enum and one `solve` entry point.
 * Optional Cranelift JIT right-hand side (`JitRhs`) behind the `jit` module,
   pluggable into the same `RhsCallable` trait as a plain closure.
+* Event detection (`solve_events`) with terminal events, `Trajectory` with
+  CSV output (`solve_trajectory`), and `JacobianPattern` with column colouring
+  for sparse Jacobians (`jacobian_colored`).
+* Optional `serde` feature for result types.
 
 ## Example
 

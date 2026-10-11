@@ -3,6 +3,21 @@
 All notable changes to `tpt-sci-kinetics` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+## [Unreleased]
+
+### Added
+
+- `ArrheniusRate::rate_constant_at`, which takes a `tpt_sci_units::Kelvin`.
+
+### Changed
+
+- The crate is split into `arrhenius`, `coverage`, `coverage_dependent`,
+  `eley_rideal`, `problem` and `constants` modules. Public paths are unchanged.
+- `R_GAS` is re-exported from `tpt-sci-units` instead of being a local constant.
+  The value, 8.314 462 618 J mol⁻¹ K⁻¹, is unchanged.
+
 ## [0.1.0] — 2026-08-22
 
 Initial release of `tpt-sci-kinetics` to crates.io (spec2.txt expanded vision).

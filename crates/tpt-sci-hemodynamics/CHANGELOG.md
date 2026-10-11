@@ -3,6 +3,21 @@
 All notable changes to `tpt-sci-hemodynamics` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+## [Unreleased]
+
+### Fixed
+
+- `Network::rhs` had no spatial coupling, so `dA/dt = −Q` per cell drained the
+  inlet area to its floor and every probe read the same deviation. It now uses
+  continuity `∂A/∂t = −∂Q/∂x` and momentum `∂Q/∂t = −(A/ρ)∂p/∂x` with
+  neighbour differences, an imposed inlet flow and a closed terminal.
+- Friction is treated implicitly, which removes a late-time instability at 40
+  cells.
+- The `wave_reflection` example comment attributed its short-versus-long
+  comparison to reflection. It is volume spreading over fewer cells.
+
 ## [0.1.0] — 2026-08-22
 
 Initial release of `tpt-sci-hemodynamics` to crates.io (spec2.txt expanded

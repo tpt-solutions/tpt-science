@@ -3,6 +3,18 @@
 All notable changes to `tpt-sci-climate` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+## [Unreleased]
+
+### Changed
+
+- **Breaking:** `grey_radiative_transfer` returns `Result<f64, ClimateError>`
+  instead of `f64`.
+- The energy-balance step is a linearised backward-Euler update, unconditionally
+  stable for the radiative term.
+- `SIGMA` is read from `tpt-sci-units`.
+
 ## [0.1.0] — 2026-08-22
 
 Initial release of `tpt-sci-climate` to crates.io (spec2.txt expanded vision).

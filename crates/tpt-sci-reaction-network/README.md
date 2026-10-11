@@ -55,6 +55,9 @@ stoichiometric network analysis:
 
 - **Exact SSA** ([`ReactionSystem::simulate_ssa`]) — Gillespie's direct
   method.
+- **SSA ensembles** ([`ReactionSystem::simulate_ssa_ensemble`]) — independent
+  seeded SSA runs, executed in parallel under the `rayon` feature with the same
+  output either way.
 - **Tau-leaping** ([`ReactionSystem::simulate_tau_leaping`]) — explicit
   tau-leaping with Poisson-distributed reaction counts per step and
   (optional) adaptive step selection, for approximate trajectories at a

@@ -3,6 +3,17 @@
 All notable changes to `tpt-sci-ocean` are documented here. This project adheres
 to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+## [Unreleased]
+
+### Fixed
+
+- The y-momentum advection term used `v` for the x-derivative instead of `u`.
+- The centred forward-Euler step was unstable. `h`, `u` and `v` now use Lax-type
+  neighbour averaging, so dam-break runs stay finite and the front speed scales
+  as `√(gh)`.
+
 ## [0.1.0] — 2026-08-22
 
 Initial release of `tpt-sci-ocean` to crates.io (spec2.txt expanded vision).

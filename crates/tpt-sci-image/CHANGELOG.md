@@ -3,6 +3,15 @@
 All notable changes to `tpt-sci-image` are documented here. This project adheres
 to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+## [Unreleased]
+
+### Added
+
+- `rayon` feature: `filtered_back_projection_3d` reconstructs z slices in
+  parallel. The output is identical with or without the feature.
+
 ## [0.1.0] — 2026-08-22
 
 Initial release of `tpt-sci-image` to crates.io.

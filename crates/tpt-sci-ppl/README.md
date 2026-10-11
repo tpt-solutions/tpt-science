@@ -15,6 +15,10 @@ gradient is exact). They can be written directly with the parameter `autodiff`
 variable, or derived from a typed distribution in `tpt-math-prob-bayes`
 (`Gaussian`, `Beta`, `Gamma`).
 
+For a black-box log density whose gradient the caller supplies, use
+`gradient::fit_with_gradient` (`fit_with_gradient_parallel` needs the `rayon`
+feature).
+
 Depends on `tpt-math-prob-bayes`, `tpt-math-prob-core`, `tpt-math-autodiff-rev`
 (all published).
 

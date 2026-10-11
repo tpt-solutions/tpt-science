@@ -3,6 +3,24 @@
 All notable changes to `tpt-sci-dft-electronic` are documented here. This project
 adheres to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+## [Unreleased]
+
+### Fixed
+
+- `eigen::jacobi` ran at most 100 rotations, which left matrices above about
+  n = 10 undiagonalised. It now runs cyclic sweeps until the off-diagonal norm
+  converges.
+- `jacobi` returns eigenpairs in ascending order, as `solve()` assumes.
+- The Hartree potential had the wrong sign in the Thomas solve and a zero
+  Dirichlet boundary that pushed electrons to the walls. It now uses the exact
+  1-D kernel `V(x) = π ∫ |x − x′| ρ(x′) dx′`.
+- The total energy double-counted `V_ext` and `V_H`. It is now
+  `E = Σ f·ε − E_H + ∫ ρ (ε_xc − v_xc)`.
+- `hydrogen_atom` counts nodes only above a noise threshold. Its absolute
+  energies are not yet converged.
+
 ## [0.1.0] — 2026-08-22
 
 Initial release of `tpt-sci-dft-electronic` to crates.io (spec2.txt expanded

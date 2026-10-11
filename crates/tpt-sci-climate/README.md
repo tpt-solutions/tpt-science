@@ -10,7 +10,7 @@ stepper, not `tpt-sci-ode`/`tpt-math-linalg`).
   `ΔF = 5.35·ln(C/C0)` (W/m²). Integrate with `step(dt)` (explicit Euler) or jump
   straight to the steady state with `equilibrium_temperature()` (Newton fixpoint).
 * `grey_radiative_transfer` — single-layer grey-atmosphere surface temperature
-  `Ts = (S·(1−α)/(4·σ·(1−ε/2)))^(1/4)`.
+  `Ts = (S·(1−α)/(4·σ·(1−ε/2)))^(1/4)`. Returns `Result<f64, ClimateError>`.
 * `radiative_transfer` — **multi-band longwave** schemes replacing the single
   grey band: [`MultiBandRadiativeTransfer`] (a stack of grey slabs, band OLR
   `F_b = w_b·(τ_b·σ·Ts⁴ + ε_b·σ·Ta⁴)`) and a `k`-distribution [`CorrelatedKRt`].

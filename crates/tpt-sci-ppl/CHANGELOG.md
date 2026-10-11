@@ -3,6 +3,23 @@
 All notable changes to `tpt-sci-ppl` are documented here. This project adheres
 to [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+## [Unreleased]
+
+### Added
+
+- `gradient` module: `fit_with_gradient` samples a black-box log density by
+  gradient injection. `fit_with_gradient_parallel` runs under the `rayon` feature.
+- Optional `serde` derive on `Trace`.
+
+### Fixed
+
+- NUTS counted U-turns as divergences and discarded the subtree. U-turns are now
+  recorded separately, and an invalid subtree ends the expansion.
+- Subtree sample selection was biased. It now draws uniformly over the merged
+  leaves.
+
 ## [0.1.0] — 2026-08-22
 
 Initial release of `tpt-sci-ppl` to crates.io.

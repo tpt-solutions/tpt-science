@@ -3,6 +3,31 @@
 All notable changes to `tpt-sci-md` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+## [Unreleased]
+
+### Added
+
+- `EamParams`, `eam_forces` and `Forces::eam`: a Finnis–Sinclair-style
+  embedded-atom-method potential.
+- `Ewald`: Ewald summation for periodic long-range electrostatics
+  (`Ewald::energy_forces`).
+- `Pppm`: particle-mesh Ewald, validated against the direct Ewald sum.
+- `Bond` and `Shake`: SHAKE position constraints and a RATTLE-style velocity
+  projection, driven through `Integrator::velocity_verlet_constrained`.
+- `CellList`, `neighbor_pairs_brute_force` and `Forces::lennard_jones_cells`:
+  linked-cell neighbour finding.
+- `Integrator::step_with`: a generic step hook for other potentials.
+
+### Changed
+
+- The cell list, Ewald, PPPM, EAM and force kernels were reworked, and the
+  benchmark suite was extended.
+- The 0.1.0 "Scope (v1)" listed EAM, PPPM, constrained bonds and neighbour lists
+  as out of scope. They are now implemented, with the simplifications documented
+  in the README.
+
 ## [0.1.0] — 2026-08-22
 
 Initial release of `tpt-sci-md` to crates.io (spec2.txt expanded vision).

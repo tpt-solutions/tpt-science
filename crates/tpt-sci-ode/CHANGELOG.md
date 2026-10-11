@@ -5,10 +5,24 @@ to [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- Event detection: `Event`, `Direction`, `EventHit` and `EventSolution`, with
+  `solve_events`. Terminal events stop the integration.
+- `Trajectory` with CSV output, returned by `solve_trajectory`.
+- `JacobianPattern` (sparsity detection, dense conversion and column colouring)
+  with `jacobian_colored`. `OdeProblemBuilder::jacobian_pattern` feeds the
+  pattern into the sparse Newton paths.
+- Optional `serde` feature for result types.
+
 ### Fixed
 
 - The crate compiles again. The Cranelift crates (`cranelift-codegen`,
-  `-frontend`, `-module`, `-jit`) are all on 0.135.
+  `-frontend`, `-module`, `-jit`) are all on 0.136.
+- TR-BDF2 had inconsistent stage row sums and quadrature weights, so it
+  converged to the wrong answer. It now uses the standard ESDIRK form.
+- ESDIRK34 weights are the solution of the order-3 conditions, not hand-adjusted
+  values.
 - `JitRhs` owns the Cranelift module that holds its machine code. Previously
   `compile_rhs` dropped the module before returning, which left a dangling
   function pointer.

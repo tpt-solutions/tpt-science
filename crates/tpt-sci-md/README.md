@@ -17,6 +17,8 @@ alpha/stale).
 * `Ewald` — Ewald summation for periodic long-range electrostatics
   (`Ewald::energy_forces`): real-space `erfc(α·r)/r` sum + a direct
   reciprocal-space Fourier sum + self-energy/background corrections.
+* `Pppm` — particle-mesh Ewald for the same long-range electrostatics,
+  validated against the direct `Ewald` sum.
 * `Bond` / `Shake` — SHAKE position constraints and a RATTLE-style velocity
   projection to hold pairwise bond lengths fixed, driven through
   `Integrator::velocity_verlet_constrained`.
@@ -62,12 +64,11 @@ the following honest simplifications relative to a production MD package:
   repulsion + square-root embedding). Parameters are chosen only to be
   physically sound (short-range repulsive, longer-range attractive) — they
   are not fit to reproduce any specific real metal.
-* **Long-range electrostatics**: real Ewald summation, not PPPM. The
-  reciprocal-space sum is a **direct discrete Fourier sum** over `k`-vectors
-  (`O(N·kmax³)`), not an FFT-based particle-mesh solve — this crate has no
-  FFT dependency available (ADR 0007: hand-rolled code only). The direct sum
-  is exact for the reciprocal term itself, just less scalable than PPPM for
-  large systems or a large `kmax`.
+* **Long-range electrostatics**: `Ewald` evaluates the reciprocal-space sum
+  as a **direct discrete Fourier sum** over `k`-vectors (`O(N·kmax³)`). It is
+  exact for the reciprocal term itself but scales poorly with system size or
+  a large `kmax`. `Pppm` is the particle-mesh alternative for larger systems;
+  it is checked against the direct Ewald result.
 * **Constrained bonds**: full SHAKE (position constraint) plus a
   RATTLE-style velocity projection (`Shake::constrain_velocities`) are both
   implemented — pairwise bond-length constraints only (no angle/dihedral
