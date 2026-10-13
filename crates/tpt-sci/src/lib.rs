@@ -36,6 +36,7 @@
 //! | `climate` | `tpt-sci-climate` | `climate` |
 //! | `ocean` | `tpt-sci-ocean` | `ocean` |
 //! | `dft_electronic` | `tpt-sci-dft-electronic` | `dft-electronic` |
+//! | `chemoinformatics` | `tpt-sci-chemoinformatics` | `chemoinformatics` |
 
 /// Re-export of [`tpt-sci-astro`](https://docs.rs/tpt-sci-astro).
 #[cfg(feature = "astro")]
@@ -43,6 +44,9 @@ pub use tpt_sci_astro as astro;
 /// Re-export of [`tpt-sci-cfd-core`](https://docs.rs/tpt-sci-cfd-core).
 #[cfg(feature = "cfd-core")]
 pub use tpt_sci_cfd_core as cfd_core;
+/// Re-export of [`tpt-sci-chemoinformatics`](https://docs.rs/tpt-sci-chemoinformatics).
+#[cfg(feature = "chemoinformatics")]
+pub use tpt_sci_chemoinformatics as chemoinformatics;
 /// Re-export of [`tpt-sci-climate`](https://docs.rs/tpt-sci-climate).
 #[cfg(feature = "climate")]
 pub use tpt_sci_climate as climate;

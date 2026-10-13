@@ -1,6 +1,6 @@
 # AGENTS.md — tpt-science
 
-Simulation/modeling substrate (18 `tpt-sci-*` crates). Virtual Cargo workspace,
+Simulation/modeling substrate (19 `tpt-sci-*` crates). Virtual Cargo workspace,
 no root package. Read `README.md`, `todo.md`, `spec.txt`, `spec2.txt` for scope.
 
 ## Verify / lint / test (matches CI)
@@ -25,7 +25,7 @@ so warnings, rustdoc warnings, and broken intra-doc links fail the build.
 
 ## Workspace layout
 
-- 18 crates under `crates/`, in dependency order (see README status table).
+- 19 crates under `crates/`, in dependency order (see README status table).
 - Cross-pillar `tpt-math-*` deps come from **crates.io** (workspace deps in
   `Cargo.toml`), NOT a sibling checkout. `feos` (`0.10`, `default-features = false`,
   feature `dft`) is the only wrap target (classical DFT, `tpt-sci-dft-classical`).
@@ -70,7 +70,7 @@ so warnings, rustdoc warnings, and broken intra-doc links fail the build.
 
 ## Benchmarks
 
-`criterion` benches live in every `crates/*/benches/` (18 crates). Run a single
+`criterion` benches live in every `crates/*/benches/` (19 crates). Run a single
 crate with `cargo bench -p <crate>`. CI runs a shortened measurement:
 `cargo bench --workspace --benches -- --warm-up-time 0.5 --measurement-time 1 --sample-size 10`.
 

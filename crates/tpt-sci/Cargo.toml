@@ -36,6 +36,7 @@ tpt-sci-electrophys = { workspace = true, optional = true }
 tpt-sci-climate = { workspace = true, optional = true }
 tpt-sci-ocean = { workspace = true, optional = true }
 tpt-sci-dft-electronic = { workspace = true, optional = true }
+tpt-sci-chemoinformatics = { workspace = true, optional = true }
 
 [features]
 # Only the core solver stack is on by default; enable domains explicitly, or use
@@ -61,6 +62,7 @@ full = [
 "climate",
 "ocean",
 "dft-electronic",
+"chemoinformatics",
 ]
 ode = ["dep:tpt-sci-ode"]
 grid = ["dep:tpt-sci-grid", "tpt-sci-grid/sparse"]
@@ -80,6 +82,7 @@ electrophys = ["dep:tpt-sci-electrophys"]
 climate = ["dep:tpt-sci-climate"]
 ocean = ["dep:tpt-sci-ocean"]
 dft-electronic = ["dep:tpt-sci-dft-electronic"]
+chemoinformatics = ["dep:tpt-sci-chemoinformatics"]
 
 [lints]
 workspace = true

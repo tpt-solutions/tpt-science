@@ -8,6 +8,10 @@ v0.1.0 covers the implementation of all eight Phase 1–3 crates.
 
 ### Added
 
+- `tpt-sci-chemoinformatics` (new, unpublished) — from-scratch SMILES parser,
+  molecular descriptors, Morgan fingerprints, ridge and Tanimoto-kNN QSPR models,
+  CSV dataset loader, cross-validation, and a TRPA1/TRPV1 activity model. Exposed
+  via the `chemoinformatics` feature of `tpt-sci`.
 - `tpt-sci-quantum` — `State::measure_collapsing()` for post-measurement
   state collapse (Qiskit/Cirq semantics); `measure()` remains non-destructive.
 - `tpt-sci-image` — `ImageError` type (`error.rs`); `radon_transform`,

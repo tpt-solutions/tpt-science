@@ -23,6 +23,7 @@ members = [
     "crates/tpt-sci-cli",
     "crates/tpt-sci-wasm",
     "crates/tpt-sci-units",
+    "crates/tpt-sci-chemoinformatics",
 ]
 exclude = ["crates/tpt-sci-py"]
 
@@ -77,6 +78,7 @@ tpt-sci-electrophys = { version = "0.1.0", path = "crates/tpt-sci-electrophys" }
 tpt-sci-climate = { version = "0.2.0", path = "crates/tpt-sci-climate" }
 tpt-sci-ocean = { version = "0.1.0", path = "crates/tpt-sci-ocean" }
 tpt-sci-dft-electronic = { version = "0.1.0", path = "crates/tpt-sci-dft-electronic" }
+tpt-sci-chemoinformatics = { version = "0.1.0", path = "crates/tpt-sci-chemoinformatics" }
 tpt-sci = { version = "0.1.0", path = "crates/tpt-sci" }
 tpt-sci-units = { version = "0.1.0", path = "crates/tpt-sci-units" }
 

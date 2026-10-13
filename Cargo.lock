@@ -2425,6 +2425,7 @@ dependencies = [
  "tpt-math-prob-core",
  "tpt-sci-astro",
  "tpt-sci-cfd-core",
+ "tpt-sci-chemoinformatics",
  "tpt-sci-climate",
  "tpt-sci-dft-classical",
  "tpt-sci-dft-electronic",
@@ -2465,6 +2466,16 @@ dependencies = [
  "tpt-math-linalg",
  "tpt-sci-grid",
  "tpt-sci-kinetics",
+]
+
+[[package]]
+name = "tpt-sci-chemoinformatics"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "criterion",
+ "thiserror 2.0.21",
+ "tpt-math-prob-core",
 ]
 
 [[package]]

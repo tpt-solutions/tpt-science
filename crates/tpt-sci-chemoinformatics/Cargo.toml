@@ -1,0 +1,37 @@
+[package]
+name = "tpt-sci-chemoinformatics"
+description = "SMILES parsing, molecular descriptors, fingerprints and a lightweight QSPR pipeline (TRPA1/TRPV1 activity), built from scratch, for the tpt-science pillar"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+documentation = "https://docs.rs/tpt-sci-chemoinformatics"
+keywords = ["cheminformatics", "smiles", "qspr", "descriptors", "science"]
+categories = ["science"]
+# Not yet published; consumed as a path dependency until the first release.
+publish = false
+
+[lib]
+bench = false
+
+[dependencies]
+thiserror = { workspace = true }
+tpt-math-prob-core = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+approx = { workspace = true }
+
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[[bench]]
+name = "chemoinformatics"
+harness = false
