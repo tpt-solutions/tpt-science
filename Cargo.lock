@@ -799,9 +799,9 @@ dependencies = [
 
 [[package]]
 name = "feos-core"
-version = "0.10.1"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34dffaede15de55d9f3318126b7fdf1d2c930cd3d1f5b3339f20d10acc3db5be"
+checksum = "7214aa45771ebd5292438c7343d9a12d79eef5586781a2566e68305af6ebfe29"
 dependencies = [
  "csv",
  "indexmap",
