@@ -25,8 +25,8 @@ serde = { version = "1", features = ["derive"], optional = true }
 # Cranelift JIT compilation backend for DiffSL RHS codegen. Every cranelift
 # crate is optional and enabled only by the `cranelift-jit` feature, so the
 # JIT and its `unsafe` code can be compiled out entirely.
-cranelift-codegen = { version = "0.136", features = ["host-arch"], optional = true }
-cranelift-frontend = { version = "0.136", optional = true }
+cranelift-codegen = { version = "0.137", features = ["host-arch"], optional = true }
+cranelift-frontend = { version = "0.137", optional = true }
 cranelift-module = { version = "0.136", optional = true }
 cranelift-jit = { version = "0.136", optional = true }
 cranelift-native = { version = "0.136", optional = true }
