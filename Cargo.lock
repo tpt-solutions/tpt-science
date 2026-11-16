@@ -2370,12 +2370,12 @@ dependencies = [
 
 [[package]]
 name = "tpt-math-signal-fft"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9200107c73e6b581b560aaa03761841dcbc2f80b449933f88a1b040a0c082419"
+checksum = "6ef49e2dae386529c936e1228840c106da8f443e543d3b08bd2cf38bef660b73"
 dependencies = [
  "rustfft",
- "tpt-math-numeric 0.1.0",
+ "tpt-math-numeric 0.2.0",
 ]
 
 [[package]]
