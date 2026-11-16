@@ -2519,7 +2519,7 @@ dependencies = [
  "proptest",
  "thiserror 2.0.21",
  "tpt-math-linalg",
- "tpt-math-numeric 0.1.0",
+ "tpt-math-numeric 0.2.0",
 ]
 
 [[package]]
@@ -2600,7 +2600,7 @@ dependencies = [
  "serde",
  "target-lexicon",
  "thiserror 2.0.21",
- "tpt-math-numeric 0.1.0",
+ "tpt-math-numeric 0.2.0",
 ]
 
 [[package]]
