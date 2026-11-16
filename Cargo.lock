@@ -2314,22 +2314,22 @@ dependencies = [
 
 [[package]]
 name = "tpt-math-linalg"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d843d795e0d6111aabebdcd29fce7f69960722acbc161046a6c51e598bedb90f"
+checksum = "a672a59c4180bb574ce8a4386cabad076b6a7bab8a9537ef97f98e22c642bc2f"
 dependencies = [
  "tpt-math-linalg-dense",
- "tpt-math-numeric 0.1.0",
+ "tpt-math-numeric 0.2.0",
  "tpt-math-units",
 ]
 
 [[package]]
 name = "tpt-math-linalg-dense"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb72b3e4034255fc86448357b4b2fbce62225525ef41c9ec72a54e9aae6c2c4f"
+checksum = "7e120242c44efa954e42445f7d758fe102c6640bfbce492db08bee628adc913c"
 dependencies = [
- "tpt-math-numeric 0.1.0",
+ "tpt-math-numeric 0.2.0",
 ]
 
 [[package]]
