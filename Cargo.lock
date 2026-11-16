@@ -828,9 +828,9 @@ dependencies = [
 
 [[package]]
 name = "feos-dft"
-version = "0.10.1"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "686657d9defab082313ed4a5469412402d3af726834b41a65cd8bc5556620b72"
+checksum = "aadfcd9f917533505c53906363bf5a69a3b75d96e8fcdaf4ad6c5b11b2d48cd7"
 dependencies = [
  "feos-core",
  "libm",
