@@ -777,9 +777,9 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "feos"
-version = "0.10.1"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7db777a05d3145e9bba358576db0a6450d319cf7d53c274e21973a3a824386b9"
+checksum = "66aa90c13504ef6deb5b09b175aa4cb42cab4835c74e89398145e0881ecdaf0f"
 dependencies = [
  "feos-core",
  "feos-derive",
