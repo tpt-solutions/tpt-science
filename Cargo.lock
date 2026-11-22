@@ -891,17 +891,17 @@ version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66aa90c13504ef6deb5b09b175aa4cb42cab4835c74e89398145e0881ecdaf0f"
 dependencies = [
- "feos-core",
+ "feos-core 0.10.5",
  "feos-derive",
  "feos-dft",
  "indexmap",
  "itertools 0.15.0",
  "nalgebra",
  "ndarray",
- "num-dual",
+ "num-dual 0.14.2",
  "num-traits",
  "petgraph",
- "quantity",
+ "quantity 0.14.1",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -917,9 +917,26 @@ dependencies = [
  "indexmap",
  "itertools 0.15.0",
  "nalgebra",
- "num-dual",
+ "num-dual 0.14.2",
  "num-traits",
- "quantity",
+ "quantity 0.14.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "feos-core"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8499e02b3f3f67f518c865bcf057b9dfa65dd58c7f0870fbac7bc5c0b754f7c2"
+dependencies = [
+ "indexmap",
+ "itertools 0.15.0",
+ "nalgebra",
+ "num-dual 0.16.0",
+ "num-traits",
+ "quantity 0.16.0",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -942,14 +959,14 @@ version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aadfcd9f917533505c53906363bf5a69a3b75d96e8fcdaf4ad6c5b11b2d48cd7"
 dependencies = [
- "feos-core",
+ "feos-core 0.10.5",
  "libm",
  "nalgebra",
  "ndarray",
- "num-dual",
+ "num-dual 0.14.2",
  "num-traits",
  "petgraph",
- "quantity",
+ "quantity 0.14.1",
  "rustdct",
  "rustfft",
 ]
@@ -1554,6 +1571,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-dual"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3277bc2cc02ea62cff7a33b0a0498e4d1a0745b2e448456c9cdb382848655f9"
+dependencies = [
+ "approx",
+ "nalgebra",
+ "num-traits",
+ "simba",
+]
+
+[[package]]
 name = "num-integer"
 version = "0.1.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1789,7 +1818,19 @@ dependencies = [
  "document-features",
  "nalgebra",
  "ndarray",
- "num-dual",
+ "num-dual 0.14.2",
+ "num-traits",
+]
+
+[[package]]
+name = "quantity"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d739a732ff9e2466176b6dabfad80201aa200894f70b0f061244c553e6498c83"
+dependencies = [
+ "document-features",
+ "nalgebra",
+ "num-dual 0.16.0",
  "num-traits",
 ]
 
@@ -2481,7 +2522,7 @@ dependencies = [
  "approx",
  "criterion",
  "feos",
- "feos-core",
+ "feos-core 0.11.0",
  "feos-dft",
  "thiserror 2.0.21",
  "tpt-sci-grid",
