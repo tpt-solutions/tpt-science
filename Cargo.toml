@@ -54,7 +54,7 @@ feos = { version = "0.10", default-features = false, features = ["dft"] }
 # `feos-dft` provides the DFT machinery re-exported by `feos` under the `dft`
 # feature; depend on it directly so `tpt-sci-dft-classical` can name the
 # `feos_dft` crate path (MIT OR Apache-2.0).
-feos-dft = { version = "0.10", default-features = false }
+feos-dft = { version = "0.11", default-features = false }
 
 # In-repo crate dependencies (referenced by `workspace = true`).
 # Closure-only solver by default. The Cranelift JIT (`cranelift-jit`) is native-only
