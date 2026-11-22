@@ -50,7 +50,7 @@ num-complex = "0.4"
 # Apache-2.0. `feos` re-exports `feos-dft` plus the equation-of-state
 # functionals (PC-SAFT, etc.) needed to build a concrete Helmholtz functional.
 # Added by the 2026-08 spec2.txt expansion pass.
-feos = { version = "0.10", default-features = false, features = ["dft"] }
+feos = { version = "0.11", default-features = false, features = ["dft"] }
 # `feos-dft` provides the DFT machinery re-exported by `feos` under the `dft`
 # feature; depend on it directly so `tpt-sci-dft-classical` can name the
 # `feos_dft` crate path (MIT OR Apache-2.0).
