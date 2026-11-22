@@ -2353,9 +2353,9 @@ dependencies = [
 
 [[package]]
 name = "tpt-math-prob-bayes"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8965e6c7391a1d0cde5da7f9320cb41fcc256bfc6878f7b819f92a1ecb530e7"
+checksum = "2ab0ee75bfbd1f037e136c9425268a8bfca52a85521ad361260f746ccc296b04"
 dependencies = [
  "tpt-math-prob-core",
 ]
