@@ -2297,18 +2297,18 @@ dependencies = [
 
 [[package]]
 name = "tpt-math-autodiff-fwd"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad0a908521fc4f4c991cabe2d6b71e9b7604684192203b3a19047ce21694e722"
+checksum = "7fa4c245f1c2849253d3b7c5151d6dfc63ecedda611a48e54ed601807a0fd350"
 dependencies = [
- "tpt-math-numeric 0.1.0",
+ "tpt-math-numeric 0.2.0",
 ]
 
 [[package]]
 name = "tpt-math-autodiff-rev"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69212c37db37e3025ef763dc716069e9d73719878bd0d14019fdfa79d90a0546"
+checksum = "5b2de5e364e4bab5a642cf2d6e39ddb2eb6cf0143839d49c4a44895667a311a1"
 dependencies = [
  "tpt-math-autodiff-fwd",
 ]
